@@ -36,17 +36,51 @@ If a proposed change to this corpus brings any of the above with it, the right m
 
 ## Read order
 
-**Pending Phase 3 migration.** The Phase 1 boundary audit (`runs/WAVE10_PHASE1_AUDIT.md` in the Rensei runs/ directory) tagged 11 OSS-only docs and 13 shared docs (with OSS substance) for migration into this corpus. Until those Phase 3 commits land, treat `rensei-architecture/001-layered-execution-model.md` § "Reading order for new contributors" as the source of truth, skipping `009-linear-realignment.md` and `012-product-management-agents.md` (both platform-only).
+Humans and fleet agents alike should consume in this order:
 
-A concrete OSS-canonical reading order will land in this AGENTS.md as part of Phase 3's final commit, replacing this placeholder. Until then:
+1. **`001-layered-execution-model.md`** — Layered model, terminology, the eight Provider Families, the OSS↔platform boundary, capability-flag abstraction. Read first. Carries the synchronized "agentfactory ↔ Rensei Platform contract" section that mirrors verbatim in `rensei-architecture/001-layered-execution-model-platform-extensions.md`.
+2. **`002-provider-base-contract.md`** — Without the base contract, the rest looks like a list of unrelated provider types.
+3. **`015-plugin-spec.md`** — Plugin manifest, single-artifact distribution, atomic auth, verb registry. Read second; it formalizes how Provider Families and Workflow Verbs come together in one shippable artifact.
+4. **`016-workflow-engine.md`** — Workflow grammar, node taxonomy, durable execution, versioning. Read third; it's the runtime substrate that consumes everything below.
+5. The reference doc for whichever layer you are working on:
+   - **`003-workarea-provider.md`** — Workarea contract and pool semantics.
+   - **`004-sandbox-capability-matrix.md`** — Sandbox capability flags and the cross-provider scheduler.
+   - **`005-kit-manifest-spec.md`** — Kit manifest, detect/provide lifecycle, daemon kit registry.
+   - **`007-intelligence-services.md`** — Memory + Code Intelligence + Architectural Intelligence interfaces.
+   - **`008-version-control-providers.md`** — VCS contract + git/Atomic/S3 adapters.
+6. **`013-orchestrator-and-governor.md`** — Orchestrator, governor, worker, AgentRuntime dispatch, completion contracts, macOS signing rule. The runtime that embeds the workflow engine.
+7. **`011-local-daemon-fleet.md`** — Operator manual for the local daemon mode of the `af` binary.
+8. **`014-tui-operator-surfaces.md`** — TUI display primitives, capability-chip pattern, theme + accessibility. Read if you're building TUI/dashboard features.
+9. **`006-cross-provider-interactions.md`** — The seams. Read once you understand the individual layers; this is where most subtle bugs live.
 
-> **Placeholder note (Wave 10 Phase 2):** the per-doc read order will be authored once the OSS docs migrate from `rensei-architecture` in Phase 3 (one commit per doc). Maintainers committing the Phase 3 series should update this section in the same commit that lands `001-layered-execution-model.md` here.
+**ADRs to read in order of foundational impact:**
+
+- **`ADR-2026-04-27-plugin-and-workflow-architecture.md`** — Plugin / Provider Family / Workflow taxonomy + AgentRuntime as 8th family. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-05-07-daemon-http-control-api.md`** — Local daemon's `/api/daemon/*` HTTP control API. The Wave 9 ADR — canonical example of "OSS daemon owns its own surface."
+- **`ADR-2026-04-29-long-running-runtime-substrate.md`** — `@renseiai/agentfactory-server` substrate. Platform schema mirror + JWT trust anchor extensions live in `rensei-architecture`.
+- **`ADR-2026-05-03-locus-of-workflow-definition.md`** — Workflow-grammar discipline. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-05-06-tui-noun-consolidation.md`** — `host` / `fleet` / `capacity` consolidation. User-auth retrofit + Live capacity addendum extensions live in `rensei-architecture`.
+- **`ADR-2026-04-28-sandbox-capabilities-in-types.md`** — TypeScript file-layout decision in `packages/core/src/providers/`.
+- **`ADR-2026-04-28-workflow-piping-uses-nodes.md`** — `{{ nodes.*.output.* }}` workflow grammar.
+- **`ADR-template.md`** — Template for new architectural decisions. Copy when proposing changes. Mirrored to `rensei-architecture` via stub.
+
+**Agents (archetypes):**
+
+- **`agents/pm/backlog-writer.yaml`** — PM-archetype: refine/groom/author modes, no-sub-issue rule, haiku-executable scope discipline.
+- **`agents/pm/outcome-auditor.yaml`** — Outcome auditor archetype.
+- **`agents/pm/improvement-loop.yaml`** — Improvement-loop archetype.
+- **`agents/pm/operational-scanner-sentry.yaml`** — Operational-scanner archetype family (Sentry representative).
+- **`agents/migration/migration-coordinator.yaml`** — Migration coordinator archetype.
+
+Each agent YAML ships with `tools: []` placeholder; operator-specific tool allowlists extend via `extends:` siblings in `rensei-architecture/agents/<group>/<name>-rensei.yaml`. See `BOUNDARY.md` § "extends: composition pattern for agents YAMLs".
+
+Skip when consuming only this OSS corpus: `009-linear-realignment.md` and `012-product-management-agents.md` (both platform-only; live in `rensei-architecture`). Their content operates against the Rensei team's Linear backlog.
 
 ## How to disagree with this doc
 
 This corpus is the canonical synthesis of an architectural conversation, not a final answer. To disagree:
 
-1. Open an ADR proposing the change (copy `ADR-template.md` once it lands in Phase 3; until then, copy from `rensei-architecture/ADR-template.md`).
+1. Open an ADR proposing the change (copy `ADR-template.md`).
 2. State the affected sections of this corpus and the reference docs.
 3. Declare the ADR's `boundary:` field in frontmatter — `OSS-only`, `platform-only`, or `shared`. See `BOUNDARY.md` for the verdict definitions.
 4. Commit the ADR; if the discussion converges, update the affected reference docs in the same commit that flips the ADR to `Accepted`.
@@ -66,4 +100,4 @@ Direct edits without an ADR are fine for clarifications, examples, typo fixes, a
 
 ## Status
 
-**Wave 10 Phase 2 scaffolding** — repo just stood up. Phase 3 will migrate the OSS-only docs from `rensei-architecture` here in a series of commits. This AGENTS.md will be revised in Phase 3 to point at concrete docs once they land.
+**Wave 10 Phase 3 migration complete.** OSS-only and shared-with-OSS-substance docs have migrated from `rensei-architecture` here in a series of per-doc commits. Cross-reference rewrites (Phase 4) come next; expect some markdown cross-links to currently point at bare filename references that Phase 4 promotes to absolute `agentfactory-architecture` URLs or platform-extensions sibling URLs as appropriate.

@@ -20,11 +20,9 @@ That discipline — particularly point (4), "removing the platform leaves a usab
 
 ## Status
 
-**Wave 10 Phase 2 scaffolding.** Phase 3 will migrate the OSS-only architecture docs from `rensei-architecture` here in a series of follow-up commits. Until that migration lands, this README enumerates the docs that **will** live here per the Phase 1 boundary audit; their content is still in `rensei-architecture` for now, and you should read them there.
+**Wave 10 Phase 3 migration complete.** OSS-only and shared-with-OSS-substance docs have migrated from `rensei-architecture` here. Phase 4 (cross-reference rewrite) follows; expect some inline markdown links to currently use bare filename forms that Phase 4 promotes to absolute repo URLs or sibling-repo paths.
 
-## Index (post-Phase-3 destination)
-
-The doc IDs below are the OSS-only and shared-with-OSS-substance docs that the Phase 1 audit (`runs/WAVE10_PHASE1_AUDIT.md`) tagged for migration into this corpus. Until Phase 3 commits land, follow the cross-repo links to `rensei-architecture` for the actual content.
+## Index
 
 ### Canonical
 
@@ -73,7 +71,19 @@ The doc IDs below are the OSS-only and shared-with-OSS-substance docs that the P
 
 ## Reading order for new contributors
 
-The full reading-order list is being authored alongside the Phase 3 doc migrations. For now, follow the order from `rensei-architecture/001-layered-execution-model.md` § "Reading order for new contributors", noting that `009-linear-realignment.md` and `012-product-management-agents.md` are platform-only and you should skip them if you only consume this OSS corpus.
+Humans and fleet agents alike should consume in this order:
+
+1. **`001-layered-execution-model.md`** — Layered model, terminology, the eight Provider Families, the OSS↔platform boundary, capability-flag abstraction. Read first.
+2. **`002-provider-base-contract.md`** — Without the base contract, the rest looks like a list of unrelated provider types.
+3. **`015-plugin-spec.md`** — Plugin manifest, single-artifact distribution, atomic auth, verb registry.
+4. **`016-workflow-engine.md`** — Workflow grammar, node taxonomy, durable execution.
+5. The reference doc for whichever layer you are working on: `003` (workarea), `004` (sandbox), `005` (kit), `007` (intelligence), `008` (VCS).
+6. **`013-orchestrator-and-governor.md`** — The runtime that embeds the workflow engine.
+7. **`011-local-daemon-fleet.md`** — Operator manual for the local daemon mode of the `af` binary.
+8. **`014-tui-operator-surfaces.md`** — TUI display primitives, capability-chip pattern, theme + accessibility.
+9. **`006-cross-provider-interactions.md`** — The seams; where most subtle bugs live.
+
+For full read-order detail (including ADR ordering and agent archetypes), see `AGENTS.md`. Skip `009-linear-realignment.md` and `012-product-management-agents.md` when consuming only this OSS corpus — both are platform-only and live in `rensei-architecture`.
 
 ## How this corpus changes
 
