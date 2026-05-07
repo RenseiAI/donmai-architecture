@@ -52,6 +52,7 @@ Humans and fleet agents alike should consume in this order:
 7. **`011-local-daemon-fleet.md`** — Operator manual for the local daemon mode of the `af` binary.
 8. **`014-tui-operator-surfaces.md`** — TUI display primitives, capability-chip pattern, theme + accessibility. Read if you're building TUI/dashboard features.
 9. **`006-cross-provider-interactions.md`** — The seams. Read once you understand the individual layers; this is where most subtle bugs live.
+10. **`BOUNDARY.md`** — Boundary-tagging convention. Read before authoring a new ADR or moving content between this corpus and `rensei-architecture`. Defines the four-value `boundary:` enum (`OSS-only` / `platform-only` / `shared` / `mirrored`), the three split mechanisms for shared docs, the cross-cutting ADR dual-publish-stub pattern, and the paired `BOUNDARY-SYNC-START`/`END` markers for synchronized regions.
 
 **ADRs to read in order of foundational impact:**
 
