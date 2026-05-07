@@ -1,0 +1,53 @@
+# BOUNDARY-SYNC integrity check.
+#
+# Verifies that every BOUNDARY-SYNC-START / BOUNDARY-SYNC-END marker pair in
+# this repo's *.md files is byte-identical to its mirrored pair in the sibling
+# rensei-architecture repo. See BOUNDARY.md § "Synchronized-section CI hook"
+# for the contract.
+#
+# STATUS: STUB — disabled by default. The triggers below are commented out so
+# this workflow is a no-op until Wave 11 (or whichever wave green-lights it
+# operationally) flips it on. To enable:
+#   1. Uncomment the `on:` block below.
+#   2. Make sure the sibling repo is accessible to GITHUB_TOKEN (public repos
+#      always are; if either becomes private, swap to a PAT with sibling read).
+#   3. Push and verify the action runs on a no-op md PR.
+#
+# TODO: enable after Wave 10 push.
+
+name: BOUNDARY-SYNC integrity
+
+# on:
+#   pull_request:
+#     paths:
+#       - '**/*.md'
+#   push:
+#     branches:
+#       - main
+#     paths:
+#       - '**/*.md'
+
+# When the on: block is enabled above, the job below runs as-is.
+on:
+  workflow_dispatch:  # manual-trigger only until the stub is flipped live
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this repo
+        uses: actions/checkout@v4
+        with:
+          path: this-repo
+
+      - name: Check out sibling rensei-architecture
+        uses: actions/checkout@v4
+        with:
+          repository: RenseiAI/rensei-architecture
+          path: rensei-architecture
+
+      - name: Run BOUNDARY-SYNC check
+        working-directory: this-repo
+        env:
+          RENSEI_ARCH_PATH: ${{ github.workspace }}/rensei-architecture
+        run: ./scripts/check-boundary-sync.sh
