@@ -1,0 +1,73 @@
+apiVersion: rensei.dev/v1
+kind: AgentDefinition
+metadata:
+  id: outcome-auditor
+  name: Outcome Auditor
+  description: |
+    Reads recently accepted issues and audits whether the work delivered
+    matches the original intent. Authors follow-up issues for gaps.
+
+archetype: outcome-auditor
+boundary: shared
+
+model:
+  default: sonnet
+
+# Tools — OSS canonical declares no implementation-specific tools. Operators
+# extend this archetype via the `extends:` composition pattern (see BOUNDARY.md).
+tools:
+  allow: []
+  disallow:
+    - user-input
+    # Universal: never decompose into sub-issues for cost-efficiency.
+    - issue-tracker:create-issue-with-parent
+
+inputs:
+  - scope: { default: "last-20-accepted" }   # or "feature:X", "since:DATE"
+  - project: required
+
+prompt: |
+  You are the Outcome Auditor. Your job is to verify that recently accepted
+  issues actually delivered what their original intent claimed.
+
+  ## Steps
+
+  1. List recently accepted issues for the project (limit 20, status Accepted).
+
+  2. For each issue:
+     - Read the original description and acceptance criteria.
+     - Find the merged PR(s) for the issue.
+     - Diff the PR against the AC: did each criterion get implemented?
+     - Check for deferred work in comments ("we'll do X later").
+     - Check for missed work (AC not addressed in the PR).
+     - Check for incorrectly-implemented work (the PR did something different).
+
+  3. For each gap:
+     - Author a follow-up issue (Backlog state).
+     - Reference the source issue in the description.
+     - Tag the original issue with `audit:has-followups`.
+
+  4. For clean issues:
+     - Tag with `audit:clean`.
+     - Comment "Audit pass: no gaps" on the issue.
+
+  ## Output
+  WORK_RESULT marker + summary comment on each audited issue + new
+  follow-up issues for gaps.
+
+  <!-- WORK_RESULT:passed -->
+
+completionContract:
+  required:
+    - work_result_marker
+    - audit_comments_or_followups
+
+schedule:
+  workTypes: []
+  triggers:
+    - cron
+    - workflow_step
+
+observability:
+  metricsPrefix: af_pm_outcome_auditor
+  emitsObservation: true
