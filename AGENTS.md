@@ -95,8 +95,8 @@ Direct edits without an ADR are fine for clarifications, examples, typo fixes, a
 - Diagrams use Mermaid embedded in markdown. Avoid external image assets.
 - Code samples are TypeScript or Go depending on subject; concrete code lives in source repos, not here.
 - "Kit" is a placeholder name pending brand decision; do not search/replace until the rename ADR lands.
-- ADR frontmatter declares `boundary:` upfront — see `BOUNDARY.md`.
-- Synchronized sections (currently: `001` § "The agentfactory ↔ Rensei Platform contract") carry a `BOUNDARY-SYNC` comment marker; edits require paired commits to both corpora. See `BOUNDARY.md` § "Synchronized sections".
+- ADR frontmatter declares `boundary:` upfront — one of `OSS-only | platform-only | shared | mirrored`. See `BOUNDARY.md` § "Frontmatter `boundary:` field" for the four-value enum and required-field discipline.
+- Synchronized sections (currently: `001` § "The agentfactory ↔ Rensei Platform contract") carry paired `BOUNDARY-SYNC-START: <id>` / `BOUNDARY-SYNC-END: <id>` markers; edits require paired PRs to both corpora and the regions stay byte-identical (verified by `scripts/check-boundary-sync.sh`). See `BOUNDARY.md` § "BOUNDARY-SYNC inline marker syntax", § "Simultaneous-PR rule for synchronized sections", and § "Synchronized-section CI hook".
 
 ## Status
 
