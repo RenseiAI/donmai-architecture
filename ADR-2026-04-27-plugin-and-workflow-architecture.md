@@ -98,7 +98,7 @@ The system MUST NOT create Linear sub-issues for cost-efficiency decomposition. 
 
 **Principle 2 — Decomposition is a session-internal concern, not a workflow-level fork.**
 
-The current `-coordination` work types (`development-coordination`, `inflight-coordination`, `qa-coordination`, `acceptance-coordination`) are deprecated. Coordinators are agents using sub-agents heavily; they're not a different work type. Work types collapse from eight to five: `development`, `qa`, `acceptance`, `refinement`, `research`. Backlog-writer is elevated to a first-class agent (separate from work types) and is documented in `012-product-management-agents.md`.
+The current `-coordination` work types (`development-coordination`, `inflight-coordination`, `qa-coordination`, `acceptance-coordination`) are deprecated. Coordinators are agents using sub-agents heavily; they're not a different work type. Work types collapse from eight to five: `development`, `qa`, `acceptance`, `refinement`, `research`. Backlog-writer is elevated to a first-class agent (separate from work types) and is documented in [`rensei-architecture/012-product-management-agents.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/012-product-management-agents.md).
 
 **Principle 3 — Quality must compound, not decay.**
 
@@ -140,7 +140,7 @@ The architecture explicitly commits to closing the Day-1-vs-Day-40 gap (where ag
 - **`004-sandbox-capability-matrix.md`** — cite `agentfactory-tui/worker/types.go` dial-out impl as reference for worker registration model.
 - **`007-intelligence-services.md`** — add language-host boundary subsection (multi-impl behind one consumer interface), add active context injection section (Day-1-vs-Day-40).
 - **`011-local-daemon-fleet.md`** — answer the GUI status open question (the TUI's `daemon status` IS the GUI surface).
-- **`009-linear-realignment.md`** — major expansion: cross-repo findings (agentfactory, agentfactory-tui, rensei-tui, tui-components), plugin/workflow reframe consequences, ~40 net-new issues.
+- [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md) — major expansion: cross-repo findings (agentfactory, agentfactory-tui, rensei-tui, tui-components), plugin/workflow reframe consequences, ~40 net-new issues.
 
 ## Affected work items
 
@@ -177,7 +177,7 @@ The corpus updates land in five sequenced commits:
 1. ADR + `001` reframe (this commit).
 2. New core docs: `015-plugin-spec.md`, `016-workflow-engine.md`, `013-orchestrator-and-governor.md`.
 3. Targeted updates to `002`, `004`, `007`, `011`.
-4. Deferred docs: `014-tui-operator-surfaces.md`, `012-product-management-agents.md` + `/agents/pm/*.yaml`.
-5. Major expansion of `009-linear-realignment.md`.
+4. Deferred docs: `014-tui-operator-surfaces.md`, [`rensei-architecture/012-product-management-agents.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/012-product-management-agents.md) + `/agents/pm/*.yaml`.
+5. Major expansion of [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md).
 
 `010-security-architecture.md` remains explicitly deferred; the security cross-cut in `001` is authoritative until it lands.

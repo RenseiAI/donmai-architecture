@@ -466,7 +466,7 @@ The discipline this preserves: daemon mode is shipped in the OSS execution layer
 
 ### Linear realignment hook
 
-This pattern is currently absent from the platform's icebox parse — there's no issue covering "local daemon" as an explicit mode. Net-new issue to author (see `009-linear-realignment.md`):
+This pattern is currently absent from the platform's icebox parse — there's no issue covering "local daemon" as an explicit mode. Net-new issue to author (see [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md)):
 
 > **`Local daemon mode for the OSS execution layer`** — One per-machine daemon registers as a multi-project worker pool, replaces per-VSCode-workspace fleet model, supports auto-update, project allowlist, and workarea-on-demand bootstrapping. Closes the friction described by users running 8–20+ workspaces.
 

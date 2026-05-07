@@ -318,7 +318,7 @@ These are first-cut declarations; each provider's implementation owns its declar
 - **REN-1166 / 1167 / 1190 / 1155 / 1183** (false-positive QA cluster) — closed by `cleanGuarantee` semantics. Once the workarea provider is in place, the existing hard-fail rule (REN-1263) becomes meaningful.
 - **REN-1244** (runtime agent versioning with pin-to-version) — pin-to-version reproducibility requires deterministic workarea state; consume `cleanStateChecksum`.
 
-Detail in `009-linear-realignment.md`.
+Detail in [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md).
 
 ## Open questions
 

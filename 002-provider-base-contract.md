@@ -545,7 +545,7 @@ This is the same migration the legacy `AgentProvider.capabilities` struct will f
 
 ## Linear realignment hooks
 
-Issues in the Rensei Platform backlog whose scope changes once this base contract lands. Detail in `009-linear-realignment.md`; pointers here for cross-reference:
+Issues in the Rensei Platform backlog whose scope changes once this base contract lands. Detail in [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md); pointers here for cross-reference:
 
 - **REN-1143** (A6 agent registry with provider plugins) — agent registry is one of the seven families. It extends `Provider<'agent-registry'>`. Its draft plugin shape (`local-yaml | git-ref | langchain | openai-assistant | a2a`) becomes a set of `entry.kind` values plus a family-specific capabilities struct.
 - **REN-148** (Vercel Integration / DeploymentProvider) — same. `Provider<'deployment'>` with `VercelDeploymentProvider` as one implementation.

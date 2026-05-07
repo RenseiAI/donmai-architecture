@@ -83,7 +83,7 @@ Humans and fleet agents alike should consume in this order:
 8. **`014-tui-operator-surfaces.md`** — TUI display primitives, capability-chip pattern, theme + accessibility.
 9. **`006-cross-provider-interactions.md`** — The seams; where most subtle bugs live.
 
-For full read-order detail (including ADR ordering and agent archetypes), see `AGENTS.md`. Skip `009-linear-realignment.md` and `012-product-management-agents.md` when consuming only this OSS corpus — both are platform-only and live in `rensei-architecture`.
+For full read-order detail (including ADR ordering and agent archetypes), see `AGENTS.md`. Skip [`009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md) and [`012-product-management-agents.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/012-product-management-agents.md) when consuming only this OSS corpus — both are platform-only and live in `rensei-architecture`.
 
 ## How this corpus changes
 

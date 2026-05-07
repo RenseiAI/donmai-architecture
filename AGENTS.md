@@ -74,7 +74,7 @@ Humans and fleet agents alike should consume in this order:
 
 Each agent YAML ships with `tools: []` placeholder; operator-specific tool allowlists extend via `extends:` siblings in `rensei-architecture/agents/<group>/<name>-rensei.yaml`. See `BOUNDARY.md` § "extends: composition pattern for agents YAMLs".
 
-Skip when consuming only this OSS corpus: `009-linear-realignment.md` and `012-product-management-agents.md` (both platform-only; live in `rensei-architecture`). Their content operates against the Rensei team's Linear backlog.
+Skip when consuming only this OSS corpus: [`009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md) and [`012-product-management-agents.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/012-product-management-agents.md) (both platform-only; live in `rensei-architecture`). Their content operates against the Rensei team's Linear backlog.
 
 ## How to disagree with this doc
 
