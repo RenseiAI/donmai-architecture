@@ -243,11 +243,13 @@ This unlocks two things: (1) a scheduler that routes by capability (`acquire(spe
 
 ## The agentfactory ↔ Rensei Platform contract
 
-<!-- BOUNDARY-SYNC: This section is mirrored verbatim across
+<!-- BOUNDARY-SYNC-START: 001-agentfactory-rensei-platform-contract -->
+<!-- This section is mirrored verbatim across
      agentfactory-architecture/001-layered-execution-model.md and
      rensei-architecture/001-layered-execution-model-platform-extensions.md.
      Any change MUST land simultaneously in both corpora via paired commits.
-     See BOUNDARY.md § "Mechanism 3: synchronized verbatim mirror". -->
+     See BOUNDARY.md § "Mechanism 3: synchronized verbatim mirror" and
+     § "BOUNDARY-SYNC inline marker syntax". -->
 
 The boundary stated as a discipline:
 
@@ -257,7 +259,7 @@ The boundary stated as a discipline:
 4. The OSS layer never depends on the SaaS plane to function. Removing the platform leaves a usable single-machine product.
 5. The boundary between them is a small set of pluggable function callbacks (`setAgentLauncher`-shaped), not subprocess or RPC. The platform composes the OSS layer as a library; both ship as one binary to end users.
 
-<!-- END BOUNDARY-SYNC -->
+<!-- BOUNDARY-SYNC-END: 001-agentfactory-rensei-platform-contract -->
 
 **Canonical realization.** The cleanest demonstration of this discipline lives in `rensei-tui`'s `cmd/rensei/main.go`, which calls `afcli.RegisterCommands(rootCmd, afcli.Config{...})` to import the OSS TUI's full command surface and extends with platform-specific commands on top. Public packages (`afclient`, `afcli`, `worker` in `agentfactory-tui`) carry the OSS interfaces; `internal/views` stays internal. The two-binary boundary works because the OSS layer never reaches up; the SaaS layer reaches down through public APIs only.
 
