@@ -210,6 +210,64 @@ dispatching Track A sub-agents:
   `/api/daemon/routing/explain/<sessionID>` as the operator-facing surface
   for the cross-provider scheduler's per-session decisions.
 
+### D6 — Kit install source wire shape
+
+<!-- boundary: OSS-only -->
+<!-- Wave 12 amendment (2026-05-07). Anchors KitInstallSource +
+     trustOverride: "allowed-this-once" wire shape consumed by
+     POST /api/daemon/kits/<id>/install. Audit reference:
+     runs/WAVE12_PHASE2_AUDIT.md § 1.3, § 2.2, Q-audit-1. -->
+
+The kit install endpoint accepts an optional `source` block selecting
+where the daemon should fetch the kit from at install time, plus an
+optional `trustOverride` field that bypasses the configured trust gate
+for a single request:
+
+```jsonc
+// POST /api/daemon/kits/<id>/install
+{
+  "version": "1.2.3",                              // optional pin
+  "source": {
+    "kind": "git" | "tessl" | "agentskills",      // Wave 12 ships "git" only
+    "url": "https://github.com/rensei/kit-foo",
+    "ref": "v1.2.3",                              // optional; default HEAD
+    "manifestPath": "kits/foo.kit.toml"           // optional; default = scan
+  },
+  "trustOverride": "allowed-this-once"            // optional; see below
+}
+```
+
+`source.kind` follows the federation order from
+`005-kit-manifest-spec.md` § "Registry sources". Wave 12 wires only
+`"git"`; `"tessl"` and `"agentskills"` return 501 with an
+`ErrKitSourceFederationUnimplemented` body. The federation list returned
+by `/api/daemon/kit-sources` continues to surface the descriptors so
+operators see the full federation order.
+
+`trustOverride: "allowed-this-once"` bypasses the trust gate for a
+single install when the configured trust mode (`signed-by-allowlist` or
+`attested`) would otherwise reject an unsigned or
+signed-but-unverified kit. The override is **single-shot** — not
+persisted, not honored on subsequent re-installs. Each override is
+**audit-logged** via `slog.Info` with structured fields `kitId`,
+`signerId` (best-effort; populated from the verifier output or the
+manifest's `authorIdentity` when unsigned), `actor` (from
+`daemon.yaml: trust.actor`, falling back to `uid:<os.Getuid()>` per
+the Q-audit-2 resolution), and `at` (RFC3339 UTC timestamp). The
+override semantic mirrors the `trustOverride` field from
+`002-provider-base-contract.md` § "Signing and trust" / REN-1314.
+
+Trust-gate response when the gate rejects WITHOUT a trustOverride:
+
+```jsonc
+// 403 Forbidden
+{
+  "error": "kit install: trust gate rejected (signed-by-allowlist requires verified signature)",
+  "kitId": "<id>",
+  "trust": "signed-unverified"
+}
+```
+
 ### Open questions resolved
 
 This ADR resolves the four open questions from the Wave 9 plan:
