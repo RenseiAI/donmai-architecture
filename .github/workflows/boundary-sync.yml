@@ -28,7 +28,7 @@ jobs:
       - name: Check out this repo
         uses: actions/checkout@v4
         with:
-          path: this-repo
+          path: agentfactory-architecture
 
       - name: Check out sibling rensei-architecture
         uses: actions/checkout@v4
@@ -38,7 +38,7 @@ jobs:
           token: ${{ secrets.BOUNDARY_SYNC_TOKEN }}
 
       - name: Run BOUNDARY-SYNC check
-        working-directory: this-repo
+        working-directory: agentfactory-architecture
         env:
           RENSEI_ARCH_PATH: ${{ github.workspace }}/rensei-architecture
         run: ./scripts/check-boundary-sync.sh
