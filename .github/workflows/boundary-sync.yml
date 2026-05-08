@@ -35,6 +35,7 @@ jobs:
         with:
           repository: RenseiAI/rensei-architecture
           path: rensei-architecture
+          token: ${{ secrets.BOUNDARY_SYNC_TOKEN }}
 
       - name: Run BOUNDARY-SYNC check
         working-directory: this-repo
