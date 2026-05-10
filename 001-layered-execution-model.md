@@ -196,6 +196,8 @@ Bringing the layers together, here are the eight typed Provider Family contracts
 
 The OSS layer ships a working implementation of every column-2 entry. The SaaS platform extends column 3. Tenants pick which providers they want; the orchestrator's scheduler reasons about capabilities, not provider identity.
 
+The table above describes each family's **typed-internal contract surface** — the cross-provider plumbing the platform reasons about. The **user-visible surface** (workflow nodes, verbs, CLI subcommands, templates, UI palettes) stays *native-rich per provider* — the platform never collapses provider-specific affordances into a lowest-common-denominator shape. See `ADR-2026-05-10-native-rich-providers.md`.
+
 A **Plugin** is an artifact that ships one or more rows above. The "Rensei Vercel Integration" plugin ships a `SandboxProvider` row (Vercel Sandbox), a `DeploymentProvider` row, an observability row, and a verb registry — one install, multiple family implementations.
 
 ## Security as defense in depth

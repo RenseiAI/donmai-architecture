@@ -196,6 +196,19 @@ type ProviderCapabilities<F extends ProviderFamily> =
 
 **Discrepancy detection:** the host SHOULD verify, at activation, that runtime behavior matches declared capabilities (e.g., a sandbox declaring `supportsPauseResume: true` must respond to the pause verb). Mismatches should fail activation with a clear error and never silently degrade. Tenants can opt to mark a provider as quarantined rather than disabled when verification fails repeatedly — useful for partial-rollout debugging.
 
+## Native-rich UX, typed-internal contract
+
+The capability struct above governs the *typed-internal* contract surface — what the scheduler, dispatch hot path, OAuth/webhook plumbing, and Layer 6 hooks reason about across providers. It does NOT govern the user-visible surface. Workflow nodes, workflow verbs, CLI subcommands, templates, and editor palettes are **native-rich per provider** — each provider exposes its full differentiating affordances, not a shared lowest-common-denominator shape.
+
+Concretely:
+
+- **Cross-provider** (this contract): `Provider<F>`, `ProviderCapabilities<F>`, scope resolution, signing, lifecycle hooks. Typed; reasoning happens by capability flag, not provider identity.
+- **Per-provider** (out of this contract, in the verb registry per `015` and the workflow grammar per `016`): `linear.agent_session.acknowledge`, `github_issues.task_list.checked`, `vercel.deploy`, `atomic.patch.commit`. Verb names carry the provider prefix and stay native-rich.
+
+Capability flags drive UX filtering: the workflow editor reads enabled-integrations + capability flags and shows only the nodes/verbs the active providers actually support. Users on a Linear-only org never see GitHub-Issues nodes; users with no Vercel integration never see `vercel.deploy`. Doubling node count when a second provider lands is the correct cost.
+
+The discipline is binding across all eight Provider Families and any added in the future. Detail and rationale: `ADR-2026-05-10-native-rich-providers.md`. Verb-namespace prefix-reservation enforcement (the registry-side check that prevents accidental generic-name verbs like `tracker.*`, `vcs.*`, `sandbox.*`) lives in `015-plugin-spec.md` § "Workflow Verb registry"; palette-filtering and compile-time verb-provider gating live in `016-workflow-engine.md`.
+
 ## Scope resolution
 
 A Provider is activated only within the scope it declares. Four levels, most-specific wins:

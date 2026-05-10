@@ -56,6 +56,7 @@ That discipline — particularly point (4), "removing the platform leaves a usab
 - **`ADR-2026-05-03-locus-of-workflow-definition.md`** — Workflow-grammar discipline. Cross-cutting; mirrored as stub in `rensei-architecture`.
 - **`ADR-2026-05-06-tui-noun-consolidation.md`** — `host` / `fleet` / `capacity` consolidation. User-auth retrofit + Live capacity addendum extensions live in `rensei-architecture`.
 - **`ADR-2026-05-07-daemon-http-control-api.md`** — Local daemon's `/api/daemon/*` HTTP control API. Wave 9 ADR — canonical example of "OSS daemon owns its own surface."
+- **`ADR-2026-05-10-native-rich-providers.md`** — Provider abstractions split into typed-internal contract + native-rich user-visible surface; never lowest-common-denominator. Cross-cutting; mirrored as stub in `rensei-architecture`.
 
 ### Agents (archetypes)
 

@@ -218,6 +218,8 @@ ERROR: plugin 'slack' declares verb 'vercel.notify' — verb namespace must matc
 
 This is the discipline none of the surveyed ecosystems enforce, and they all suffer collision incidents because of that gap. We enforce.
 
+**Reserved generic prefixes.** The registry additionally rejects verb ids whose plugin segment matches a Provider Family name (`tracker`, `vcs`, `sandbox`, `workarea`, `agent-runtime`, `deployment`, `agent-registry`, `kit`). Verbs are *provider-shaped*, not *family-shaped* — `linear.comment.create` and `github_issues.comment.create` are correct; `tracker.comment.create` is not. This prevents accidental lowest-common-denominator drift across Provider Families and is the registry-side enforcement of `ADR-2026-05-10-native-rich-providers.md`.
+
 **Verb kinds and the workflow engine.** The `kind` field tells the workflow engine how to treat the verb in a graph:
 
 - `action` (default) — invokable; runs to completion; outputs feed downstream.

@@ -63,6 +63,7 @@ Humans and fleet agents alike should consume in this order:
 - **`ADR-2026-05-06-tui-noun-consolidation.md`** — `host` / `fleet` / `capacity` consolidation. User-auth retrofit + Live capacity addendum extensions live in `rensei-architecture`.
 - **`ADR-2026-04-28-sandbox-capabilities-in-types.md`** — TypeScript file-layout decision in `packages/core/src/providers/`.
 - **`ADR-2026-04-28-workflow-piping-uses-nodes.md`** — `{{ nodes.*.output.* }}` workflow grammar.
+- **`ADR-2026-05-10-native-rich-providers.md`** — Provider abstractions split into typed-internal contract + native-rich user-visible surface; never lowest-common-denominator. Cross-cutting; mirrored as stub in `rensei-architecture`.
 - **`ADR-template.md`** — Template for new architectural decisions. Copy when proposing changes. Mirrored to `rensei-architecture` via stub.
 
 **Agents (archetypes):**

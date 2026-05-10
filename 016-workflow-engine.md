@@ -219,8 +219,11 @@ Workflow Definitions go through a compile pass before deploy. The engine validat
 5. **Topology** — DAG (no cycles), every step reachable from at least one trigger, terminal steps don't claim non-existent next-step ids.
 6. **Type compatibility (W1)** — when inter-node output piping is implemented (see Open Questions), upstream output types must satisfy downstream input types.
 7. **Scope** — provider scope (`002`) admits the workflow's tenant/project; plugins with insufficient scope reject installation.
+8. **Provider-enabled gating** — every verb's owning provider (the prefix segment of the verb id, e.g., `linear` in `linear.agent_session.acknowledge`) must be registered AND enabled in the workflow's bound tenant/project. A workflow that references `linear.*` verbs against a GitHub-Issues-bound subscription fails to publish. This is the compile-time enforcement of `ADR-2026-05-10-native-rich-providers.md`.
 
 Failed compilation produces structured errors with line numbers (when YAML) or node ids (when authored via React Flow). The "if it compiles, it runs" property is intentional inheritance from WEFT.
+
+**Editor palette filtering.** The workflow editor (React Flow canvas + node picker) reads the active org's enabled integrations + each provider's declared capability flags (`002`) and shows only the nodes/verbs the user can actually wire up. Linear-only orgs never see GitHub-Issues nodes in the palette; orgs with no Vercel integration never see `vercel.deploy`. This is the user-visible counterpart to compile-time gating — the editor never offers a verb that compilation would later reject. Per `ADR-2026-05-10-native-rich-providers.md`, doubling node count when a second provider lands is the correct cost; palette filtering is what keeps the surface tractable.
 
 ## Durable execution
 
