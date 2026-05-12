@@ -300,6 +300,36 @@ type ProviderHookEvent =
   | { kind: 'post-verb'; provider: ProviderRef; verb: string; result: unknown; durationMs: number }
   | { kind: 'verb-error'; provider: ProviderRef; verb: string; error: Error }
 
+  // Agent-runtime tool-call invocation (added 2026-05-12 per ADR-2026-05-12-cross-process-hook-bus-bridge)
+  // Distinct from `pre-verb`/`post-verb` above: those are PROVIDER-method-level operations
+  // (`provision`, `acquire`, `runSession`); these are AGENT tool calls executed inside an
+  // AgentRuntime session (`Read`, `Bash`, `mcp__af_code_search_symbols`). Session-scoped
+  // and correlation-keyed by `toolUseId` so consumers can pair pre/post for the same call.
+  | { kind: 'pre-tool-use'
+    ; provider: ProviderRef
+    ; sessionId: string
+    ; toolUseId: string
+    ; toolName: string
+    ; toolInput: unknown
+    ; toolCategory?: string
+    }
+  | { kind: 'post-tool-use'
+    ; provider: ProviderRef
+    ; sessionId: string
+    ; toolUseId: string
+    ; toolName: string
+    ; toolOutput: string
+    ; durationMs: number
+    ; isError: boolean
+    }
+  | { kind: 'tool-use-error'
+    ; provider: ProviderRef
+    ; sessionId: string
+    ; toolUseId: string
+    ; toolName: string
+    ; error: string
+    }
+
   // Capability discrepancy
   | { kind: 'capability-mismatch'; provider: ProviderRef; declared: unknown; observed: unknown }
 
@@ -312,9 +342,17 @@ This is the surface that policy rules attach to. Examples:
 - `pre-verb sandbox.provision args.region != 'us'` → block, log to audit.
 - `post-verb workarea.acquire` → emit cost event, attach to issue thread.
 - `verb-error vcs.push` → notify oncall.
+- `post-tool-use toolName=Read` → derive `currentFile` context entry; retrieve relevant past observations for the touched file (REN-1184).
+- `post-tool-use toolName=Bash input.command~/git push/` → notify deployment monitor.
 - `capability-mismatch` → quarantine provider, page security.
 
 The base contract guarantees that these events fire consistently across all seven plugin families. Without that consistency, the policy layer can't be one thing.
+
+### Cross-process providers and the hook bus
+
+A provider may run **in-process** (TypeScript, instrumented via `InstrumentedProvider`) or **cross-process** (e.g. the Go `af agent run` daemon, future RPC-shaped providers). Cross-process providers emit equivalent hook events through a **bridge owned by the platform's ingest route for that provider's transport**. From a subscriber's view, an event emitted by a cross-process provider is indistinguishable from one emitted in-process; the bus contract is identical.
+
+For the Go daemon today (per `ADR-2026-05-12-cross-process-hook-bus-bridge`), the bridge surface is the `POST /api/sessions/<id>/activity` ingest route. The daemon's wire payload carries the canonical fields the new event kinds reference (`toolUseId`, `toolInput`, `toolOutput`, `isError`, `durationMs`, `providerName`); the platform side reconstructs the appropriate `pre-tool-use` / `post-tool-use` / `tool-use-error` event and emits it on `globalHookBus`. Cross-replica visibility is achieved by fan-out via the platform's existing Redis session-event channel (a new `provider_hook_event` `SessionEvent` type). See `006-cross-provider-interactions.md` Seam 10 for the cooperation contract.
 
 ## How the seven families extend this contract
 

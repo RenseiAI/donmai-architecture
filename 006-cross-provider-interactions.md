@@ -238,6 +238,26 @@ Contract details:
 
 **Bug class prevented:** stale or partial indexes, lost observations on session crash, "did the index get rebuilt" debugging churn.
 
+## Seam 10 — Cross-process provider hook bridge
+
+**Problem:** Layer 6 hook events (`pre-verb`/`post-verb`/`pre-tool-use`/`post-tool-use`, etc.) are emitted on an in-process TypeScript bus (`globalHookBus`). The Go `af agent run` daemon — the AgentRuntime provider that executes real SDLC sessions today — is a separate OS process and so cannot emit on the bus directly. Without a bridge, every Layer 6 subscriber that targets tool-call-grained events (REN-1184 in-session memory injector, REN-1166 graph-extraction-event-trigger, the Context-satellite derive subscriber, future security/cost subscribers) is dark for production sessions.
+
+**Cooperation:** Cross-process providers participate in Layer 6 through a **wire-format-as-bridge** owned by the platform-side ingest route for that provider's transport. Per `ADR-2026-05-12-cross-process-hook-bus-bridge`:
+
+1. **Daemon-side wire payload** is the canonical bridge schema. For AgentRuntime providers via the activity-ingest route (`POST /api/sessions/<id>/activity`), the wire `payload` carries the fields needed to reconstruct an agent-tool-use event: `type`, `toolName`, `toolInput`, `toolOutput`, `toolUseId`, `isError`, `durationMs`, `toolCategory`, `providerName`, `timestamp`. The OSS contract requires every cross-process AgentRuntime provider to populate these fields when emitting `action`-type activities for tool calls; downstream subscribers fail open when fields are absent but lose fidelity.
+
+2. **Platform-side translation** is the bridge's runtime half. The ingest route reconstructs the appropriate `ProviderHookEvent` (`pre-tool-use` when `toolOutput`/`isError` are absent and `toolUseId` is set; `post-tool-use` on completion; `tool-use-error` when `isError === true`) and calls `globalHookBus.emit()`. Bus emission is fire-and-forget — the activity-route HTTP response does not block on subscriber latency.
+
+3. **Cross-replica fan-out** reuses the existing platform Redis session-event channel. A new `SessionEvent.type = 'provider_hook_event'` carries a serialized `ProviderHookEvent`; each platform replica's bootstrap subscribes and re-emits inbound `provider_hook_event` payloads onto its own `globalHookBus`. The new event type is filtered out of consumer-facing SSE feeds (Topology session-activity stream, public `/api/public/session-activities`); only Layer 6 subscribers observe it.
+
+4. **Subscriber idempotency requirement.** Redis pub/sub is fire-and-forget with no cross-channel ordering guarantee, so a `pre-tool-use` and `post-tool-use` for the same `toolUseId` may arrive at a subscriber in either order. Subscribers MUST be tolerant of out-of-order pairing and tolerant of replays. The derive-context subscriber acts on `post-tool-use` only and is naturally idempotent; the in-session memory injector ranks by `paths` and is order-tolerant.
+
+5. **The bridge does not violate the OSS↔platform library-composition seam** described in `001-layered-execution-model.md` § "The agentfactory ↔ Rensei Platform contract." That seam describes **build-time** composition (OSS code is consumed as a library by platform code). This seam describes **runtime** composition (an OSS-built binary running as a long-lived subprocess that communicates with the platform service via HTTP). Both seams hold simultaneously; the Go daemon participates only in the runtime axis.
+
+**Bug class prevented:** "Layer 6 subscriber works in unit tests but does nothing in production" — the bug where the subscription wires up correctly, the bus is healthy, and no events ever arrive because the active provider is in a different process. Also prevents the inverse bug where a producer-side wire-format change silently breaks event reconstruction on the platform side; the daemon emits a contract test fixture that pins the JSON shape.
+
+**Future cross-process providers** (A2A bridges, remote AgentRuntime peers, hosted sandbox providers) plug into Layer 6 through the same pattern: define a wire payload that carries the canonical fields the relevant event kinds reference, own the platform-side ingest route that translates, and emit on `globalHookBus`. The contract above does not depend on the daemon being Go — it depends on the ingest route owning the translation.
+
 ## How to add a new seam to this doc
 
 When implementation experience reveals a cross-layer cooperation that isn't captured here:
