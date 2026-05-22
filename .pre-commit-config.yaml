@@ -1,0 +1,31 @@
+# Pre-commit hooks for agentfactory-architecture corpus.
+#
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+#
+# Hooks:
+#   guard-b-lint  — blocks commits that introduce closed-source content leaks
+#   gitleaks      — blocks commits that contain secrets or credentials
+#
+# The guard-b-lint hook runs scripts/guard-b-lint.sh against all staged
+# markdown, YAML, shell, and TOML files. Per-line allowlist overrides live
+# in .guard-allowlist. See BOUNDARY.md for the closed-source-content contract.
+
+repos:
+  - repo: local
+    hooks:
+      - id: guard-b-lint
+        name: Guard-B closed-source content lint
+        language: script
+        entry: scripts/guard-b-lint.sh
+        types_or: [markdown, yaml, shell, toml]
+        pass_filenames: false
+        args: ['--all']
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        name: Gitleaks secret scan
+        description: Detect secrets, API keys, and credentials before commit
+        args: ['--config', '.gitleaks.toml']
