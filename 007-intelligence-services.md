@@ -22,7 +22,7 @@ Per Wave 10 Phase 1 resolutions Q4: this doc is the **forward-looking canonical 
 | Surface | OSS-shipped today | Scheduled |
 |---|---|---|
 | Code Intelligence (`@renseiai/agentfactory-code-intelligence`, six MCP tools) | yes | n/a |
-| Code Intelligence (Go reimpl, `af code` subcommands) | partial (REN-1116-1124 in flight) | finish in next-N waves |
+| Code Intelligence (Go reimpl, `af code` subcommands) | partial (in flight) | finish in next-N waves |
 | Memory query/write API + sqlite single-tenant reference impl | no | scheduled — see "Implementation status" annotation in § Memory below |
 | Architectural Intelligence (single-project synthesis) | no | scheduled |
 

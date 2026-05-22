@@ -490,13 +490,6 @@ The kit doesn't know which provider satisfied the toolchain. The provider doesn'
 
 Standard discipline: every interface and adapter ships in OSS. SaaS adds the central registry, multi-tenant policy, and publication UX.
 
-## Linear realignment hooks
-
-- **REN-1241** (per-agent SKILL.md with progressive disclosure) — Anthropic Skills support is now a kit contribution type (`provide.skills`). Reframe as "Kit support for Skill contributions" rather than a standalone feature.
-- **REN-1232** (Harness DX: skills, middleware, tracing, agent versioning) — split into per-contribution-type tasks; each maps onto a `provide.*` field.
-- **REN-1268** (AST-driven memory extraction) — domain-specific extractors become `provide.intelligence_extractors`. Generic AST stays in core; kits extend.
-- **REN-1184** (Proactive memory) — kits may contribute observation/suggestion patterns; not blocking on this doc but worth a follow-up ADR once memory contracts stabilize.
-
 ## Open questions
 
 1. **Conflict resolution UX.** When conflicting kits both apply, what's the tenant's interaction surface? Default: error with both kit IDs and a config snippet to set explicit preference. Better: SaaS dashboard widget showing kit detection results with a one-click pin.

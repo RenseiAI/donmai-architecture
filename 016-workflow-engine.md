@@ -6,13 +6,13 @@
 
 ## Why this exists
 
-The Rensei Platform shipped a workflow engine inspired by [WeaveMindAI/weft](https://github.com/WeaveMindAI/weft) (REN-1021 competitive intel + decision doc, Accepted 2026-04-17). Workflows are graphs of typed nodes that compose plugin verbs into runnable processes — the SDLC dispatch, custom QA pipelines, eventual scheduled flows. The engine is the runtime substrate the orchestrator embeds; the corpus needs to specify it formally because every Plugin's verbs are invoked through it.
+The platform shipped a workflow engine inspired by [WeaveMindAI/weft](https://github.com/WeaveMindAI/weft) (Accepted 2026-04-17). Workflows are graphs of typed nodes that compose plugin verbs into runnable processes — the SDLC dispatch, custom QA pipelines, eventual scheduled flows. The engine is the runtime substrate the orchestrator embeds; the corpus needs to specify it formally because every Plugin's verbs are invoked through it.
 
 The engine is **versioned grammar** (`apiVersion: workflow/v1`), **typed nodes**, **durable execution**, **compile-time validation**. It inherits from WEFT's "if it compiles, it runs" property and adds Rensei-specific patterns (BFSI approval gates, multi-tracker scoping, agent dispatch as a first-class action class).
 
 ### What we adopted from WEFT
 
-The W1-W5 imports from REN-1021 (in active backlog as platform issues, including REN-1139 "Loop node type, composes with Weft W2 groups"):
+The W1-W5 imports from WEFT (the loop node type composes with Weft W2 groups):
 
 - **W1: Typed ports + compile-time edge validation.** Reject type-incompatible edges at save time with actionable errors.
 - **W2: Recursive groups with scoped typed interfaces.** Any subgraph collapses to a reusable node with declared inputs/outputs. Single biggest lever for workflow legibility at scale.
@@ -22,7 +22,7 @@ The W1-W5 imports from REN-1021 (in active backlog as platform issues, including
 
 ### What we declined from WEFT
 
-Per REN-1021 §7:
+Per the WEFT research decision:
 
 - **Restate-based durable executor.** Our DB-memoized DAG executor + Redis pub/sub is durable-enough; Restate adds K8s coupling.
 - **Compile-to-Rust standalone binary.** No customer problem this solves.
@@ -237,7 +237,7 @@ For gate nodes specifically:
 - When a matching event arrives (from any plugin's webhook handler emitting it onto the signal bus), the gate resumes and continues to its `next` step.
 - Timeouts handle the no-event case: `onTimeout: skip` advances; `error` halts the run; `branch:<step-id>` reroutes.
 
-This is durable-enough for the use cases REN-1021 enumerated. Restate-style cluster-of-actor durability is explicitly declined per the WEFT decline list.
+This is durable-enough for the use cases enumerated in the WEFT research. Restate-style cluster-of-actor durability is explicitly declined per the WEFT decline list.
 
 ## Workflow design discipline
 
@@ -396,13 +396,6 @@ Detail in `013-orchestrator-and-governor.md`. Worth knowing here: the engine emi
 | Migration tooling for apiVersion bumps | ✅ ships | inherits |
 
 OSS users get a working workflow engine, can author YAML by hand, run it locally. SaaS adds the visual designer, the marketplace, and multi-tenant administration.
-
-## Linear realignment hooks
-
-- **REN-1021** (Competitive Intel - Weft) — Accepted; the research basis. Workstreams W1-W10 land as platform issues; this doc defines the contracts they implement against.
-- **REN-1139** (Loop node type, composes with Weft W2 groups) — implements W2 group composability.
-- **W1-W5 cluster** (typed ports, groups, AST source-of-truth, null propagation, per-node folders) — the foundation; some shipped, some pending. `009` realignment expansion enumerates current state.
-- **Default SDLC YAML rewrite** — the legacy generated YAML should be replaced with a human-readable group-shaped version once W2 ships. Net-new issue in `009`.
 
 ## Open questions
 

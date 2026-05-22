@@ -14,7 +14,7 @@ split: sibling-extensions
 
 ## Context
 
-The `linear` subcommand tree shipped via `afcli.RegisterCommands` (16 subcommands in `agentfactory-tui/afcli/linear.go`) authenticates exclusively against `LINEAR_API_KEY` / `LINEAR_ACCESS_TOKEN` env vars. When a user has already authenticated with the platform via `rensei login` (rsk_ Bearer token) AND the platform holds a working Linear OAuth credential for the org (via the existing OAuth flow at `/api/integrations/linear/oauth/authorize`), the CLI cannot use that credential — `rensei linear get-issue REN-1` still hard-errors on the missing env var.
+The `linear` subcommand tree shipped via `afcli.RegisterCommands` (16 subcommands in `agentfactory-tui/afcli/linear.go`) authenticates exclusively against `LINEAR_API_KEY` / `LINEAR_ACCESS_TOKEN` env vars. When a user has already authenticated with the platform via `rensei login` (rsk_ Bearer token) AND the platform holds a working Linear OAuth credential for the org (via the existing OAuth flow at `/api/integrations/linear/oauth/authorize`), the CLI cannot use that credential — it still hard-errors on the missing env var.
 
 The bug is structural in two places:
 

@@ -377,16 +377,7 @@ A Kit is a specialized Plugin — its manifest emphasizes `[provide]` blocks (to
 
 OSS users can install plugins from local manifests or any registry their config points at. SaaS tenants get the curated registry, the marketplace UX, multi-tenant install isolation, and policy controls.
 
-## Linear realignment hooks
-
-Issues in the existing platform backlog whose scope shifts:
-
-- **REN-148** (Vercel Integration / DeploymentProvider) — concretizes as `RenseiVercelPlugin`. Single artifact implementing Deployment + Sandbox + Observability.
-- **REN-1142** (multi-tracker mirror, Jira/Asana) — IssueTrackerProvider implementations packaged as plugins (`@rensei/plugin-jira`, `@rensei/plugin-asana`).
-- **REN-1143** (Agent registry plugins) — `entry.kind` taxonomy from manifest; plugins implementing `AgentRegistry` family.
-- **REN-1194 §4.f T1.a** (decouple harness from sandbox) — sandbox impls become plugins; orchestrator dispatches via family resolver.
-
-Net-new issues to author (full list in `009` after expansion):
+Net-new items to implement (full list in `009` after expansion):
 
 - Plugin manifest schema + validator implementation
 - Plugin loader runtime (manifest → registered providers + verbs)

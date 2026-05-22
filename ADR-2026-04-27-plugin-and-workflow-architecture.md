@@ -11,11 +11,11 @@ The initial architectural corpus (`001`–`009`, `011`) defined seven plugin fam
 
 1. **The agentfactory codebase has two existing provider concepts not unified by the corpus.** `AgentProvider` (claude/codex/amp/spring-ai/a2a) — a typed LLM dispatch interface with its own capability struct — and `ProviderPlugin` (Slack/GitHub/Jira-shaped integration plugins with actions, triggers, conditions). Neither maps onto the seven families as drafted.
 
-2. **The Rensei Platform has shipped a workflow engine** (`apiVersion: workflow/v1`) inspired by WEFT (`WeaveMindAI/weft`, REN-1021 research). Workflows are graphs of typed nodes (`trigger | condition | action | gate`), and every functional node references a `provider` namespace + `verb`. The workflow engine is the runtime substrate for the orchestrator and is absent from the corpus.
+2. **The platform has shipped a workflow engine** (`apiVersion: workflow/v1`) inspired by WEFT (`WeaveMindAI/weft`). Workflows are graphs of typed nodes (`trigger | condition | action | gate`), and every functional node references a `provider` namespace + `verb`. The workflow engine is the runtime substrate for the orchestrator and is absent from the corpus.
 
 3. **A fundamental decomposition pattern** was being implemented via Linear sub-issue creation (e.g., backlog-writer creating 3 sub-issues for a 1-point ticket). This conflates *human intent* with *agent-internal work decomposition* and creates real friction (humans need to enable sub-issue view; agents misread sub-issue dependencies as blockers).
 
-A research turn covering plugin distribution patterns (Backstage, GitHub Apps, Vercel Integrations, n8n, Temporal, Argo Events, Inngest, Pipedream, VSCode extensions) and a workflow-engine research turn (WEFT, REN-1021, the SDLC YAML at `/Users/markkropf/Downloads/rensei-default-sdlc.yaml`) settled the model below.
+A research turn covering plugin distribution patterns (Backstage, GitHub Apps, Vercel Integrations, n8n, Temporal, Argo Events, Inngest, Pipedream, VSCode extensions) and a workflow-engine research turn (WEFT) settled the model below.
 
 ## Decision
 
@@ -116,9 +116,9 @@ The architecture explicitly commits to closing the Day-1-vs-Day-40 gap (where ag
 
 ### Negative
 
-- **Existing platform issues need rescoping.** REN-1142 (multi-tracker mirror), REN-1143 (agent registry), REN-148 (Vercel integration) all have plugin shapes implied; some of their drafted scope no longer applies cleanly.
-- **One-time migration cost for existing Linear projects** with thousands of agent-created sub-issues. Operational, out of scope for the architecture.
-- **Workflow engine work (REN-1021 W1-W5 cluster) becomes load-bearing for the SDLC redesign.** The new SDLC YAML can't be authored cleanly until typed ports + recursive groups + AST source-of-truth ship. Sequencing matters.
+- **Existing platform issues need rescoping.** Multi-tracker mirror, agent registry, and Vercel integration backlog items all have plugin shapes implied; some of their drafted scope no longer applies cleanly.
+- **One-time migration cost for existing projects** with thousands of agent-created sub-issues. Operational, out of scope for the architecture.
+- **Workflow engine work (WEFT W1-W5 cluster) becomes load-bearing for the SDLC redesign.** The new SDLC YAML can't be authored cleanly until typed ports + recursive groups + AST source-of-truth ship. Sequencing matters.
 
 ### Risks
 
@@ -142,23 +142,9 @@ The architecture explicitly commits to closing the Day-1-vs-Day-40 gap (where ag
 - **`011-local-daemon-fleet.md`** — answer the GUI status open question (the TUI's `daemon status` IS the GUI surface).
 - [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md) — major expansion: cross-repo findings (agentfactory, agentfactory-tui, rensei-tui, tui-components), plugin/workflow reframe consequences, ~40 net-new issues.
 
-## Affected work items
+## Follow-on implementation items
 
-Direction shift (existing issues whose scope changes):
-
-- **REN-1021** — already Accepted; W1-W5 implementation issues remain valid. The corpus now references this research as the authoritative WEFT-import basis.
-- **REN-1139** ("Loop node type, composes with Weft W2 groups") — composes; no shift.
-- **REN-1142** (multi-tracker mirror) — IssueTrackerProvider adapter shape; one of N implementations.
-- **REN-1143** (A6 Agent registry) — extends `Provider<'agent-registry'>`; entry-kind taxonomy from manifest.
-- **REN-1194 §4.f T1.a** — promote to standalone "ship `SandboxProvider` capability matrix + scheduler."
-- **REN-148** (Vercel) — DeploymentProvider plugin shape; `RenseiVercelPlugin` concretizes.
-- **REN-1241** (per-agent SKILL.md) — Kit contribution type; reframed.
-- **REN-205** (Routing Intelligence) — extends to two-dimensional (LLM × sandbox).
-- **REN-1249** (cost-per-issue) — taps SandboxProvider idle/active hours.
-- **REN-1238** (eval reproducibility) — uses WorkareaSnapshotRef.
-- **REN-1244** (pin-to-version) — uses cleanStateChecksum.
-
-Net-new issues to author (full list in `009`):
+Net-new items to implement (full list in `009`):
 
 - Plugin manifest spec implementation
 - Workflow engine inter-node output piping (W3 / new)

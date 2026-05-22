@@ -64,7 +64,7 @@ That discipline — particularly point (4), "removing the platform leaves a usab
 - **`agents/pm/outcome-auditor.yaml`** — same pattern.
 - **`agents/pm/improvement-loop.yaml`** — same pattern.
 - **`agents/pm/operational-scanner-sentry.yaml`** — Sentry-source archetype; same pattern.
-- **`agents/migration/migration-coordinator.yaml`** — Migration archetype: AgentDefinition + Task tool + WORK_RESULT marker. Rensei-team-specific REN-1407 binary-distribution gate + tool allowlists live in `rensei-architecture/agents/migration/migration-coordinator-rensei.yaml` via `extends:`.
+- **`agents/migration/migration-coordinator.yaml`** — Migration archetype: AgentDefinition + Task tool + WORK_RESULT marker. Rensei-team-specific binary-distribution gate + tool allowlists live in `rensei-architecture/agents/migration/migration-coordinator-rensei.yaml` via `extends:`.
 
 ### Convention
 

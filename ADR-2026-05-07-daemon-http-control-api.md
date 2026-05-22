@@ -255,7 +255,7 @@ manifest's `authorIdentity` when unsigned), `actor` (from
 `daemon.yaml: trust.actor`, falling back to `uid:<os.Getuid()>` per
 the Q-audit-2 resolution), and `at` (RFC3339 UTC timestamp). The
 override semantic mirrors the `trustOverride` field from
-`002-provider-base-contract.md` § "Signing and trust" / REN-1314.
+`002-provider-base-contract.md` § "Signing and trust".
 
 Trust-gate response when the gate rejects WITHOUT a trustOverride:
 

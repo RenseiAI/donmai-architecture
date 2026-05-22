@@ -18,9 +18,9 @@ Layer 6 (`001-layered-execution-model.md` § Layer 6, `002-provider-base-contrac
 
 Production reality has moved past that scope. The OSS Go daemon shipped in `agentfactory-tui/runtime/` is the AgentRuntime provider that executes every SDLC session for Rensei platform users today. It posts agent activity (`ToolUseEvent`, `ToolResultEvent`, `AssistantTextEvent`, …) to the platform's `/api/sessions/[id]/activity` HTTP endpoint, which stores them in a ring buffer + Postgres but does not emit anything on Layer 6. The consequence is that every Layer 6 subscriber written for tool-call-grained events is dark for production sessions:
 
-- **REN-1184 InSessionMemoryInjector** (`platform/src/lib/memory/in-session-injection.ts`) defines `subscribeToVerbBus()` to inject memory mid-session when an agent touches relevant files, but the subscription is never wired and the bus has no daemon events anyway.
-- **REN-1166 graph extraction** (`platform/src/lib/graph/extraction/pipeline.ts`) runs cron-driven over the observations table; real-time graph-aware retrieval and feedback weighting are unreachable because the events that would trigger them aren't on the bus.
-- **The Context satellite** on the topology overlay (`platform/src/components/topology/satellites/compact-context.tsx`) consumes `contextKey`/`contextValue` activities that no producer emits. The platform wire was completed in 2026-05-12 (commit `ddf0770`) but workers don't fill it.
+- **InSessionMemoryInjector** defines `subscribeToVerbBus()` to inject memory mid-session when an agent touches relevant files, but the subscription is never wired and the bus has no daemon events anyway.
+- **Graph extraction** runs cron-driven over the observations table; real-time graph-aware retrieval and feedback weighting are unreachable because the events that would trigger them aren't on the bus.
+- **The Context satellite** on the topology overlay consumes `contextKey`/`contextValue` activities that no producer emits. The platform wire was completed in 2026-05-12 (commit `ddf0770`) but workers don't fill it.
 - **`af_code_*` and `af_memory_*` MCP tools** that constitute platform differentiation never surface as Layer 6 events.
 
 The boundary discipline in `001-layered-execution-model.md` § "The agentfactory ↔ Rensei Platform contract" historically read the OSS↔Platform seam as **library composition, not subprocess RPC**. The Go daemon falsifies that read: the daemon is itself an OSS-shipped binary that runs as a long-lived subprocess, communicating with the platform over HTTP. This is not a violation — it is a new mode the corpus needs to admit.
@@ -31,7 +31,7 @@ This ADR makes three connected changes:
 
 ### D1 — Extend `ProviderHookEvent` with agent-tool-use variants
 
-The existing `pre-verb` / `post-verb` / `verb-error` events are at the provider-method level (`provision`, `acquire`, `runSession`). Agent-level tool calls (`Read`, `Bash`, `mcp__af_code_search_symbols`) are a different layer that REN-1184 and the Context satellite both need. Add three new kinds to the `ProviderHookEvent` discriminated union in `002-provider-base-contract.md`:
+The existing `pre-verb` / `post-verb` / `verb-error` events are at the provider-method level (`provision`, `acquire`, `runSession`). Agent-level tool calls (`Read`, `Bash`, `mcp__af_code_search_symbols`) are a different layer that the memory injector and the Context satellite both need. Add three new kinds to the `ProviderHookEvent` discriminated union in `002-provider-base-contract.md`:
 
 ```ts
 | { kind: 'pre-tool-use'
@@ -86,16 +86,16 @@ The platform's `globalHookBus` is per-process. The platform already serves Verce
 
 ### Positive
 
-- REN-1184 proactive memory injection lights up for production (Go-daemon-driven) sessions. The injector's existing `subscribeToVerbBus` interface gains a real producer.
+- Proactive memory injection lights up for production (Go-daemon-driven) sessions. The injector's existing `subscribeToVerbBus` interface gains a real producer.
 - The Context satellite populates with derived entries (`currentFile`, `lastEditedFile`, `lastGitOp`, `lastSearch`, `lastTestRun`, …) on real sessions, with no Go-daemon-side changes beyond the wire payload extension.
-- A future event-driven REN-1166 graph extraction pipeline can subscribe to the same bus and replace the cron-based polling without restructuring its consumers.
+- A future event-driven graph extraction pipeline can subscribe to the same bus and replace the cron-based polling without restructuring its consumers.
 - The contract is symmetric across in-process and cross-process providers, so future RPC providers (A2A bridges, remote AgentRuntime providers) plug into the same bus through their own ingest routes without re-opening this question.
 - `af_code_*` / `af_memory_*` MCP tools become Layer 6 events alongside platform-differentiating analytics.
 
 ### Negative
 
 - One more place to keep in sync when the hook taxonomy changes: the daemon's wire payload must carry the fields the new event kinds reference. The wire schema is now a load-bearing cross-language contract.
-- The Redis fan-out adds a network hop between platform replicas. Latency budget for memory injection (≤100ms per REN-1184) holds locally — the bridge fires after `storeActivity` returns and is best-effort — but cross-replica subscribers see events with Redis-round-trip latency added.
+- The Redis fan-out adds a network hop between platform replicas. Latency budget for memory injection (≤100ms) holds locally — the bridge fires after `storeActivity` returns and is best-effort — but cross-replica subscribers see events with Redis-round-trip latency added.
 - `provider_hook_event` is now a privileged event type that consumer-facing SSE streams must explicitly filter. Forgetting to filter exposes raw hook payloads through public-ish endpoints.
 
 ### Risks
@@ -109,7 +109,7 @@ The platform's `globalHookBus` is per-process. The platform already serves Verce
 - **Dedicated `/api/observability/hooks` endpoint, parallel to activity ingest** — cleaner separation but doubles the daemon's network traffic and creates two arrival surfaces the platform must reconcile. Rejected: activity-as-bridge reuses the existing battle-tested route and the duplication isn't worth it.
 - **Per-replica in-memory bus only (no Redis fan-out)** — simpler but means subscribers on replica B miss events that arrived at replica A. Memory injection would silently miss any session whose activity post landed on a different replica than the consumer's subscription. Rejected: cross-replica visibility is non-negotiable for Vercel concurrent invocations.
 - **Push the daemon to subscribe directly to a TypeScript hook bus via WebSocket** — keeps the bus authoritative but couples the daemon to the platform's Node runtime and introduces a long-lived bidirectional channel where activity ingest is one-shot HTTP. Rejected: the daemon's transport simplicity is a feature.
-- **Keep `pre-verb` / `post-verb` as the tool-call-level kind and add a separate provider-method-level kind** — semantically inverse to D1. Rejected: REN-1184's `VerbBusEvent` already conflates these, and the existing emitters in `InstrumentedProvider` are at the provider-method level. Adding new kinds for tool calls is the smaller delta.
+- **Keep `pre-verb` / `post-verb` as the tool-call-level kind and add a separate provider-method-level kind** — semantically inverse to D1. Rejected: the existing `VerbBusEvent` already conflates these, and the existing emitters in `InstrumentedProvider` are at the provider-method level. Adding new kinds for tool calls is the smaller delta.
 
 ## Affected documents
 
@@ -117,10 +117,10 @@ The platform's `globalHookBus` is per-process. The platform already serves Verce
 - `006-cross-provider-interactions.md` — add **Seam 10: Cross-process provider hook bridge**, describing the wire-format-as-bridge contract.
 - `rensei-architecture/013-orchestrator-and-governor-platform-extensions.md` — add § "Cross-process Layer 6 ingestion" describing the platform-side translation, the Redis fan-out via `provider_hook_event`, and the filter rule that keeps the event off public-facing SSE streams.
 
-## Affected work items
+## Follow-on items
 
-- **REN-1184** (Proactive In-Session Memory) — completes the production wire-up that the original issue scoped against in-process providers. `InSessionMemoryInjector.subscribeToVerbBus` becomes a `globalHookBus` subscriber on `pre-tool-use`/`post-tool-use`.
-- **REN-1166** (Native Knowledge Graph) — REN-1269's cron extractor remains operational; a follow-up to make extraction event-driven now has a concrete subscription surface to use.
+- **Proactive In-Session Memory** — completes the production wire-up scoped against in-process providers. `InSessionMemoryInjector.subscribeToVerbBus` becomes a `globalHookBus` subscriber on `pre-tool-use`/`post-tool-use`.
+- **Native Knowledge Graph** — the cron extractor remains operational; a follow-up to make extraction event-driven now has a concrete subscription surface to use.
 - **Topology overlay Context satellite** — the producer side requested in the 2026-05-12 overlay UX work (commit `ddf0770`) lands via the derive-context subscriber on this bus.
 
 ## Implementation notes

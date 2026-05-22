@@ -9,7 +9,7 @@
 
 The Rensei Platform's value proposition is that users compose any process they want from a small set of composable primitives — triggers, conditions, actions, gates — wired together as a node graph on the workflow canvas. AgentFactory (OSS) is opinionated and batteries-included; Rensei (paid) is the engine that makes the user's process explicit and editable.
 
-Wave 7 (REN-1485, REN-1486, REN-1488) shipped a stage-driven SDLC implementation that, in the course of solving real wire-up gaps, accumulated coupling that contradicts that value proposition:
+Wave 7 shipped a stage-driven SDLC implementation that, in the course of solving real wire-up gaps, accumulated coupling that contradicts that value proposition:
 
 - A required `transition_to: string` field on every stage's exit (`src/lib/workflow/stages/lifecycle-schema.ts`), forcing every stage to mutate tracker state on success.
 - An auto-generated *pair* of workflows per stage (a `dispatch` workflow and a separate `exit` workflow) at publish time (`src/lib/workflow/templates/sdlc-default-stage-driven/index.ts`). Neither workflow is visible on the canvas; the user cannot see, debug, or replace them.
@@ -78,12 +78,12 @@ Concretely, this ADR accepts the following invariants for the workflow engine an
 - `016-workflow-engine.md` — new top-level section "Locus of definition — user-visible nodes only", inserted between "Workflow design discipline" and "Templating and the inter-node output piping gap".
 - `013-orchestrator-and-governor.md` — completion contracts section gets a clarifying note that contract outputs are observable artifacts (commits, comments, status transitions made via user-authored action nodes), not hidden side effects of the orchestration framework.
 
-## Affected work items
+## Follow-on items
 
-- **REN-1485** (Wave 7 stage-driven SDLC) — its current shape is the inventory under "Context"; remediation issues spawn from this ADR.
-- A new follow-up Linear issue captures the 10-item baked-in coupling inventory plus the legacy `Detect Work Type` / `Next Station` deprecations, and tracks the migration to user-visible, transparent nodes. (To be filed when this ADR is accepted.)
+- The Wave 7 stage-driven SDLC current shape is the inventory under "Context"; remediation issues spawn from this ADR.
+- A follow-up captures the 10-item baked-in coupling inventory plus the legacy `Detect Work Type` / `Next Station` deprecations, and tracks the migration to user-visible, transparent nodes.
 - The Agent Exit node primitive is a separate work item (palette + designer + executor support).
-- **`agent.work_type.detect` and `linear.issue.status_switch` deprecations** — each gets a dedicated work item: either replace with composable smaller nodes the user wires explicitly, or refactor to expose internal mappings (status table, keyword pool, override rules) as canvas-editable typed config. The Default SDLC YAML rewrite called out in `016` § "Linear realignment hooks" subsumes the user-facing portion of this work.
+- **`agent.work_type.detect` and `linear.issue.status_switch` deprecations** — each gets a dedicated work item: either replace with composable smaller nodes the user wires explicitly, or refactor to expose internal mappings (status table, keyword pool, override rules) as canvas-editable typed config.
 
 ## Implementation notes
 

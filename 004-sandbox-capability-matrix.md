@@ -187,7 +187,7 @@ interface SandboxProviderCapabilities {
 
 ## Capability profile by provider
 
-The platform ships against six providers today (REN-1194 lists Blaxel/Cloudflare/Daytona/E2B/Modal/Runloop/Vercel as the OpenAI-tracked set; Rensei's set is overlapping but not identical). The OSS execution layer ships only `Local`. Profiles below are first-cut declarations; each implementation owns its declared values and the host verifies via discrepancy detection (see `002`).
+The platform ships against multiple cloud providers (Blaxel, Cloudflare, Daytona, E2B, Modal, Runloop, Vercel and others). The OSS execution layer ships only `Local`. Profiles below are first-cut declarations; each implementation owns its declared values and the host verifies via discrepancy detection (see `002`).
 
 | Capability | Local | Vercel | E2B | Modal | Daytona | Docker | K8s |
 |---|---|---|---|---|---|---|---|
@@ -240,7 +240,7 @@ The scheduler decides which `SandboxProvider` (and which `WorkareaProvider`) han
 > § "HTTP Control API" and `ADR-2026-05-07-daemon-http-control-api.md` §§
 > D1, D4 for endpoint contracts. The wire shape of the explain response
 > mirrors the `RoutingDecision` + `RoutingTraceStep` types defined for the
-> SaaS dashboard (REN-205) so the same renderer composes both surfaces.
+> SaaS dashboard so the same renderer composes both surfaces.
 
 
 ```ts
@@ -304,7 +304,7 @@ Local pool: trivially computable. K8s: `kubectl top` + `ResourceQuotas`. Docker:
 
 ### Persistent vs on-demand modes
 
-The platform's existing `projects.sandboxMode: 'persistent' | 'on_demand'` distinction (REN-1140 / REN-1136) is **a scheduler bias, not a provider type**. Both modes use the same provider implementations.
+The platform's existing `projects.sandboxMode: 'persistent' | 'on_demand'` distinction is **a scheduler bias, not a provider type**. Both modes use the same provider implementations.
 
 - **Persistent** — scheduler keeps `provisionedActive` ≥ baseline regardless of demand. Workers stay registered. Acquire-acquire-acquire is fast.
 - **On-demand** — scheduler provisions on demand and tears down when sessions end. `provisionedActive` tracks demand directly. Cheaper but slower per-session.
@@ -325,7 +325,7 @@ This is the dominant model in research findings (E2B's `envd`, Modal's direct co
 
 The orchestrator provisions compute and waits. A worker process inside the compute boots, reads `RENSEI_REGISTRATION_TOKEN` from env, dials the orchestrator's registration endpoint, presents the token, and receives a scoped JWT. From then on, the worker pulls work from a queue (Redis/Valkey/etc.).
 
-This is the platform's existing model (REN-148 / `maybeProvisionWorker` flow). Works perfectly for K8s and Docker.
+This is the platform's existing model (`maybeProvisionWorker` flow). Works perfectly for K8s and Docker.
 
 ### Either (host-shared kernel — Local, sometimes Docker)
 
@@ -333,7 +333,7 @@ Both transports are valid. Local Mac Studio: dial-in via Unix-domain socket (loo
 
 ### A2A as transport flavor
 
-A remote A2A agent registers as a `SandboxProvider` with `isA2ARemote: true`. Provisioning is a no-op (the remote already exists). `provision` returns a handle whose `execUrl` is the A2A peer's endpoint. The orchestrator dispatches work via the A2A protocol, treating the response as session output. This is the cleanest place to integrate REN-1168 / REN-1264 (MCP↔A2A bridging) — A2A doesn't reshape the architecture, it slots into a specific extension point.
+A remote A2A agent registers as a `SandboxProvider` with `isA2ARemote: true`. Provisioning is a no-op (the remote already exists). `provision` returns a handle whose `execUrl` is the A2A peer's endpoint. The orchestrator dispatches work via the A2A protocol, treating the response as session output. A2A doesn't reshape the architecture, it slots into a specific extension point.
 
 ## Local daemon mode (the central machine pattern)
 
@@ -486,19 +486,11 @@ This pattern is currently absent from the platform's icebox parse — there's no
 
 The OSS layer can run a multi-Mac-Studio fleet on a LAN with the local provider plus optional Docker. SaaS adds the cloud burst story and the multi-tenant control plane.
 
-## Linear realignment hooks
-
-- **REN-1194 §4.f T1.a** (decouple harness from sandbox) — the seed for this whole doc. Promote out of the research issue into a standalone "ship `SandboxProvider` capability matrix + scheduler" issue.
-- **REN-205** (Routing Intelligence panel) — today scoped to LLM-provider Thompson Sampling. Extend to display sandbox-provider routing decisions: which provider was chosen, why, what was rejected. Two-dimensional routing instead of one.
-- **REN-1140 / REN-1136** (long-running runtime / parent epic) — `persistent` vs `on_demand` reframed as scheduler bias against the same providers, not separate provider types. Substrate spike scope expands accordingly.
-- **REN-1249** (cost-per-issue) — must tap `idleCostModel` and `billingModel` to attribute cost correctly. A paused E2B sandbox at $0 should not show as "compute cost" the way a metered Modal worker does.
-- **REN-148** (Vercel deploy provider) — different family (`DeploymentProvider`), but Vercel's existence as both a deploy target *and* a sandbox compute target is worth flagging. Two providers, same vendor, separate plugins; tenants may pair them for "deploy where you ran."
-
 ## Open questions
 
 1. **Workarea provider pairing.** Should a `SandboxSpec` always carry a `workareaSpec`, or are there sandbox uses without workareas (e.g., GPU eval runs that don't touch a repo)? Default: yes-always for coding-agent flows; admit "no-workarea" mode for benchmarks/eval. Concrete in `006-cross-provider-interactions.md`.
 2. **Scheduler bias function.** The cost/latency score weighting needs tenant-level config (cost-sensitive customers vs latency-sensitive). Default: 70/30 cost/latency. Real customers will want this tunable.
 3. **Health check semantics.** Do we treat a single failed `health()` as unhealthy, or require N consecutive? Default: fail-fast on `unhealthy`, two-strike on `degraded`. Tenants may override.
-4. **A2A capability shape.** A remote A2A agent doesn't expose VCpu/Memory ceilings — those are the remote's concern. Capabilities for A2A providers may need a `delegatedCapacity: true` flag and a fallback contract that the remote will refuse if it can't satisfy. Not yet specified; revisit when A2A becomes load-bearing (REN-1168/1264).
+4. **A2A capability shape.** A remote A2A agent doesn't expose VCpu/Memory ceilings — those are the remote's concern. Capabilities for A2A providers may need a `delegatedCapacity: true` flag and a fallback contract that the remote will refuse if it can't satisfy. Not yet specified; revisit when A2A becomes load-bearing.
 
 These are intentional gaps to be locked by ADR after implementation experience.

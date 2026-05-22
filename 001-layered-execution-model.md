@@ -65,7 +65,7 @@ graph TB
 
 **Workflow Definition** is a graph of typed nodes (`trigger | condition | action | gate`) referencing verbs by id and major version (`vercel@1:vercel.deploy`). Versioned grammar (`apiVersion: workflow/v1`); details in `016`.
 
-**Workflow Engine** is the runtime substrate. Compiles definitions, validates verb resolution, executes durably (signal events, gate timeouts), inherits from WEFT's typed-graph model (REN-1021). The orchestrator embeds the engine; it does not duplicate it.
+**Workflow Engine** is the runtime substrate. Compiles definitions, validates verb resolution, executes durably (signal events, gate timeouts), inherits from WEFT's typed-graph model. The orchestrator embeds the engine; it does not duplicate it.
 
 The detail for these concepts lives in `015-plugin-spec.md` and `016-workflow-engine.md`.
 
@@ -102,7 +102,7 @@ The ground floor. A unified `Provider` interface that all seven plugin families 
 - **Signing and trust** — third-party plugins are signed; enterprise tenants may require sigstore-equivalent verification.
 - **Lifecycle hooks** — pre/post/around extension points that the Policy layer attaches to.
 
-Without this layer, the seven plugin families below would each invent their own discovery, their own capability vocabulary, and their own trust model. We've already begun to see this drift in the Linear backlog (REN-1143 agent registry, REN-148 deployment provider, REN-1142 issue-tracker registry — all designed in isolation). This layer exists to stop that drift.
+Without this layer, the seven plugin families below would each invent their own discovery, their own capability vocabulary, and their own trust model. This layer exists to stop that drift.
 
 Detail: **`002-provider-base-contract.md`**.
 
@@ -114,8 +114,8 @@ Four families today:
 
 - **IssueTrackerProvider** — Linear (OSS default), Jira, Asana, Monday, sheets/Notion, "platform proxy mode."
 - **VersionControlProvider** — git hosts (GitHub/GitLab/Bitbucket), Atomic, S3 with/without versioning, structured-content backends.
-- **DeploymentProvider** — Vercel, Cloudflare Pages, custom CI hooks (REN-148 is the seed).
-- **AgentRegistry** — local YAML, git-ref, langchain, openai-assistant, A2A remote agents (REN-1143 is the seed).
+- **DeploymentProvider** — Vercel, Cloudflare Pages, custom CI hooks.
+- **AgentRegistry** — local YAML, git-ref, langchain, openai-assistant, A2A remote agents.
 
 These are the most "shaped" plugin families because external systems already have their own protocols; we adapt rather than invent. The base contract gives them shared vocabulary so a tenant can consistently say "use Jira for issues, Atomic for VCS, A2A for these agents" without each setting being a different config namespace.
 
@@ -130,7 +130,7 @@ Where work physically happens. Four sub-concepts that compose:
 - **AgentRuntimeProvider** — *which model + agentic protocol* dispatches the LLM process. Claude (Anthropic), Codex (OpenAI), Amp, Spring AI, OpenCode, Ollama, Gemini, plus A2A as a transport flavor for federated work. Each declares capabilities like `supportsMessageInjection`, `supportsSessionResume`, `supportsToolPlugins`, `emitsSubagentEvents` (drives Topology view sub-agent visibility), `streamingTransport` (sse / ndjson / websocket / none), and `humanLabel` companions for capability flags so TUI surfaces don't re-encode semantics. Each also declares a **stability tier** (`stable | beta | unstable | registration-only`); the orchestrator (`013`) consults the tier when placing work, warning on `unstable` and refusing `registration-only` unless the session is explicitly a probe.
 - **Worker** — the agent process itself. Registers with the orchestrator (dial-in or dial-out per `SandboxProvider.capabilities.transportModel`) and consumes work.
 
-The split between SandboxProvider and WorkareaProvider is critical. They are not the same concern — even on a perfectly fresh K8s pod, if you reuse it for a second session without resetting filesystem state, you get the false-positive QA bug that motivated this entire architecture (REN-1166 family). SandboxProvider gives you *compute*; WorkareaProvider guarantees *filesystem determinism inside that compute*; AgentRuntimeProvider says *which LLM speaks the protocol the orchestrator expects*.
+The split between SandboxProvider and WorkareaProvider is critical. They are not the same concern — even on a perfectly fresh K8s pod, if you reuse it for a second session without resetting filesystem state, you get the false-positive QA bug that motivated this entire architecture. SandboxProvider gives you *compute*; WorkareaProvider guarantees *filesystem determinism inside that compute*; AgentRuntimeProvider says *which LLM speaks the protocol the orchestrator expects*.
 
 The codebase's existing `AgentProvider` (`packages/core/src/providers/types.ts`) is the OSS reference implementation of `AgentRuntimeProvider`. The renaming is corpus-only; the type stays the same.
 
@@ -158,7 +158,7 @@ Detail: **`005-kit-manifest-spec.md`**.
 
 The differentiator. Memory and Code Intelligence accumulate value across sessions, providers, and tenants. They are not optional — every session reads from and writes to them, regardless of which sandbox hosted it or which Kit configured it.
 
-- **Memory** — knowledge graph (Postgres + pgvector), in-session observation capture, AST-driven file-op extraction, cross-session injection, proactive context-aware suggestions. Maps to REN-1184, 1188, 1268, 1239, 1265–1274.
+- **Memory** — knowledge graph (Postgres + pgvector), in-session observation capture, AST-driven file-op extraction, cross-session injection, proactive context-aware suggestions.
 - **Code Intelligence** — BM25 + vector hybrid search, repo map (PageRank), symbol search, dedup detection, cross-package dependency validation, type usage finding. The existing `@renseiai/agentfactory-code-intelligence` package is the OSS-shipped implementation.
 
 These services are **provider-orthogonal**: an agent running on Vercel Sandbox with an E2B-paused workarea using a Spring Java Kit still benefits from the same memory graph and same code index. Routing across providers is what makes the platform composable; *enriching across providers* is what makes it differentiated.
@@ -173,7 +173,7 @@ This is where regulated-enterprise concerns live (banking, defense, healthcare).
 
 - **Policy** — *what is allowed*. Tenant-defined rules: which models can run on which data, which kits can deploy to which environments, which agents can write to which paths. Policy is **almost entirely a SaaS control-plane concern** — the OSS layer ships only the hook surface, not opinionated implementations.
 - **Security** — *defense in depth across every layer*. Plugin signing and trust verification (Layer 1), tenant isolation and network policy (Layer 3), provenance and attestation (Layer 2 VCS), secret management (cross-cutting), prompt-injection and code-injection defense (Layer 4 Kit ingestion + Layer 5 memory writes), audit chains. Security is **shared between OSS and SaaS** — the OSS layer must ship secure defaults; the SaaS layer adds central administration and pluggable security providers (vulnerability scanners, code signers, identity providers, SIEM exporters).
-- **Observability** — *what happened*. Structured event emission from every provider lifecycle hook. Workarea ID, session ID, model dispatch decisions, cost accumulation, tool calls, agent attribution. The basis for routing intelligence (REN-205), agentic DORA (REN-1231/1248), cost-per-issue (REN-1249), and post-hoc forensics.
+- **Observability** — *what happened*. Structured event emission from every provider lifecycle hook. Workarea ID, session ID, model dispatch decisions, cost accumulation, tool calls, agent attribution. The basis for routing intelligence, agentic DORA metrics, cost-per-issue attribution, and post-hoc forensics.
 
 Defense in depth is the architectural principle that makes this layer load-bearing for enterprise sales: **each lower layer enforces a security property locally, and the policy hooks compose them into tenant-defined enforcement chains.** A failure at any single layer is contained by the layers around it. See "Security as defense in depth" below for the per-layer responsibilities.
 
@@ -212,7 +212,7 @@ Per-layer responsibilities at a glance:
 | **Integration** | VCS attestation (Atomic-style native, git-via-trailers), IssueTracker access tokens scoped to the minimum required, DeploymentProvider gate hooks (no deploy without policy approval). |
 | **Execution** | Sandbox process isolation, network egress allowlists per session, secret injection at acquire time (not in code), worker dial-in/dial-out auth (one-time tokens, JWT rotation), workarea snapshot encryption at rest. |
 | **Composition** | Kit signature verification before detect runs, untrusted-code execution policy (declarative kits run in-orchestrator, executable kits run in the workarea sandbox), MCP server permission scoping per kit, prompt-injection sanitization on ingested external content (kit docs, fetched URLs, memory queries). |
-| **Intelligence Services** | Memory row-level security per tenant/project/scope (extends REN-1265 Cedar policies), code-index access controls, audit trail for every read/write, encryption of sensitive observations at rest. |
+| **Intelligence Services** | Memory row-level security per tenant/project/scope (Cedar policies), code-index access controls, audit trail for every read/write, encryption of sensitive observations at rest. |
 | **Policy/Security/Observability hooks** | Composable enforcement chains, audit log emission, breach detection, attestation aggregation (proving the full chain of custody for a change). |
 
 Two non-obvious points worth flagging because they shape the design before doc 010 lands:

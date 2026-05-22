@@ -341,12 +341,6 @@ The workarea provider doesn't assume any of these; it asks the right VCS provide
 
 OSS users get git + Atomic + S3 working; SaaS adds the more-credentialed providers (GitLab/Bitbucket if not contributed back) and the multi-tenant audit chain.
 
-## Linear realignment hooks
-
-- Per the icebox parse (`009`), nothing in the existing backlog covers VCS abstraction. This is greenfield. Net-new issue to author:
-  > **`VCS provider abstraction with Atomic + git + S3 implementations`** — Defines `VersionControlProvider` per `008`, ships GitHub adapter (rename existing merge-queue logic to consume it), Atomic adapter (CLI shell-out), S3 adapter. Closes the assumption-of-git in core code paths.
-- **REN-148** (Vercel Integration / DeploymentProvider) — DeploymentProvider is a sibling family, not VCS. Co-design timing only — no scope shift.
-
 ## Open questions
 
 1. **Conflict resolution UX for Atomic auto-resolved cases.** When Atomic auto-resolves 5 token-level conflicts, the agent's working copy may differ from what the agent itself wrote. Should we surface a "review the auto-resolution" step? Default: log + continue; flag surfaces for tenant policy.

@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-The Rensei platform has eight plugin families: `Sandbox`, `Workarea`, `AgentRuntime`, `VersionControl`, `IssueTracker`, `Deployment`, `AgentRegistry`, `Kit`. Without a unified base contract, each family invents its own discovery, capability vocabulary, scope resolution, and trust model. We've already begun to see this drift in the existing Linear backlog — REN-1143 (agent registry plugins), REN-148 (deployment provider), and REN-1142 (issue-tracker registry) were all designed in isolation.
+The platform has eight plugin families: `Sandbox`, `Workarea`, `AgentRuntime`, `VersionControl`, `IssueTracker`, `Deployment`, `AgentRegistry`, `Kit`. Without a unified base contract, each family invents its own discovery, capability vocabulary, scope resolution, and trust model.
 
 This doc defines the single base contract every plugin family extends. Land it once, the policy/security layer (cross-cutting in `001`) has consistent extension points, the SaaS control plane has consistent administration, and tenants can configure providers in one mental model rather than eight.
 
@@ -342,7 +342,7 @@ This is the surface that policy rules attach to. Examples:
 - `pre-verb sandbox.provision args.region != 'us'` → block, log to audit.
 - `post-verb workarea.acquire` → emit cost event, attach to issue thread.
 - `verb-error vcs.push` → notify oncall.
-- `post-tool-use toolName=Read` → derive `currentFile` context entry; retrieve relevant past observations for the touched file (REN-1184).
+- `post-tool-use toolName=Read` → derive `currentFile` context entry; retrieve relevant past observations for the touched file.
 - `post-tool-use toolName=Bash input.command~/git push/` → notify deployment monitor.
 - `capability-mismatch` → quarantine provider, page security.
 
@@ -422,7 +422,7 @@ Reference declarations:
 
 | Provider | Inject | Resume | Tools | BaseInstr | Permissions | CodeIntel | Subagents | Effort | PermFormat | Tier |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `claude` | ✅ | ❌ (v0.5.0; tracked REN-1451) | ✅ | ❌ | ❌ | ❌ (gated on canUseTool) | ✅ | ✅ | claude | T1 |
+| `claude` | ✅ | ❌ (v0.5.0) | ✅ | ❌ | ❌ | ❌ (gated on canUseTool) | ✅ | ✅ | claude | T1 |
 | `codex` | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | codex | T1 |
 | `stub` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | claude | T1-test |
 | `ollama` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | claude (default) | T2 |
@@ -436,13 +436,13 @@ Each implementation is a peer-package under `agentfactory-tui/provider/`:
 - `provider/claude/` — Claude Code CLI shell-out. Per-session subprocess; JSONL stream-json mode; mid-session injection via fresh `claude --resume <id> -p <text>` subprocess that streams onto the parent Handle's events channel.
 - `provider/codex/` — Codex `app-server` JSON-RPC over stdio. Long-lived subprocess; multiple sessions multiplex via `thread/start`; permission-config bridge implements canUseTool-equivalent.
 - `provider/stub/` — deterministic scripted-event sequences for tests and the F.4 smoke harness; supports every capability so the runner exercises every gating branch.
-- `provider/ollama/` (added 2026-05-06, REN-1502) — local-first HTTP. Probe via `GET /api/tags`; spawn via streaming `POST /api/chat`; deliberately conservative capability profile (no inject, no resume, no tools).
+- `provider/ollama/` (added 2026-05-06) — local-first HTTP. Probe via `GET /api/tags`; spawn via streaming `POST /api/chat`; deliberately conservative capability profile (no inject, no resume, no tools).
 
 Provider construction (`buildAgentRunRegistry`, `afcli/agent_run.go:387`) is best-effort — each ctor probes fail-fast and the daemon logs WARN per failure but only ERRORs when zero providers register. This means an operator without Ollama installed sees the registry skip Ollama silently (visible in the WARN log), while sessions resolved to `provider="ollama"` then fail at `runner.Resolve` with `agent.ErrNoProvider` — the correct loud failure when the requested local runtime is missing.
 
 ### v2 enrichments — Accepted (2026-05-06)
 
-Adding Ollama (REN-1502), Gemini, and the registration-only Amp / OpenCode probes (this wave) surfaced where the legacy `agent.Provider` contract diverges from the unified base contract above. The five items below are **accepted as v2 enrichments** to the existing contract — there is no `apiVersion: 2` bump and no migration guide (rationale in *Decision 3* below). Each is enriched-in-place against the v1 surface; future "real" Amp / OpenCode implementations drop in against the enriched surface without a contract refactor.
+Adding Ollama, Gemini, and the registration-only Amp / OpenCode probes (this wave) surfaced where the legacy `agent.Provider` contract diverges from the unified base contract above. The five items below are **accepted as v2 enrichments** to the existing contract — there is no `apiVersion: 2` bump and no migration guide (rationale in *Decision 3* below). Each is enriched-in-place against the v1 surface; future "real" Amp / OpenCode implementations drop in against the enriched surface without a contract refactor.
 
 1. **Manifest separation.** *Accepted.* The current contract embeds discovery (binary probe, HTTP probe) in `provider.New`. The base contract requires capabilities to be readable *before* loading code. Each provider package exports a `Manifest()` static value (compile-time constant struct) consumed by daemon startup before calling `New`; `New` becomes activation-only. The existing `New(opts Options)` constructor pattern stays wired in the four call sites; the manifest is added alongside, not in place of, that constructor — so the change is additive at the provider-package boundary.
 
@@ -593,15 +593,6 @@ The migration to typed structs (per this doc) follows the standard fallback patt
 4. **Phase 3:** tag list removed.
 
 This is the same migration the legacy `AgentProvider.capabilities` struct will follow as it's renamed to `AgentRuntimeProvider.capabilities` (rename in corpus only; codebase keeps the existing type). Apply the same pattern to any future untyped-to-typed capability migration.
-
-## Linear realignment hooks
-
-Issues in the Rensei Platform backlog whose scope changes once this base contract lands. Detail in [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md); pointers here for cross-reference:
-
-- **REN-1143** (A6 agent registry with provider plugins) — agent registry is one of the seven families. It extends `Provider<'agent-registry'>`. Its draft plugin shape (`local-yaml | git-ref | langchain | openai-assistant | a2a`) becomes a set of `entry.kind` values plus a family-specific capabilities struct.
-- **REN-148** (Vercel Integration / DeploymentProvider) — same. `Provider<'deployment'>` with `VercelDeploymentProvider` as one implementation.
-- **REN-1142** (multi-tracker mirror, Jira/Asana) — same. `Provider<'issue-tracker'>` with adapter implementations.
-- **REN-1144** (org/project scoping) — directly maps onto `ProviderScope` resolution. Should be reframed as "implement scope resolution per the base contract" rather than designing a per-family scope model.
 
 ## Cross-doc updates accompanying v2
 

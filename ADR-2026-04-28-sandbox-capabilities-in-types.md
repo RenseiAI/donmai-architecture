@@ -8,9 +8,9 @@
 
 ## Context
 
-During the 2026-04-27 foundation migration, REN-1279 (Provider base contract) declared a minimal `SandboxProviderCapabilities` interface in `packages/core/src/providers/base.ts` to bootstrap the provider hierarchy. REN-1281 (SandboxProvider capability matrix) then needed the full 18-field struct described in `004-sandbox-capability-matrix.md` — `transportModel`, `supportsFsSnapshot`, `supportsPauseResume`, `idleCostModel`, `billingModel`, `regions`, `os`, `arch`, etc.
+During the 2026-04-27 foundation migration, the Provider base contract work declared a minimal `SandboxProviderCapabilities` interface in `packages/core/src/providers/base.ts` to bootstrap the provider hierarchy. The SandboxProvider capability matrix work then needed the full 18-field struct described in `004-sandbox-capability-matrix.md` — `transportModel`, `supportsFsSnapshot`, `supportsPauseResume`, `idleCostModel`, `billingModel`, `regions`, `os`, `arch`, etc.
 
-Rather than expand the base.ts declaration in place, REN-1281 added the full struct to `packages/core/src/providers/types.ts`. This produced a type-collision because both files exported `SandboxProviderCapabilities` with different shapes. Hot-fix #101 (commit 1247b7ea) resolved the collision by removing the `base.ts` re-export.
+Rather than expand the base.ts declaration in place, the full struct was added to `packages/core/src/providers/types.ts`. This produced a type-collision because both files exported `SandboxProviderCapabilities` with different shapes. Hot-fix #101 (commit 1247b7ea) resolved the collision by removing the `base.ts` re-export.
 
 The pattern this established — **rich capability structs live in `types.ts`, not `base.ts`** — is silently in conflict with corpus 002's framing where `Provider<F>`'s capability surface is defined alongside the base contract.
 
@@ -18,7 +18,7 @@ The pattern this established — **rich capability structs live in `types.ts`, n
 
 Capability structs that extend beyond the bootstrap minimum live in `packages/core/src/providers/types.ts`. The `base.ts` file holds only the `Provider<F>` shape and the names of the capability families; the rich struct definitions are owned by `types.ts` and are the canonical source of truth.
 
-**For future capability extensions** (e.g., REN-1343's VCS caps expansion), use module augmentation against `types.ts` rather than redeclaration in `base.ts`. The pattern is documented inline near the `SandboxProviderCapabilities` declaration.
+**For future capability extensions** (e.g., VCS caps expansion), use module augmentation against `types.ts` rather than redeclaration in `base.ts`. The pattern is documented inline near the `SandboxProviderCapabilities` declaration.
 
 ## Consequences
 
@@ -46,13 +46,6 @@ Capability structs that extend beyond the bootstrap minimum live in `packages/co
 
 - `002-provider-base-contract.md` — §Capabilities, add a one-line pointer: "Rich capability structs live in code at `packages/core/src/providers/types.ts`; this section describes the contract, not the file layout."
 - `004-sandbox-capability-matrix.md` — §Implementation, note that the canonical struct location is `types.ts` not `base.ts`.
-
-## Affected work items
-
-- REN-1279 (Provider base contract — origin of the minimal struct)
-- REN-1281 (SandboxProvider capability matrix — origin of the full struct)
-- REN-1343 (Expand VersionControlProviderCapabilities — must follow this pattern)
-- Hot-fix #101 (commit 1247b7ea — resolved the original collision)
 
 ## Implementation notes
 

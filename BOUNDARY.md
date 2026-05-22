@@ -175,7 +175,7 @@ The script and the workflow are sibling-repo aware: both corpora ship the same s
 Per the Phase 1 audit, several agent definition YAMLs have OSS-archetype substance + Rensei-team-specific tool allowlists. The split (per `runs/WAVE10_PHASE1_RESOLUTIONS.md` Q1 resolution) follows a composition pattern modeled on how `rensei-tui` imports `agentfactory-tui`'s command factories:
 
 - **OSS canonical**: `agentfactory-architecture/agents/<group>/<name>.yaml` — declares the archetype's purpose, model selection, inputs, completion contract, hard rules, and `tools: []` (empty placeholder; the archetype declares no Rensei-specific tools).
-- **Rensei-specific override**: `rensei-architecture/agents/<group>/<name>-rensei.yaml` — declares `extends: agentfactory-architecture/agents/<group>/<name>.yaml` in its frontmatter, then specifies the Rensei-specific `tools:` allowlist (e.g., `pnpm af-linear`, `pnpm af-code`) and any team-specific gates (e.g., the REN-1407 binary-distribution acceptance gate on `migration-coordinator-rensei.yaml`).
+- **Rensei-specific override**: `rensei-architecture/agents/<group>/<name>-rensei.yaml` — declares `extends: agentfactory-architecture/agents/<group>/<name>.yaml` in its frontmatter, then specifies the Rensei-specific `tools:` allowlist (e.g., `pnpm af-linear`, `pnpm af-code`) and any team-specific gates.
 
 The OSS YAML is genuinely runnable as a template — anyone forking AgentFactory can compose their own override layer the same way. The `extends:` field is a documentation convention today; if a future wave ships a YAML composer that actually merges them at agent-load time, the convention becomes structural.
 
