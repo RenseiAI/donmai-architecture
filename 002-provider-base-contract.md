@@ -16,7 +16,7 @@ This doc defines the single base contract every plugin family extends. Land it o
 
 ```ts
 /**
- * Every plugin family in Rensei extends this contract.
+ * Every plugin family extends this contract.
  * Family-specific verbs live on the family-typed sub-interfaces
  * (SandboxProvider, WorkareaProvider, KitProvider, etc.) declared
  * in their own reference docs (003–008).
@@ -553,7 +553,7 @@ Note: `ToolPermissionFormat` differs from the wire format the provider consumes 
 
 The four open questions from the prior draft are resolved:
 
-1. **Hot-reload during development — Default NO; opt-in via dev flag.** The host does not re-activate providers when their manifest file changes on disk by default. A `--provider-hot-reload` flag (CLI) or `RENSEI_PROVIDER_HOT_RELOAD=1` env var (daemon) opts into reload-on-manifest-change. The reload boundary: **manifest metadata, capability declarations, and scope selectors are reload-safe**; **long-lived clients (HTTP keep-alive pools, child processes such as the codex app-server, MCP server processes) are NOT reload-safe** and require a full daemon restart to pick up. Reload-safe changes apply at the next session boundary; in-flight sessions retain the pre-reload provider snapshot. Kit authors iterating on declarative manifests benefit; agent-runtime authors hacking on provider implementations should still restart the daemon.
+1. **Hot-reload during development — Default NO; opt-in via dev flag.** The host does not re-activate providers when their manifest file changes on disk by default. A `--provider-hot-reload` flag (CLI) or `DONMAI_PROVIDER_HOT_RELOAD=1` env var (daemon) opts into reload-on-manifest-change. The reload boundary: **manifest metadata, capability declarations, and scope selectors are reload-safe**; **long-lived clients (HTTP keep-alive pools, child processes such as the codex app-server, MCP server processes) are NOT reload-safe** and require a full daemon restart to pick up. Reload-safe changes apply at the next session boundary; in-flight sessions retain the pre-reload provider snapshot. Kit authors iterating on declarative manifests benefit; agent-runtime authors hacking on provider implementations should still restart the daemon.
 
 2. **Cross-family dependencies — Adopt kit manifest spec in lockstep with v2.** A provider may declare it consumes a kit's contributions (e.g., the Claude provider declares it needs the `node-sandbox` kit's toolchain at runtime). The shape lives in `005-kit-manifest-spec.md`'s `dependsOn` / `provides` model; this contract cross-references it rather than redefining it. Concrete shape: a provider's manifest gains an optional `consumesKits: KitDependency[]` field that names kits by `id` and minimum version, with the host resolving the dependency at activation. **Cross-doc lockstep:** `005` is updated in the same wave to introduce the `[provides]` / `[depends_on]` blocks the v2 contract references — see *Cross-doc updates* at the foot of this doc.
 
@@ -567,7 +567,7 @@ The five proposals captured by the prior draft are now accepted as v2 enrichment
 
 ## OSS vs SaaS responsibilities
 
-| Concern | OSS (`agentfactory` / future name) | SaaS (`Rensei Platform`) |
+| Concern | OSS (`donmai`) | SaaS (Donmai Platform) |
 |---|---|---|
 | Base interface definitions | ✅ owns | consumes |
 | Manifest schema + validation | ✅ owns | consumes |

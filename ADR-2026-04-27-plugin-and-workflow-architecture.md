@@ -28,7 +28,7 @@ A **Plugin** is one installable unit (npm package, registry artifact). It declar
 Manifest shape (VSCode/n8n hybrid):
 
 ```yaml
-apiVersion: rensei.dev/v1
+apiVersion: donmai.dev/v1
 kind: Plugin
 metadata:
   id: vercel
@@ -55,7 +55,7 @@ auth:
   type: oauth2
   scopes: [deployments:read, deployments:write, projects:read, logs:read]
 engines:
-  rensei: ">=0.9 <2.0"
+  donmai: ">=0.9 <2.0"
 ```
 
 **Single artifact** for distribution. **Atomic auth** — one OAuth flow grants the full declared scope set. **Verb namespace** enforced at registry validation: every verb must start with `<plugin>.` prefix to prevent collisions. **Major-version pinning** in workflow definitions (`vercel@1:vercel.deploy`) so plugin upgrades don't break installed workflows.
@@ -77,7 +77,7 @@ The codebase's existing `AgentProvider` is the implementation; the corpus name i
 
 ### Decision 3: Workflow Engine elevated to first-class corpus citizen
 
-The Rensei workflow engine is documented in a new corpus doc `016-workflow-engine.md`. It defines:
+The workflow engine is documented in a new corpus doc `016-workflow-engine.md`. It defines:
 
 - **Grammar:** `apiVersion: workflow/v1` (versioned), `WorkflowDefinition` resource with `metadata`, `triggers[]`, `spec.steps[]`.
 - **Node taxonomy:** `trigger | condition | action | gate`. Conditions support boolean (`branches.yes/no`) and switch (`mode: switch, cases: [...]`). Gates subscribe to typed event signals.
@@ -109,7 +109,7 @@ The architecture explicitly commits to closing the Day-1-vs-Day-40 gap (where ag
 ### Positive
 
 - **Unifies the codebase's two existing provider concepts** (`AgentProvider`, `ProviderPlugin`) under one model without a rewrite. Migration is rename + manifest extraction.
-- **Makes the Vercel friction tractable.** Single Rensei Vercel App = one install, OAuth atomic, multiple capabilities (Deployment + Sandbox + Observability + workflow verbs). No per-user-seat cost ridiculousness.
+- **Makes the Vercel friction tractable.** Single Donmai Vercel App = one install, OAuth atomic, multiple capabilities (Deployment + Sandbox + Observability + workflow verbs). No per-user-seat cost ridiculousness.
 - **Sub-issue pollution stops at the architectural level.** Backlog-writer's "1-point gets 3 sub-issues" pathology is named explicitly as an anti-pattern in `012`.
 - **SDLC workflow simplifies dramatically.** Post-W1-W5 (group support), the SDLC YAML becomes top-level case-statement-into-Group-per-work-type instead of the current 30+ node opaque chain.
 - **Spring team contribution path is concrete** — the Plugin manifest in `015` is a stable target Spring can build against.
@@ -140,7 +140,7 @@ The architecture explicitly commits to closing the Day-1-vs-Day-40 gap (where ag
 - **`004-sandbox-capability-matrix.md`** — cite `agentfactory-tui/worker/types.go` dial-out impl as reference for worker registration model.
 - **`007-intelligence-services.md`** — add language-host boundary subsection (multi-impl behind one consumer interface), add active context injection section (Day-1-vs-Day-40).
 - **`011-local-daemon-fleet.md`** — answer the GUI status open question (the TUI's `daemon status` IS the GUI surface).
-- [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md) — major expansion: cross-repo findings (agentfactory, agentfactory-tui, rensei-tui, tui-components), plugin/workflow reframe consequences, ~40 net-new issues.
+- [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md) — major expansion: cross-repo findings (agentfactory, agentfactory-tui, closed-source TUI, tui-components), plugin/workflow reframe consequences, ~40 net-new issues.
 
 ## Follow-on implementation items
 

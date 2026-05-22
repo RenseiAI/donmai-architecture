@@ -40,5 +40,5 @@ jobs:
       - name: Run BOUNDARY-SYNC check
         working-directory: agentfactory-architecture
         env:
-          RENSEI_ARCH_PATH: ${{ github.workspace }}/rensei-architecture
+          DONMAI_ARCH_PATH: ${{ github.workspace }}/rensei-architecture
         run: ./scripts/check-boundary-sync.sh

@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-Rensei needs to scale from ~10 concurrent agents (a single Mac Studio's local capacity) to ~1000+ (cloud-burst across multiple providers) without the user or the agent caring where compute physically runs. We have six platform-shipped sandbox implementations today (`Local`, `Docker`, `K8s`, `Daytona`, `E2B`, `Modal`) plus a Vercel implementation in scope for SaaS turnkey, and a likely seventh (`Atomic` or other agent-native VCS-bundled compute) on the horizon.
+Donmai needs to scale from ~10 concurrent agents (a single Mac Studio's local capacity) to ~1000+ (cloud-burst across multiple providers) without the user or the agent caring where compute physically runs. We have six platform-shipped sandbox implementations today (`Local`, `Docker`, `K8s`, `Daytona`, `E2B`, `Modal`) plus a Vercel implementation in scope for SaaS turnkey, and a likely seventh (`Atomic` or other agent-native VCS-bundled compute) on the horizon.
 
 Each provider has different lifecycle primitives, different cost shapes, different network topologies, and different snapshot/pause-resume support. A scheduler that knows about each by name doesn't scale: every new provider would force scheduler edits. The fix is **capability declaration**: each provider declares typed flags; the scheduler reasons about flags; new providers slot in by declaring their shape.
 
@@ -323,7 +323,7 @@ This is the dominant model in research findings (E2B's `envd`, Modal's direct co
 
 ### Dial-out (substrate platforms — K8s, Docker fleet, on-demand cloud)
 
-The orchestrator provisions compute and waits. A worker process inside the compute boots, reads `RENSEI_REGISTRATION_TOKEN` from env, dials the orchestrator's registration endpoint, presents the token, and receives a scoped JWT. From then on, the worker pulls work from a queue (Redis/Valkey/etc.).
+The orchestrator provisions compute and waits. A worker process inside the compute boots, reads `DONMAI_REGISTRATION_TOKEN` from env, dials the orchestrator's registration endpoint, presents the token, and receives a scoped JWT. From then on, the worker pulls work from a queue (Redis/Valkey/etc.).
 
 This is the platform's existing model (`maybeProvisionWorker` flow). Works perfectly for K8s and Docker.
 
@@ -343,7 +343,7 @@ The Local sandbox provider has two operational modes. Tenants pick one per machi
 
 A worker fleet is spawned alongside the user's editor session — typically by a VSCode/Cursor SessionStart hook or `pnpm orchestrator` invocation. The fleet's lifetime is tied to that editor process; closing the editor stops the fleet. Each project's workspace runs its own fleet, scoped to that project.
 
-This works for solo dev with one project open. It breaks down at the scale a real Rensei user actually operates: 8–20+ open workspaces, each spinning its own fleet, each requiring manual updates on every release. The user-friction cost is real and quickly dominates the OSS experience.
+This works for solo dev with one project open. It breaks down at the scale a real user actually operates: 8–20+ open workspaces, each spinning its own fleet, each requiring manual updates on every release. The user-friction cost is real and quickly dominates the OSS experience.
 
 ### Daemon mode (recommended for any user with >1 project)
 
@@ -422,7 +422,7 @@ projects:
 
 orchestrator:
   url: https://platform.rensei.dev      # SaaS — or ssh://localhost:NNNN for OSS-only
-  authToken: ${RENSEI_DAEMON_TOKEN}
+  authToken: ${DONMAI_DAEMON_TOKEN}
 
 autoUpdate:
   channel: stable              # 'stable' | 'beta' | 'main'

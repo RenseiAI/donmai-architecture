@@ -19,8 +19,8 @@ model:
 
 # Tools — OSS canonical declares no implementation-specific tools. Operators
 # extend this archetype via the `extends:` composition pattern (see BOUNDARY.md
-# § "extends: composition pattern for agents YAMLs"). The Rensei-team override
-# lives at rensei-architecture/agents/pm/backlog-writer-rensei.yaml.
+# § "extends: composition pattern for agents YAMLs"). Platform-team overrides
+# live at rensei-architecture/agents/pm/backlog-writer-rensei.yaml.
 tools:
   allow: []
   disallow:

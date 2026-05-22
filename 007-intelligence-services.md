@@ -7,7 +7,7 @@
 
 ## Why this exists
 
-The single most important user commitment from `001`: **using Rensei across LLM providers, sandbox providers, and issue trackers must produce a strictly better result than using any of those providers alone.** If we fail at that, we are an integration vendor.
+The single most important user commitment from `001`: **using Donmai across LLM providers, sandbox providers, and issue trackers must produce a strictly better result than using any of those providers alone.** If we fail at that, we are an integration vendor.
 
 Memory, Code Intelligence, and Architectural Intelligence are how that commitment is honored. They are the layer where the OSS execution layer accumulates compounding value: every session enriches the knowledge graph, every codebase improves the index, every PR refines the architectural understanding.
 
@@ -105,7 +105,7 @@ Detail is in `006` (Seam 1). Contract summary:
 
 Without this contract, every snapshot resume double-emits, every pool reuse leaks state, and eval replay (Seam 5) is unreliable. The seam doc is the authoritative source; this layer's contract just states the obligations on the memory side.
 
-### Memory access from non-Rensei contexts
+### Memory access from external contexts
 
 The principle: a tenant's accumulated graph is *theirs*, exportable in a documented schema. Two practical surfaces:
 

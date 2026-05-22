@@ -5,14 +5,14 @@
 
 **Date:** 2026-05-07
 
-**Authors:** Wave 9 coordinator (Claude Opus 4.7), confirmed by mark@rensei.dev
+**Authors:** Wave 9 coordinator (Claude Opus 4.7), confirmed by mark@donmai.dev
 
 ## Context
 
 The four daemon-targeted operator surfaces — Provider, Kit, Workarea, Routing
-— ship today as commands in the closed-source `rensei-tui` binary
+— ship today as commands in the closed-source `closed-source-tui` binary
 (`cmd/rensei/{provider,kit,workarea,routing}.go`) backed by HTTP clients in
-`rensei-tui/internal/api/{provider,kit,workarea,routing}_*.go` that reference
+`closed-source-tui/internal/api/{provider,kit,workarea,routing}_*.go` that reference
 `/v1/providers`, `/v1/kits`, `/v1/workareas`, and `/v1/routing/*`. Those
 endpoints are not implemented anywhere — neither on the SaaS platform nor on
 the local `af` daemon — so the commands have always returned misleading
@@ -28,13 +28,13 @@ Mapping the four surfaces against `001-layered-execution-model.md`:
 | Routing | Layer 3 (Execution → cross-provider scheduler) | Effective routing config + per-session explain |
 
 None has a platform-specific concern. Per the boundary discipline in
-`001-layered-execution-model.md` § "The agentfactory ↔ Rensei Platform
-contract" and `rensei-tui/AGENTS.md` § "Boundary":
+`001-layered-execution-model.md` § "The OSS↔Platform contract"
+and the closed-source TUI's boundary guidance:
 
 > Generic AgentFactory commands … are implemented in `agentfactory-tui` and
 > imported here via `afcli.RegisterCommands`. **If a generic command is
 > missing, contribute it upstream to agentfactory-tui first**, then it
-> automatically appears in rensei.
+> automatically appears in the downstream binary.
 
 Today's placement is a pre-existing boundary violation. This ADR records the
 canonical shape of the daemon's HTTP control API and the
@@ -45,7 +45,7 @@ in `runs/WAVE9_DAEMON_OSS_BOUNDARY_MIGRATION_PLAN.md`) implements it.
 
 The local `af` daemon owns an HTTP control API at the canonical namespace
 `/api/daemon/*`. The four migrating surfaces' endpoints, types, client
-methods, cobra commands, and renderers move from rensei-tui to public
+methods, cobra commands, and renderers move from closed-source-tui to public
 agentfactory-tui packages. The rensei binary picks them up automatically via
 the existing `afcli.RegisterCommands` seam.
 
@@ -82,7 +82,7 @@ GET    /api/daemon/routing/config
 GET    /api/daemon/routing/explain/<sessionID>
 ```
 
-The `/v1/*` paths the rensei-tui clients reference today are retired: they
+The `/v1/*` paths the closed-source-tui clients reference today are retired: they
 were aspirational pointers to a SaaS platform contract that never landed and
 have no place in a localhost daemon API. All client code paths in the
 migrated `afclient` methods MUST hit `/api/daemon/*`.
@@ -94,7 +94,7 @@ header is silently ignored by the daemon and MUST NOT be sent by the
 afclient methods that target it. Sending a platform user-JWT to a localhost
 service expands the trust boundary for no gain.
 
-The rensei-tui fix from commit `10275ba` (host: target the local daemon, not
+The closed-source-tui fix from commit `10275ba` (host: target the local daemon, not
 cfg.APIBaseURL) already encodes this convention by routing the four
 commands through a separate `daemonClient` rather than the platform-aware
 authenticated client. afcli inherits that separation: `afclient.Client`'s
@@ -116,7 +116,7 @@ expose what downstream consumers (rensei) compose. Wave 9 lands:
 **Renderers go in a new public `afview/` package in agentfactory-tui** —
 not `internal/views/`, not `tui-components`. The reasoning:
 
-- `internal/views/` (option a) blocks rensei-tui from importing the canonical
+- `internal/views/` (option a) blocks closed-source-tui from importing the canonical
   renderer; rensei would have to fork its own copy. That violates the
   "soldered-in" principle and re-introduces the drift Wave 9 is fixing.
 - `tui-components` (option mid) hosts low-level, surface-agnostic primitives
@@ -126,7 +126,7 @@ not `internal/views/`, not `tui-components`. The reasoning:
   load-bearing for unrelated changes.
 - `afview/` (option b, chosen) sits beside `afclient`/`afcli`/`worker` as a
   peer public package. Renderers depend on `afclient` types and on
-  `tui-components` primitives; rensei-tui imports `afview/` for the
+  `tui-components` primitives; closed-source-tui imports `afview/` for the
   authoritative composed views; tui-components stays a pure primitive
   layer.
 
@@ -286,7 +286,7 @@ This ADR resolves the four open questions from the Wave 9 plan:
 - One canonical home for OSS-execution-layer operator commands. The two
   binaries no longer fork on Provider/Kit/Workarea/Routing.
 - The rensei binary's command surface for these four areas comes for free
-  via `afcli.RegisterCommands` — no rensei-tui-resident copy of types,
+  via `afcli.RegisterCommands` — no closed-source-tui-resident copy of types,
   commands, or renderers.
 - The daemon's HTTP API lives at one canonical namespace
   (`/api/daemon/*`), matching the pre-existing seven endpoints. Operators
@@ -298,9 +298,9 @@ This ADR resolves the four open questions from the Wave 9 plan:
 ### Negative
 
 - Two repos must move in lockstep this wave: agentfactory-tui ships the
-  surface; rensei-tui simultaneously bumps its dep and deletes its old
-  copies. A botched bump leaves rensei-tui unable to build. Mitigation:
-  Track B is sequential after Track A is green; rensei-tui's CI must run
+  surface; closed-source-tui simultaneously bumps its dep and deletes its old
+  copies. A botched bump leaves closed-source-tui unable to build. Mitigation:
+  Track B is sequential after Track A is green; closed-source-tui's CI must run
   full `go test -race ./...` before the dep bump merges.
 - The `afview/` package is new and joins `afclient`/`afcli`/`worker` as a
   fourth public agentfactory-tui package. Each new public package is a
@@ -322,7 +322,7 @@ This ADR resolves the four open questions from the Wave 9 plan:
 - Restore of a corrupted archive must fail clearly (400 with reason)
   rather than half-materialising a broken pool member. Mitigation: A3
   tests cover the corrupted-archive path explicitly.
-- Renderer churn: lifting renderers from `rensei-tui/internal/views/` to
+- Renderer churn: lifting renderers from `closed-source-tui/internal/views/` to
   `agentfactory-tui/afview/` may surface previously-internal interface
   shapes (model state, msg types) that the current renderer code relied
   on. Mitigation: Track A sub-agents do the lift surface-by-surface and
@@ -336,7 +336,7 @@ This ADR resolves the four open questions from the Wave 9 plan:
 Reject. Provider/Kit/Workarea/Routing introspection is OSS-execution-layer
 plumbing (`001-layered-execution-model.md` § "The OSS execution layer never
 ships an interface whose only working implementation lives downstream in
-the SaaS product."). Putting the canonical surface on platform.rensei.dev
+the SaaS product."). Putting the canonical surface on the SaaS platform
 would leave OSS-only users without a working command and force the daemon
 to phone home for state it owns.
 
@@ -351,7 +351,7 @@ integration writers and bloats the routing table for no benefit. The
 ### Alternative 3 — Renderers in `internal/views/` (option a)
 
 Reject. Rejected on the boundary clarity grounds in D3: an internal
-package forces rensei-tui to fork its own renderers, re-introducing the
+package forces closed-source-tui to fork its own renderers, re-introducing the
 exact drift this wave fixes.
 
 ### Alternative 4 — Renderers in `tui-components`
@@ -387,7 +387,7 @@ consumer of the same data; nothing in this ADR precludes that.
 ## Affected work items
 
 - Wave 9 plan: `runs/WAVE9_DAEMON_OSS_BOUNDARY_MIGRATION_PLAN.md`.
-- Tracks Track A (4 sub-agents in agentfactory-tui), Track B (rensei-tui
+- Tracks Track A (4 sub-agents in agentfactory-tui), Track B (closed-source-tui
   cleanup), Track C (rensei-smokes coverage). Phase numbering and
   dispatch order are owned by the coordinator session.
 - Future wave: per-Provider-Family registries (Sandbox, Workarea, VCS,

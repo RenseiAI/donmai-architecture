@@ -383,7 +383,7 @@ Kits are discovered through multiple sources, identical to the base contract's d
 
 1. **Local manifests** — `.rensei/kits/*.kit.toml` in the workarea. Highest priority. Used for project-bespoke kits.
 2. **Bundled kits** — shipped with the OSS execution layer. Default TS/Next.js kit lives here.
-3. **Rensei-hosted registry** — `registry.rensei.dev` (SaaS-managed, available to OSS users via free tier).
+3. **Donmai-hosted registry** — `registry.donmai.dev` (SaaS-managed, available to OSS users via free tier).
 4. **Tessl registry** — `registry.tessl.io`. Tessl tiles map onto kit contributions: skills (SKILL.md), docs (prompt fragments), rules. Tessl has no detect phase or toolchain demand, so a Tessl-imported kit ships only the contribution subset Tessl declares; the host wraps it with a default detect.
 5. **Anthropic Skills registry** — `agentskills.io`. Same model as Tessl: import a skill, wrap it as a single-skill kit.
 6. **Other community / enterprise registries** — declared in tenant config; same manifest schema and signature requirements.
@@ -483,7 +483,7 @@ The kit doesn't know which provider satisfied the toolchain. The provider doesn'
 | Default TS/Next.js kit | ✅ ships | inherits |
 | Local manifest discovery | ✅ ships | inherits |
 | Tessl / agentskills.io adapters | ✅ ships | inherits |
-| Registry adapters (Rensei + community) | ✅ ships | ✅ ships hosted registry |
+| Registry adapters (Donmai + community) | ✅ ships | ✅ ships hosted registry |
 | Signing verification | ✅ ships permissive | ✅ ships allowlist + attested |
 | Per-tenant kit policies | ❌ | ✅ owns |
 | Kit publication / curation UI | ❌ | ✅ owns (paid) |

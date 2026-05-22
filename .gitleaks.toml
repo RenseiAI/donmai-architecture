@@ -36,10 +36,10 @@ regex = '''postgres://[^:]+:[^@]+@[a-z0-9\-]+\.neon\.tech/[^\s"']+'''
 tags = ["secret", "neon", "database"]
 
 [[rules]]
-id = "renseiai-npm-token"
-description = "Rensei scoped npm publish token (rsk_ prefix)"
+id = "donmai-npm-token"
+description = "Donmai platform scoped publish token (rsk_ prefix)"
 regex = '''rsk_[a-zA-Z0-9]{32,}'''
-tags = ["secret", "npm", "rensei"]
+tags = ["secret", "npm", "donmai"]
 
 [allowlist]
 description = "Known safe patterns"

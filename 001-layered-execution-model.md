@@ -8,14 +8,14 @@ This is the canonical mental model for the AgentFactory OSS execution layer. Eve
 
 ## Goal of the platform
 
-Rensei orchestrates fleets of coding agents — and increasingly, non-coding agents — to do real work against real customer codebases and content. The platform spans two products that share architecture but have different audiences:
+Donmai orchestrates fleets of coding agents — and increasingly, non-coding agents — to do real work against real customer codebases and content. The platform spans two products that share architecture but have different audiences:
 
-- **The OSS execution layer** (currently named `agentfactory`, rename pending) — the open-source primitive set. One CLI, one bootstrap, you can work. Ships *one* batteries-included implementation per concept.
-- **The SaaS / enterprise control plane** (`Rensei Platform`) — premium product. TUI install, signup, register workers, default workflow within minutes. Ships alternative implementations and the centralized control plane.
+- **The OSS execution layer** (`donmai`) — the open-source primitive set. One CLI, one bootstrap, you can work. Ships *one* batteries-included implementation per concept.
+- **The SaaS / enterprise control plane** (`Donmai Platform`) — premium product. TUI install, signup, register workers, default workflow within minutes. Ships alternative implementations and the centralized control plane.
 
 The single most important architectural commitment binding the two: **the OSS layer never ships an interface whose only working implementation lives downstream in the SaaS product.** Every contract in this corpus must have a usable OSS-shipped implementation.
 
-The single most important *user* commitment: **using Rensei across LLM providers, sandbox providers, and issue trackers must produce a strictly better result than using any of those providers alone.** If we fail at that, we are an integration vendor, not a platform. The Intelligence Services layer (§4 below) is where this commitment is honored.
+The single most important *user* commitment: **using Donmai across LLM providers, sandbox providers, and issue trackers must produce a strictly better result than using any of those providers alone.** If we fail at that, we are an integration vendor, not a platform. The Intelligence Services layer (§4 below) is where this commitment is honored.
 
 The single most important *quality* commitment: **project quality must compound, not decay.** Today's agent fleets show a Day-1-vs-Day-40 gap — sessions feel like magic on day one, like a slog on day forty. Conversational quality with the same models stays consistent. The architectural answer is in the Memory layer (`007`) — active context injection at session start, with this corpus and per-project CLAUDE.md as high-priority retrieval sources, plus session-end writes that compound knowledge across runs. If we don't close this gap, the platform fails its own scale story.
 
@@ -57,7 +57,7 @@ graph TB
     E -->|invokes| V
 ```
 
-**Plugin** is the unit of distribution — one installable artifact, one OAuth grant, atomic lifecycle. A plugin declares zero, one, or many implementations of typed Provider Family interfaces, AND zero, one, or many named Workflow Verbs. Examples: a "Rensei Vercel Integration" plugin implements `DeploymentProvider` + `SandboxProvider` + `ObservabilityProvider`, and exposes verbs `vercel.deploy`, `vercel.list_deployments`, `vercel.get_logs`. Single OAuth flow grants the full scope set; multiple capabilities ride the same install.
+**Plugin** is the unit of distribution — one installable artifact, one OAuth grant, atomic lifecycle. A plugin declares zero, one, or many implementations of typed Provider Family interfaces, AND zero, one, or many named Workflow Verbs. Examples: a "Donmai Vercel Integration" plugin implements `DeploymentProvider` + `SandboxProvider` + `ObservabilityProvider`, and exposes verbs `vercel.deploy`, `vercel.list_deployments`, `vercel.get_logs`. Single OAuth flow grants the full scope set; multiple capabilities ride the same install.
 
 **Provider Family** is the typed contract the platform reasons about. A scheduler picks providers by capability flags, not by plugin identity. Eight families today; see "The eight plugin families" below.
 
@@ -198,11 +198,11 @@ The OSS layer ships a working implementation of every column-2 entry. The SaaS p
 
 The table above describes each family's **typed-internal contract surface** — the cross-provider plumbing the platform reasons about. The **user-visible surface** (workflow nodes, verbs, CLI subcommands, templates, UI palettes) stays *native-rich per provider* — the platform never collapses provider-specific affordances into a lowest-common-denominator shape. See `ADR-2026-05-10-native-rich-providers.md`.
 
-A **Plugin** is an artifact that ships one or more rows above. The "Rensei Vercel Integration" plugin ships a `SandboxProvider` row (Vercel Sandbox), a `DeploymentProvider` row, an observability row, and a verb registry — one install, multiple family implementations.
+A **Plugin** is an artifact that ships one or more rows above. The "Donmai Vercel Integration" plugin ships a `SandboxProvider` row (Vercel Sandbox), a `DeploymentProvider` row, an observability row, and a verb registry — one install, multiple family implementations.
 
 ## Security as defense in depth
 
-Security is not a layer; it is a property each layer must contribute to. The architectural rule: **every layer enforces a security property locally, and the Layer 6 hooks compose them.** A breach or bypass at one layer is contained by the layers around it. The pluggable shape (a `SecurityProvider` plugin family is *not* added to the seven — security is a hook taxonomy, not a thing) means tenants can layer in scanners, signers, IDPs, and audit sinks without each Rensei subsystem reinventing them.
+Security is not a layer; it is a property each layer must contribute to. The architectural rule: **every layer enforces a security property locally, and the Layer 6 hooks compose them.** A breach or bypass at one layer is contained by the layers around it. The pluggable shape (a `SecurityProvider` plugin family is *not* added to the seven — security is a hook taxonomy, not a thing) means tenants can layer in scanners, signers, IDPs, and audit sinks without each subsystem reinventing them.
 
 Per-layer responsibilities at a glance:
 
@@ -263,7 +263,7 @@ The boundary stated as a discipline:
 
 <!-- BOUNDARY-SYNC-END: 001-agentfactory-rensei-platform-contract -->
 
-**Canonical realization.** The cleanest demonstration of this discipline lives in `rensei-tui`'s `cmd/rensei/main.go`, which calls `afcli.RegisterCommands(rootCmd, afcli.Config{...})` to import the OSS TUI's full command surface and extends with platform-specific commands on top. Public packages (`afclient`, `afcli`, `worker` in `agentfactory-tui`) carry the OSS interfaces; `internal/views` stays internal. The two-binary boundary works because the OSS layer never reaches up; the SaaS layer reaches down through public APIs only.
+**Canonical realization.** The cleanest demonstration of this discipline lives in the closed-source TUI consumer's main entry point, which calls `afcli.RegisterCommands(rootCmd, afcli.Config{...})` to import the OSS TUI's full command surface and extends with platform-specific commands on top. Public packages (`afclient`, `afcli`, `worker` in `agentfactory-tui`) carry the OSS interfaces; `internal/views` stays internal. The two-binary boundary works because the OSS layer never reaches up; the SaaS layer reaches down through public APIs only.
 
 **Where this principle has tension: webhooks.** The OSS Linear integration today requires a public URL. Long-term answer: a localtunnel-style ephemeral URL spun up by the OSS CLI. Short-term: OSS users deploy a small webhook target on Railway or equivalent. SaaS users get the platform's webhook proxy (see platform extensions). Neither violates the principle — the OSS layer remains usable; webhooks are an integration concern, not a core dependency.
 
@@ -272,7 +272,7 @@ The boundary stated as a discipline:
 ## What this corpus is not
 
 - **Not implementation reference.** Concrete code lives in source repos (`agentfactory-tui`, future Kit repos). This corpus is *contracts*. Where this corpus and code diverge, the corpus is right and the code needs to align (or an ADR amends the corpus).
-- **Not a roadmap.** Sequencing belongs in Linear; OSS readers can ignore Linear-realignment specifics — those live in `rensei-architecture/009-linear-realignment.md` and operate against the Rensei team's backlog.
+- **Not a roadmap.** Sequencing belongs in Linear; OSS readers can ignore Linear-realignment specifics — those live in `rensei-architecture/009-linear-realignment.md` and operate against the platform team's backlog.
 - **Not the brand book.** Naming decisions (the `agentfactory` rename, the Kit-or-Ofuda question) are tracked separately and updated here only after the brand team confirms.
 
 ## Reading order for new contributors

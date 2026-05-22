@@ -112,7 +112,7 @@ Welcome to AgentFactory. Let's get your machine working.
   Where do work assignments come from?
   > 1. Self-hosted (OSS only)        — point at your own webhook target
     2. Local file queue (single-user) — for solo dev, no network
-    3. Rensei Platform (SaaS)        — register with platform.rensei.dev (see platform extensions doc)
+    3. Donmai Platform (SaaS)        — register with donmai.dev/dashboard (see platform extensions doc)
   Choice [1]:
 
 [4/5] Project allowlist
@@ -141,7 +141,7 @@ Welcome to AgentFactory. Let's get your machine working.
 
 The wizard writes `~/.rensei/daemon.yaml` matching the schema in `004`. Idempotent: re-running re-prompts for changed values without resetting unchanged ones.
 
-The Step 3 "Rensei Platform (SaaS)" choice walks through registration with `platform.rensei.dev`; that branch is documented in the platform-extensions doc.
+The Step 3 "Donmai Platform (SaaS)" choice walks through registration with `donmai.dev/dashboard`; that branch is documented in the platform-extensions doc.
 
 ## Config file walkthrough
 

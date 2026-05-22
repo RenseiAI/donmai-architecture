@@ -9,13 +9,13 @@ boundary: shared
 **Status:** Accepted
 **Date:** 2026-05-10
 **Boundary:** shared (OSS-canonical; mirrored as a stub in `rensei-architecture` per `BOUNDARY.md` § "Cross-cutting ADR dual-publish")
-**Authors:** Mark Kropf (Rensei) + Rensei Agent — synthesized from architectural conversation 2026-05-10 while planning the IssueTrackerProvider abstraction for tracker #2.
+**Authors:** Mark Kropf (Rensei) + Donmai Agent — synthesized from architectural conversation 2026-05-10 while planning the IssueTrackerProvider abstraction for tracker #2.
 
 ## Context
 
 `001-layered-execution-model.md` § "Goal of the platform" commits the architecture to a user-facing promise:
 
-> **using Rensei across LLM providers, sandbox providers, and issue trackers must produce a strictly better result than using any of those providers alone. If we fail at that, we are an integration vendor, not a platform.**
+> **using Donmai across LLM providers, sandbox providers, and issue trackers must produce a strictly better result than using any of those providers alone. If we fail at that, we are an integration vendor, not a platform.**
 
 The eight Provider Families (`002`) — `Sandbox · Workarea · AgentRuntime · VCS · IssueTracker · Deployment · AgentRegistry · Kit` — each have concrete OSS impls today and a list of shipping or planned alternates. Onboarding the second impl in any family forces a design choice that reappears every time:
 
@@ -73,7 +73,7 @@ Per `002`'s capability-flags-as-the-abstraction-technique, every provider declar
 
 - **Honors the user-facing commitment from `001`.** Each provider's differentiating capabilities reach end users; the platform earns the "strictly better result than any of those providers alone" promise.
 - **Prevents progressive dilution.** LCD abstractions tend to drift toward the smallest common subset over time as new providers are added. Native-rich peers don't have that gradient.
-- **Plugins gain a real reason to exist.** A "Rensei Vercel Plugin" that ships native-rich `vercel.*` verbs is more valuable to a Vercel-using customer than a generic `deployment.run` wrapper. The native-rich discipline is what makes plugin authors' work visible.
+- **Plugins gain a real reason to exist.** A "Donmai Vercel Plugin" that ships native-rich `vercel.*` verbs is more valuable to a Vercel-using customer than a generic `deployment.run` wrapper. The native-rich discipline is what makes plugin authors' work visible.
 - **Architectural clarity for the next reviewer.** "Should this be generic or per-provider?" is decided by the surface taxonomy: internal contract = generic+typed; user-visible = per-provider+native. No case-by-case re-litigation.
 
 ### Negative

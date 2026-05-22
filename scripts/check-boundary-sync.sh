@@ -21,7 +21,7 @@
 #         or sibling repo not found
 #
 # Environment:
-#     RENSEI_ARCH_PATH   override path to sibling rensei-architecture repo;
+#     DONMAI_ARCH_PATH   override path to sibling rensei-architecture repo;
 #                        defaults to ../rensei-architecture relative to this repo
 #
 # Layout assumption: this script ships byte-identical in both
@@ -54,11 +54,11 @@ case "${THIS_REPO_NAME}" in
     ;;
 esac
 
-SIBLING_REPO_ROOT="${RENSEI_ARCH_PATH:-${SIBLING_DEFAULT}}"
+SIBLING_REPO_ROOT="${DONMAI_ARCH_PATH:-${SIBLING_DEFAULT}}"
 
 if [ ! -d "${SIBLING_REPO_ROOT}" ]; then
   echo "ERROR: sibling repo not found at ${SIBLING_REPO_ROOT}" >&2
-  echo "       set RENSEI_ARCH_PATH to override the default ../${SIBLING_NAME} layout" >&2
+  echo "       set DONMAI_ARCH_PATH to override the default ../${SIBLING_NAME} layout" >&2
   exit 2
 fi
 

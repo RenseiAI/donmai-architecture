@@ -3,9 +3,52 @@
 # --- ADR author attribution: "Mark Kropf (Rensei)" is legitimate parent-company attribution ---
 ADR-.*\.md:.*Authors:.*Mark Kropf \(Rensei\)
 
-# --- check-boundary-sync.sh: RENSEI_ARCH_PATH is the env var name in the sync script ---
-# This will be renamed to DONMAI_ARCH_PATH in the same wave; allowlisted during transition.
-scripts/check-boundary-sync\.sh:.*RENSEI_ARCH_PATH
+# --- RENSEI_ARCH_PATH renamed to DONMAI_ARCH_PATH in check-boundary-sync.sh ---
+# No longer needed; entry kept as a comment for historical context.
 
-# --- boundary-sync.yml: RENSEI_ARCH_PATH env var in CI ---
-\.github/workflows/boundary-sync\.yml:.*RENSEI_ARCH_PATH
+# --- guard-b-lint.sh self-references: the linter defines rule patterns containing the strings it checks ---
+# The script's own RULES array contains the exact patterns it scans for; these are definitional, not violations.
+scripts/guard-b-lint\.sh:.*RENSEI_BRAND
+scripts/guard-b-lint\.sh:.*RENSEI_TUI
+scripts/guard-b-lint\.sh:.*RENSEI_PLATFORM
+scripts/guard-b-lint\.sh:.*RENSEI_AI_DOMAIN
+scripts/guard-b-lint\.sh:.*RENSEI_ENV_VAR
+scripts/guard-b-lint\.sh:.*PLATFORM_PATH
+scripts/guard-b-lint\.sh:.*DEV_ABS_PATH
+
+# --- .guard-allowlist self-references: the allowlist file itself contains the patterns it exceptions ---
+# Every comment and rule line in this file may contain the very strings it's whitelisting.
+\.guard-allowlist:.*
+
+# --- BOUNDARY-SYNC marker IDs: the synchronized section marker ID contains "rensei-platform-contract"
+# This is a load-bearing corpus convention (marker IDs must be globally unique across both corpora).
+# The marker ID is NOT a brand reference; it encodes the boundary concept name.
+# Renaming this ID requires a paired-commit update to rensei-architecture as well.
+001-layered-execution-model\.md:.*001-agentfactory-rensei-platform-contract
+BOUNDARY\.md:.*001-agentfactory-rensei-platform-contract
+scripts/check-boundary-sync\.sh:.*001-agentfactory-rensei-platform-contract
+
+# --- "The agentfactory ↔ Rensei Platform contract" section heading and cross-references
+# This is the load-bearing boundary section heading that names the enterprise product (Rensei).
+# "Rensei Platform" here is legitimate parent-brand attribution for the OSS↔enterprise seam.
+# Renaming this heading requires a paired commit to rensei-architecture (BOUNDARY-SYNC).
+001-layered-execution-model\.md:.*agentfactory.*Rensei Platform contract
+BOUNDARY\.md:.*agentfactory.*Rensei Platform contract
+AGENTS\.md:.*agentfactory.*Rensei Platform contract
+ADR-template\.md:.*agentfactory.*Rensei Platform contract
+
+# --- BOUNDARY.md enterprise-brand attribution (parent-brand refs describing the OSS↔Rensei seam)
+# "Rensei SaaS dashboard", "Rensei team's backlog", "Rensei org", "Rensei-platform-specific",
+# "Rensei-team-specific", "Rensei-specific" — all legitimate enterprise-product attribution.
+BOUNDARY\.md:.*Rensei([-]| SaaS| team| org| Platform| runs)
+BOUNDARY\.md:.*no Rensei-specific tools
+BOUNDARY\.md:.*Rensei-specific override
+BOUNDARY\.md:.*runs directory
+
+# --- README.md enterprise-brand attribution (OSS↔Rensei platform seam descriptions)
+README\.md:.*Rensei([-]| SaaS| team| Platform| Architecture)
+README\.md:.*agentfactory.*Rensei Platform contract
+
+# --- ADR-template.md enterprise-brand attribution (boundary definitions)
+ADR-template\.md:.*Rensei([-]| team| org)
+

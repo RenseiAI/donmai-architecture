@@ -193,11 +193,11 @@ All three declare identical capabilities except per-host quirks (e.g., GitHub me
 
 Provenance via commit trailers:
 ```
-Co-Authored-By: <agent-name> <agent@rensei.dev>
-X-Rensei-Session-Id: <sessionId>
-X-Rensei-Kit-Set: spring/java@1.0.0,docker-compose@2.1.0
-X-Rensei-Workarea-Snapshot: <ref>
-X-Rensei-Model: anthropic/claude-opus-4-7
+Co-Authored-By: <agent-name> <agent@donmai.dev>
+X-Donmai-Session-Id: <sessionId>
+X-Donmai-Kit-Set: spring/java@1.0.0,docker-compose@2.1.0
+X-Donmai-Workarea-Snapshot: <ref>
+X-Donmai-Model: anthropic/claude-opus-4-7
 ```
 
 Tagged session SHAs are signed via configured GPG/Sigstore key when `provenanceNative: true` is requested by tenant policy.

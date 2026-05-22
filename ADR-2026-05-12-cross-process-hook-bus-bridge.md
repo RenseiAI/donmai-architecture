@@ -10,20 +10,20 @@ split: sibling-extensions
 **Status:** Accepted
 **Date:** 2026-05-12
 **Boundary:** shared (OSS-canonical contract here; platform-side ingestion and fan-out captured in `rensei-architecture/013-orchestrator-and-governor-platform-extensions.md` § "Cross-process Layer 6 ingestion")
-**Authors:** Mark Kropf (Rensei) + Rensei Agent
+**Authors:** Mark Kropf (Rensei) + Donmai Agent
 
 ## Context
 
 Layer 6 (`001-layered-execution-model.md` § Layer 6, `002-provider-base-contract.md` § "Lifecycle hooks") is the canonical surface where policy, security, observability, and intelligence services attach to provider activity. The current spec scopes the hook bus to **in-process providers**: `globalHookBus` is a TypeScript pub/sub bus in `agentfactory/packages/core/src/observability/hooks.ts`, and emissions are produced by `InstrumentedProvider` wrappers around in-process provider methods.
 
-Production reality has moved past that scope. The OSS Go daemon shipped in `agentfactory-tui/runtime/` is the AgentRuntime provider that executes every SDLC session for Rensei platform users today. It posts agent activity (`ToolUseEvent`, `ToolResultEvent`, `AssistantTextEvent`, …) to the platform's `/api/sessions/[id]/activity` HTTP endpoint, which stores them in a ring buffer + Postgres but does not emit anything on Layer 6. The consequence is that every Layer 6 subscriber written for tool-call-grained events is dark for production sessions:
+Production reality has moved past that scope. The OSS Go daemon shipped in `agentfactory-tui/runtime/` is the AgentRuntime provider that executes every SDLC session for platform users today. It posts agent activity (`ToolUseEvent`, `ToolResultEvent`, `AssistantTextEvent`, …) to the platform's `/api/sessions/[id]/activity` HTTP endpoint, which stores them in a ring buffer + Postgres but does not emit anything on Layer 6. The consequence is that every Layer 6 subscriber written for tool-call-grained events is dark for production sessions:
 
 - **InSessionMemoryInjector** defines `subscribeToVerbBus()` to inject memory mid-session when an agent touches relevant files, but the subscription is never wired and the bus has no daemon events anyway.
 - **Graph extraction** runs cron-driven over the observations table; real-time graph-aware retrieval and feedback weighting are unreachable because the events that would trigger them aren't on the bus.
 - **The Context satellite** on the topology overlay consumes `contextKey`/`contextValue` activities that no producer emits. The platform wire was completed in 2026-05-12 (commit `ddf0770`) but workers don't fill it.
-- **`af_code_*` and `af_memory_*` MCP tools** that constitute platform differentiation never surface as Layer 6 events.
+- **`af_code_*` and `af_memory_*` MCP tools** that constitute product differentiation never surface as Layer 6 events.
 
-The boundary discipline in `001-layered-execution-model.md` § "The agentfactory ↔ Rensei Platform contract" historically read the OSS↔Platform seam as **library composition, not subprocess RPC**. The Go daemon falsifies that read: the daemon is itself an OSS-shipped binary that runs as a long-lived subprocess, communicating with the platform over HTTP. This is not a violation — it is a new mode the corpus needs to admit.
+The boundary discipline in `001-layered-execution-model.md` § "The OSS↔Platform contract" historically read the seam as **library composition, not subprocess RPC**. The Go daemon falsifies that read: the daemon is itself an OSS-shipped binary that runs as a long-lived subprocess, communicating with the platform over HTTP. This is not a violation — it is a new mode the corpus needs to admit.
 
 ## Decision
 
@@ -71,11 +71,11 @@ For the Go daemon specifically, the bridge surface IS the `/api/sessions/[id]/ac
 - **Daemon-side wire payload** carries the canonical fields needed to reconstruct a hook event: `toolUseId`, `toolName`, `toolInput`, `toolOutput`, `isError`, `durationMs`, `providerName` (plus existing `type`, `content`, `timestamp`).
 - **Platform-side ingest route** translates each inbound `action` activity into the appropriate `pre-tool-use` / `post-tool-use` / `tool-use-error` event and calls `globalHookBus.emit()`.
 
-This is not a violation of the library-composition seam (`001` § "The agentfactory ↔ Rensei Platform contract") — that seam describes how OSS code and platform code compose **at build time**. The daemon-platform bridge describes how the OSS daemon binary and the platform service compose **at runtime**, which is a separate axis. Both must hold.
+This is not a violation of the library-composition seam (`001` § "The OSS↔Platform contract") — that seam describes how OSS code and platform code compose **at build time**. The daemon-platform bridge describes how the OSS daemon binary and the platform service compose **at runtime**, which is a separate axis. Both must hold.
 
 ### D3 — Cross-replica fan-out reuses the platform Redis session-event channel
 
-The platform's `globalHookBus` is per-process. The platform already serves Vercel concurrent serverless invocations and ships a Redis pub/sub fan-out for SSE session events (`platform/src/lib/events/event-bus.ts#publishSessionEvent`). The hook-bus bridge layers onto that existing infrastructure:
+The platform's `globalHookBus` is per-process. The platform already serves Vercel concurrent serverless invocations and ships a Redis pub/sub fan-out for SSE session events (`publishSessionEvent` in the platform event-bus module). The hook-bus bridge layers onto that existing infrastructure:
 
 - A new `SessionEvent.type = 'provider_hook_event'` carries a serialized `ProviderHookEvent` payload.
 - The platform-side ingest route both emits to its local `globalHookBus` AND publishes to Redis via `publishSessionEvent`.

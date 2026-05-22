@@ -30,11 +30,11 @@ OSS archetypes declare `boundary: shared` in frontmatter. Operators and platform
 
 ```yaml
 # rensei-architecture/agents/pm/backlog-writer-rensei.yaml
-apiVersion: rensei.dev/v1
+apiVersion: donmai.dev/v1
 kind: AgentDefinitionOverride
 metadata:
   id: backlog-writer-rensei
-  name: Backlog Writer (Rensei team)
+  name: Backlog Writer (platform team)
 
 # Point at the OSS canonical base.
 extends: agentfactory-architecture/agents/pm/backlog-writer.yaml
@@ -56,14 +56,14 @@ tools:
     - shell: "pnpm af-linear create-issue --parentId *"
 
 observability:
-  metricsPrefix: rensei_pm_backlog_writer
+  metricsPrefix: donmai_pm_backlog_writer
 ```
 
 The `extends:` field is resolved at publish time (not at dispatch time): the platform performs a deep-merge (child fields win on conflict) and stores the result as a flat materialized `agent_cards` row. Dispatch is a single table lookup — no chain traversal.
 
 **Merge direction is upward-only:** project-scope cards may extend org-scope or system-scope; org-scope may extend system-scope; system-scope may not extend an org-scope card.
 
-The Rensei-team's overlays live in `rensei-architecture/agents/pm/<name>-rensei.yaml`. For custom tenant overrides, create a new file using the pattern above and publish it via the platform API (`/api/org/agents` or `/api/project/agents`).
+Platform-team overlays live in `rensei-architecture/agents/pm/<name>-rensei.yaml`. For custom tenant overrides, create a new file using the pattern above and publish it via the platform API (`/api/org/agents` or `/api/project/agents`).
 
 ## Hard rule across all PM archetypes
 
@@ -91,7 +91,7 @@ The platform-level documentation for how AgentCards are published, scoped, and i
 
 ```
 ../rensei-architecture/agents/README.md       — 10-pack PM roster + Layer 6 ADR index
-platform/docs/agent-capability-layer/         — developer-facing reference docs
+<platform>/docs/agent-capability-layer/       — developer-facing reference docs
 ```
 
-The 10-pack publication (Rensei Y1 roster) uses these OSS archetypes as bases. The published system-scope cards are materialized during the Lane A1 migration (Stream A, Wave A+B+C, 2026-05-12).
+The 10-pack publication (platform Y1 roster) uses these OSS archetypes as bases. The published system-scope cards are materialized during the Lane A1 migration (Stream A, Wave A+B+C, 2026-05-12).
