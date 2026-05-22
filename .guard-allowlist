@@ -1,1 +1,11 @@
 # Allowlist: extended-regex per line. Add legitimate parent-brand or sibling-corpus refs here.
+
+# --- ADR author attribution: "Mark Kropf (Rensei)" is legitimate parent-company attribution ---
+ADR-.*\.md:.*Authors:.*Mark Kropf \(Rensei\)
+
+# --- check-boundary-sync.sh: RENSEI_ARCH_PATH is the env var name in the sync script ---
+# This will be renamed to DONMAI_ARCH_PATH in the same wave; allowlisted during transition.
+scripts/check-boundary-sync\.sh:.*RENSEI_ARCH_PATH
+
+# --- boundary-sync.yml: RENSEI_ARCH_PATH env var in CI ---
+\.github/workflows/boundary-sync\.yml:.*RENSEI_ARCH_PATH
