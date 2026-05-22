@@ -5,7 +5,7 @@
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/011-local-daemon-fleet-platform-extensions.md`)
 **Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-05-07-daemon-http-control-api.md`.
 
-> **Command surface note (2026-05-06):** Per `ADR-2026-05-06-tui-noun-consolidation.md`, the daemon CLI lifecycle commands (install, status, doctor, drain, update) are now invoked as `<binary> host *` (e.g., `af host install` for the OSS binary; `rensei host install` on the platform binary). Both binaries share the same noun model via `afcli.RegisterCommands`. The `<binary> daemon *` form shown in the example fences below remains as a hidden deprecated alias for one release.
+> **Command surface note (2026-05-06):** Per `ADR-2026-05-06-tui-noun-consolidation.md`, the daemon CLI lifecycle commands (install, status, doctor, drain, update) are now invoked as `<binary> host *` (e.g., `donmai host install` for the OSS binary; the platform binary's equivalent on the platform). Both binaries share the same noun model via `afcli.RegisterCommands`. The `<binary> daemon *` form shown in the example fences below remains as a hidden deprecated alias for one release.
 
 ## Why this exists
 
@@ -19,12 +19,12 @@ The architectural answer is the daemon model from `004`. This doc makes it real 
 
 ## The user model
 
-> "I have a Mac. I want to install AgentFactory once, configure it once, and have any project's work execute on this Mac as long as the project is allowed and credentials are wired up. I never want to think about the worker fleet again."
+> "I have a Mac. I want to install Donmai once, configure it once, and have any project's work execute on this Mac as long as the project is allowed and credentials are wired up. I never want to think about the worker fleet again."
 
 Concretely, the user's day:
 
-1. **Once at install:** `brew install af && af host install` (or equivalent on Linux). Daemon starts; registers as a system service.
-2. **Once per project:** `af project allow github.com/foo/bar`. Daemon now accepts work for that project. Credentials are picked up from system keychain or per-project config.
+1. **Once at install:** `brew install donmai && donmai host install` (or equivalent on Linux). Daemon starts; registers as a system service.
+2. **Once per project:** `donmai project allow github.com/foo/bar`. Daemon now accepts work for that project. Credentials are picked up from system keychain or per-project config.
 3. **Day-to-day:** open VSCode for any allowed project, or don't. Linear webhooks → orchestrator → daemon. The daemon clones the repo on first session, warms a workarea pool, and runs sessions. No window-switching, no per-workspace fleet management.
 4. **On release:** daemon auto-updates on configured channel. Drains in-flight work, restarts cleanly. User sees a single notification or nothing at all.
 
@@ -34,29 +34,29 @@ Concretely, the user's day:
 
 ```bash
 # One-line install
-brew install af
-af host install            # writes ~/Library/LaunchAgents/dev.rensei.daemon.plist
+brew install donmai
+donmai host install            # writes ~/Library/LaunchAgents/dev.donmai.daemon.plist
                            # loads agent; survives reboots and re-logins
 
 # Verify
-af host status
-# af-daemon: running   pid 12345   uptime 2h13m   sessions 3 / 8
+donmai host status
+# donmai-daemon: running   pid 12345   uptime 2h13m   sessions 3 / 8
 ```
 
-The launchd plist is generated from a template; the user doesn't edit it directly. The daemon binary lives at `/usr/local/bin/af` (or `~/.rensei/bin/` for user-scoped install). Logs at `~/Library/Logs/rensei/daemon.log` per macOS convention.
+The launchd plist is generated from a template; the user doesn't edit it directly. The daemon binary lives at `/usr/local/bin/donmai` (or `~/.donmai/bin/` for user-scoped install). Logs at `~/Library/Logs/donmai/daemon.log` per macOS convention.
 
 ### Linux (systemd)
 
 ```bash
-# Distro-agnostic via the AgentFactory installer
-curl -fsSL https://get.agentfactory.dev | sh
+# Distro-agnostic via the Donmai installer
+curl -fsSL https://get.donmai.dev | sh
 
 # User-scoped systemd unit (recommended)
-af host install --user
+donmai host install --user
 systemctl --user status af-daemon
 
 # System-scoped unit (multi-user shared machine)
-sudo af host install --system
+sudo donmai host install --system
 sudo systemctl status af-daemon
 ```
 
@@ -77,11 +77,11 @@ Explicitly in scope alongside x86_64. Mac Studio M-series is arm64; Graviton/Amp
 ### Docker (for self-hosted dev/test fleets)
 
 ```bash
-docker run -d --name af-daemon \
-  -v ~/.rensei:/etc/rensei \
+docker run -d --name donmai-daemon \
+  -v ~/.donmai:/etc/donmai \
   -v ~/.ssh:/root/.ssh:ro \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  agentfactory/daemon:latest
+  donmai/daemon:latest
 ```
 
 Useful for CI, ephemeral dev environments, or machines where the user doesn't want a long-running native daemon. Inherits the same config file format.
@@ -91,9 +91,9 @@ Useful for CI, ephemeral dev environments, or machines where the user doesn't wa
 On first install, an interactive wizard captures the minimum config.
 
 ```
-$ af host setup
+$ donmai host setup
 
-Welcome to AgentFactory. Let's get your machine working.
+Welcome to Donmai. Let's get your machine working.
 
 [1/5] Machine identity
   Machine ID (auto-generated): mac-studio-marks-office
@@ -112,11 +112,11 @@ Welcome to AgentFactory. Let's get your machine working.
   Where do work assignments come from?
   > 1. Self-hosted (OSS only)        — point at your own webhook target
     2. Local file queue (single-user) — for solo dev, no network
-    3. Rensei Platform (SaaS)        — register with platform.rensei.dev (see platform extensions doc)
+    3. Donmai Platform (SaaS)        — register with donmai.dev/dashboard (see platform extensions doc)
   Choice [1]:
 
 [4/5] Project allowlist
-  Allow which projects? (You can add more later with `af project allow`.)
+  Allow which projects? (You can add more later with `donmai project allow`.)
   > Detected: github.com/myorg/myrepo  [add? Y/n]
   > Add another? [n]
 
@@ -134,14 +134,14 @@ Welcome to AgentFactory. Let's get your machine working.
   Drain timeout (max wait for in-flight work before restart): [600] seconds
 
 ✔ Setup complete. Daemon is running.
-  Status: af host status
-  Logs:   af host logs
-  Stop:   af host stop
+  Status: donmai host status
+  Logs:   donmai host logs
+  Stop:   donmai host stop
 ```
 
-The wizard writes `~/.rensei/daemon.yaml` matching the schema in `004`. Idempotent: re-running re-prompts for changed values without resetting unchanged ones.
+The wizard writes `~/.donmai/daemon.yaml` matching the schema in `004`. Idempotent: re-running re-prompts for changed values without resetting unchanged ones.
 
-The Step 3 "Rensei Platform (SaaS)" choice walks through registration with `platform.rensei.dev`; that branch is documented in the platform-extensions doc.
+The Step 3 "Donmai Platform (SaaS)" choice walks through registration with `donmai.dev/dashboard`; that branch is documented in the platform-extensions doc.
 
 ## Config file walkthrough
 
@@ -151,7 +151,7 @@ The full schema is in `004`. Key knobs and when to use them:
 
 How many sessions the daemon will run in parallel. Default: 8 on a Mac Studio, 4 on a MacBook Pro. Hard ceiling enforced by the scheduler.
 
-If sessions are heavy (Cargo builds, large test suites), drop this. If sessions are light (TS typecheck only), raise it. Watch `af host stats` for per-session resource usage.
+If sessions are heavy (Cargo builds, large test suites), drop this. If sessions are light (TS typecheck only), raise it. Watch `donmai host stats` for per-session resource usage.
 
 ### `capacity.reservedForSystem`
 
@@ -186,7 +186,7 @@ For SSH-based remotes, set `sshKey` instead of `credentialHelper`.
 
 - `nightly` — check for updates at 03:00 local time. Drains and restarts if an update is available. Recommended.
 - `on-release` — checks immediately when a release notification arrives (requires SaaS or webhook). Lower latency for fixes.
-- `manual` — never auto-updates; you run `af host update` when ready.
+- `manual` — never auto-updates; you run `donmai host update` when ready.
 
 ### `orchestrator.url`
 
@@ -194,7 +194,7 @@ Where the daemon receives work assignments.
 
 - `file:///$HOME/.rensei/queue` — local file queue. Solo dev, no network. The OSS layer ships a minimal queue runner that delivers work from local Linear webhooks or CLI dispatch.
 - `https://your-deployed-orchestrator.example.com` — self-hosted orchestrator endpoint.
-- `https://platform.rensei.dev` — the SaaS control plane (platform-extension; see the platform-extensions doc for setup).
+- `donmai.dev/dashboard` — the SaaS control plane (platform-extension; see the platform-extensions doc for setup).
 
 ## Drain semantics
 
@@ -205,7 +205,7 @@ When the daemon needs to restart (auto-update, manual stop, system reboot schedu
 3. **Release pool members cleanly.** Pool members in `ready` or `warming` state are torn down; `acquired` members are forced-released as above.
 4. **Restart.** New process boots, re-registers, status returns to `ready`.
 
-For graceful planned restarts (e.g., a reboot), `af host drain` returns when drain completes. CI scripts or shutdown hooks can wait on it.
+For graceful planned restarts (e.g., a reboot), `donmai host drain` returns when drain completes. CI scripts or shutdown hooks can wait on it.
 
 ## Recovery from crash
 
@@ -214,22 +214,22 @@ If the daemon process dies unexpectedly:
 1. **System service auto-restart.** launchd / systemd brings it back. Default backoff: immediate, then 30s, 5m for repeated crashes.
 2. **In-flight sessions become orphans.** Their workareas remain on disk. The new daemon process scans on boot, marks orphan workareas as `archive`, and notifies the orchestrator. The orchestrator may re-dispatch the corresponding session work (idempotency depends on the work type — backstop logic in `packages/core/src/orchestrator/session-backstop.ts` handles much of this).
 3. **Pool state survives.** Pool members are filesystem state; they're rediscovered on daemon boot via a lightweight pool-scan that re-validates each member's `cleanStateChecksum`.
-4. **Logs preserve crash context.** macOS: `~/Library/Logs/rensei/daemon.log`; Linux: `journalctl --user -u af-daemon`. The daemon emits a final crash dump to the same path before exiting (when possible).
+4. **Logs preserve crash context.** macOS: `~/Library/Logs/donmai/daemon.log`; Linux: `journalctl --user -u donmai-daemon`. The daemon emits a final crash dump to the same path before exiting (when possible).
 
 If the daemon refuses to start, common causes:
 
-- **Bad credentials** for a configured project. Daemon logs the project ID and exits. Fix via `af project credentials github.com/foo/bar`.
-- **Port collision** for the local exec endpoint. Daemon picks a free port by default; explicit `localExecPort` in config can hit collisions. Run `af host doctor` to detect.
+- **Bad credentials** for a configured project. Daemon logs the project ID and exits. Fix via `donmai project credentials github.com/foo/bar`.
+- **Port collision** for the local exec endpoint. Daemon picks a free port by default; explicit `localExecPort` in config can hit collisions. Run `donmai host doctor` to detect.
 - **Disk full** in the pool directory. Pool members are scratch FS; running out of disk halts acquires. Default cleanup: warn at 80%, refuse new pool members at 90%.
 
-`af host doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, pool sane) and prints the failing condition.
+`donmai host doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, pool sane) and prints the failing condition.
 
 ## Logs and observability
 
 Three observability surfaces:
 
-- **`af host logs`** — tail the daemon log. NDJSON by default. Pretty-printed when stdout is a TTY.
-- **`af host stats`** — current capacity, sessions in flight, pool state per (repo, toolchain), recent acquire/release latencies.
+- **`donmai host logs`** — tail the daemon log. NDJSON by default. Pretty-printed when stdout is a TTY.
+- **`donmai host stats`** — current capacity, sessions in flight, pool state per (repo, toolchain), recent acquire/release latencies.
 - **Prometheus metrics** at `http://localhost:9101/metrics` (configurable). Scrape into your own monitoring if running multi-machine.
 
 Key NDJSON fields the daemon emits (consumed by Layer 6 observability per `006`):
@@ -245,7 +245,7 @@ Key NDJSON fields the daemon emits (consumed by Layer 6 observability per `006`)
 ## HTTP Control API
 
 The daemon binds to `127.0.0.1:7734` (configurable) and exposes a JSON HTTP
-control API used by the `af`/`rensei host *` CLI surface, by per-session
+control API used by the `donmai`/platform-binary `host *` CLI surface, by per-session
 worker children, and by integration tooling. The contract is locked in
 `ADR-2026-05-07-daemon-http-control-api.md`; this section is the
 operations-facing reference.
@@ -321,47 +321,47 @@ the caveat from the flag rather than sniffing for emptiness.
 ### "I want to test a beta release on one machine"
 
 ```bash
-af host set autoUpdate.channel beta
-af host update                 # force-pull now
-af host status                 # confirm new version
+donmai host set autoUpdate.channel beta
+donmai host update                 # force-pull now
+donmai host status                 # confirm new version
 # revert later:
-af host set autoUpdate.channel stable
+donmai host set autoUpdate.channel stable
 ```
 
 ### "I want to pause work for an hour without uninstalling"
 
 ```bash
-af host pause                  # stops accepting new work; existing finishes
+donmai host pause                  # stops accepting new work; existing finishes
 # ... do something ...
-af host resume
+donmai host resume
 ```
 
 ### "I want to add a project I haven't wired credentials for yet"
 
 ```bash
-af project allow github.com/newco/newrepo --no-credentials
+donmai project allow github.com/newco/newrepo --no-credentials
 # Daemon will refuse work for this project until credentials configured.
 # Add credentials when ready:
-af project credentials github.com/newco/newrepo
+donmai project credentials github.com/newco/newrepo
 ```
 
 ### "Pool's getting big, disk is filling"
 
 ```bash
-af host stats --pool           # see usage by (repo, toolchain)
-af host evict --repo github.com/old/project --older-than 7d
+donmai host stats --pool           # see usage by (repo, toolchain)
+donmai host evict --repo github.com/old/project --older-than 7d
 # or
-af host set capacity.poolMaxDiskGb 100
+donmai host set capacity.poolMaxDiskGb 100
 # the daemon will LRU-evict to fit
 ```
 
 ### "I need to inspect a workarea after a session failed"
 
 ```bash
-af session list --status failed --limit 10
-af session inspect <session-id>
+donmai session list --status failed --limit 10
+donmai session inspect <session-id>
 # Workarea was archived on failure (default); restore for inspection:
-af session restore-workarea <session-id> --to ~/debug/sess-XYZ
+donmai session restore-workarea <session-id> --to ~/debug/sess-XYZ
 ```
 
 ## Open questions

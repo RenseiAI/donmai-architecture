@@ -1,0 +1,51 @@
+# .gitleaks.toml — place in repo root of every public Donmai repo
+title = "Donmai gitleaks config"
+
+[extend]
+# Inherit the full upstream gitleaks default ruleset
+useDefault = true
+
+[[rules]]
+id = "linear-api-key"
+description = "Linear API key"
+regex = '''lin_api_[a-zA-Z0-9]{40}'''
+tags = ["secret", "linear"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key"
+regex = '''sk-ant-[a-zA-Z0-9\-_]{90,}'''
+tags = ["secret", "anthropic"]
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API key"
+regex = '''sk-[a-zA-Z0-9]{48}'''
+tags = ["secret", "openai"]
+
+[[rules]]
+id = "workos-api-key"
+description = "WorkOS secret key"
+regex = '''sk_[a-z]+_[a-zA-Z0-9]{40,}'''
+tags = ["secret", "workos"]
+
+[[rules]]
+id = "neon-connection-string"
+description = "Neon Postgres connection string"
+regex = '''postgres://[^:]+:[^@]+@[a-z0-9\-]+\.neon\.tech/[^\s"']+'''
+tags = ["secret", "neon", "database"]
+
+[[rules]]
+id = "donmai-npm-token"
+description = "Donmai platform scoped publish token (rsk_ prefix)"
+regex = '''rsk_[a-zA-Z0-9]{32,}'''
+tags = ["secret", "npm", "donmai"]
+
+[allowlist]
+description = "Known safe patterns"
+regexes = [
+  # Test fixture placeholder, never a real key
+  '''sk-ant-REPLACE_ME''',
+  # CI env-var name references (not values)
+  '''ANTHROPIC_API_KEY\s*=\s*\$\{''',
+]

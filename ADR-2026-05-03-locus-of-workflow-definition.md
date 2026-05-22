@@ -7,17 +7,17 @@
 
 ## Context
 
-The Rensei Platform's value proposition is that users compose any process they want from a small set of composable primitives — triggers, conditions, actions, gates — wired together as a node graph on the workflow canvas. AgentFactory (OSS) is opinionated and batteries-included; Rensei (paid) is the engine that makes the user's process explicit and editable.
+The platform's value proposition is that users compose any process they want from a small set of composable primitives — triggers, conditions, actions, gates — wired together as a node graph on the workflow canvas. Donmai (OSS) is opinionated and batteries-included; the paid tier is the engine that makes the user's process explicit and editable.
 
-Wave 7 (REN-1485, REN-1486, REN-1488) shipped a stage-driven SDLC implementation that, in the course of solving real wire-up gaps, accumulated coupling that contradicts that value proposition:
+Wave 7 shipped a stage-driven SDLC implementation that, in the course of solving real wire-up gaps, accumulated coupling that contradicts that value proposition:
 
-- A required `transition_to: string` field on every stage's exit (`src/lib/workflow/stages/lifecycle-schema.ts`), forcing every stage to mutate tracker state on success.
-- An auto-generated *pair* of workflows per stage (a `dispatch` workflow and a separate `exit` workflow) at publish time (`src/lib/workflow/templates/sdlc-default-stage-driven/index.ts`). Neither workflow is visible on the canvas; the user cannot see, debug, or replace them.
+- A required `transition_to: string` field on every stage's exit (`lifecycle-schema.ts`), forcing every stage to mutate tracker state on success.
+- An auto-generated *pair* of workflows per stage (a `dispatch` workflow and a separate `exit` workflow) at publish time (`sdlc-default-stage-driven/index.ts`). Neither workflow is visible on the canvas; the user cannot see, debug, or replace them.
 - A hardcoded `CANONICAL_STAGE_IDS` list of five SDLC stages (`research`, `backlog-writer`, `development`, `qa`, `acceptance`) that the dispatcher (`agent.dispatch_stage`) and prompt loader reject anything outside of.
-- A trigger normaliser that emits hardcoded `com.rensei.stage.<id>.start` CloudEvents — users cannot substitute their own trigger.
-- Stage prompts are TypeScript modules in `src/lib/workflow/stages/prompts/<stageId>.ts`; users cannot supply a prompt via configuration.
+- A trigger normaliser that emits hardcoded `com.platform.stage.<id>.start` CloudEvents — users cannot substitute their own trigger.
+- Stage prompts are TypeScript modules under `stages/prompts/<stageId>.ts`; users cannot supply a prompt via configuration.
 
-The same antipattern predates wave 7. The legacy default SDLC workflow (`Downloads/rensei-default-sdlc.yaml`) ships two condition nodes whose user-facing surface is a list of case labels but whose decision logic lives in node-implementation code rather than on the canvas:
+The same antipattern predates wave 7. The legacy default SDLC workflow template ships two condition nodes whose user-facing surface is a list of case labels but whose decision logic lives in node-implementation code rather than on the canvas:
 
 - **`agent.work_type.detect` ("Detect Work Type")** — surface shows cases `[development, inflight, qa, acceptance, refinement, research]`. The actual routing logic (`STATUS_WORK_TYPE_MAP`, mention-keyword scan, first-touch override that promotes `inflight`→`development` when no session exists) lives in `src/lib/nodes/condition/agent.work_type.detect/backend.ts`. From the user's perspective, the node is a black box: they see *that* a routing decision happens, not *how* or *why*.
 - **`linear.issue.status_switch` ("Next Station")** — same shape; routing between Finished→QA, Delivered→Acceptance, Rejected→Refinement is encoded in the node's TypeScript backend, not on the canvas.
@@ -51,7 +51,7 @@ Concretely, this ADR accepts the following invariants for the workflow engine an
 - The platform's value proposition becomes literally true: users can author any process. The "social DM pipeline" example is achievable on the canvas without code changes.
 - Wave 7's debugging difficulty (9 wire-up gaps across 9 PRs in this iteration alone) drops sharply — when behavior is on the canvas, it is grep-able and correlatable to a specific node id.
 - The OSS / SaaS boundary in `016` becomes more honest: OSS owns the grammar and runtime; SaaS adds the visual designer that makes node-graph authoring tractable. Hidden auto-generated workflows muddied this — they were behavior shipped by SaaS templates that OSS users could not see or edit.
-- Customers who upgrade from AgentFactory to Rensei get exactly the upgrade we sell: their soldered SDLC unfolds into composable nodes they own.
+- Customers who upgrade from Donmai OSS to the paid tier get exactly the upgrade we sell: their soldered SDLC unfolds into composable nodes they own.
 
 ### Negative
 
@@ -78,12 +78,12 @@ Concretely, this ADR accepts the following invariants for the workflow engine an
 - `016-workflow-engine.md` — new top-level section "Locus of definition — user-visible nodes only", inserted between "Workflow design discipline" and "Templating and the inter-node output piping gap".
 - `013-orchestrator-and-governor.md` — completion contracts section gets a clarifying note that contract outputs are observable artifacts (commits, comments, status transitions made via user-authored action nodes), not hidden side effects of the orchestration framework.
 
-## Affected work items
+## Follow-on items
 
-- **REN-1485** (Wave 7 stage-driven SDLC) — its current shape is the inventory under "Context"; remediation issues spawn from this ADR.
-- A new follow-up Linear issue captures the 10-item baked-in coupling inventory plus the legacy `Detect Work Type` / `Next Station` deprecations, and tracks the migration to user-visible, transparent nodes. (To be filed when this ADR is accepted.)
+- The Wave 7 stage-driven SDLC current shape is the inventory under "Context"; remediation issues spawn from this ADR.
+- A follow-up captures the 10-item baked-in coupling inventory plus the legacy `Detect Work Type` / `Next Station` deprecations, and tracks the migration to user-visible, transparent nodes.
 - The Agent Exit node primitive is a separate work item (palette + designer + executor support).
-- **`agent.work_type.detect` and `linear.issue.status_switch` deprecations** — each gets a dedicated work item: either replace with composable smaller nodes the user wires explicitly, or refactor to expose internal mappings (status table, keyword pool, override rules) as canvas-editable typed config. The Default SDLC YAML rewrite called out in `016` § "Linear realignment hooks" subsumes the user-facing portion of this work.
+- **`agent.work_type.detect` and `linear.issue.status_switch` deprecations** — each gets a dedicated work item: either replace with composable smaller nodes the user wires explicitly, or refactor to expose internal mappings (status table, keyword pool, override rules) as canvas-editable typed config.
 
 ## Implementation notes
 

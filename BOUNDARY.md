@@ -156,7 +156,7 @@ Phase 5 ships `scripts/check-boundary-sync.sh` to detect drift on `BOUNDARY-SYNC
 - **Lookup mode.** With no arguments, the script enumerates all marker ids in this repo, locates the matching marker pair in the sibling repo (`../rensei-architecture/`), extracts the bounded text in both, and `diff`s.
 - **Single-id mode.** With one argument (a marker id), the script checks that one pair only. Useful for fast iteration during a sync edit: `./scripts/check-boundary-sync.sh 001-agentfactory-rensei-platform-contract`.
 - **Exit codes.** `0` if all pairs match. `1` if any pair drifts (with `diff` output to stderr). `2` if a marker is unpaired or missing in the sibling repo (configuration error).
-- **Sibling layout assumption.** The sibling repo is at `../rensei-architecture/` relative to this repo. Override with `RENSEI_ARCH_PATH=/abs/path` for non-default layouts.
+- **Sibling layout assumption.** The sibling repo is at `../rensei-architecture/` relative to this repo. Override with `DONMAI_ARCH_PATH=/abs/path` for non-default layouts.
 
 Local invocation:
 
@@ -172,12 +172,12 @@ The script and the workflow are sibling-repo aware: both corpora ship the same s
 
 ## `extends:` composition pattern for agents YAMLs
 
-Per the Phase 1 audit, several agent definition YAMLs have OSS-archetype substance + Rensei-team-specific tool allowlists. The split (per `runs/WAVE10_PHASE1_RESOLUTIONS.md` Q1 resolution) follows a composition pattern modeled on how `rensei-tui` imports `agentfactory-tui`'s command factories:
+Per the Phase 1 audit, several agent definition YAMLs have OSS-archetype substance + Rensei-team-specific tool allowlists. The split (per `runs/WAVE10_PHASE1_RESOLUTIONS.md` Q1 resolution) follows a composition pattern modeled on how the closed-source TUI imports `donmai`'s command factories:
 
 - **OSS canonical**: `agentfactory-architecture/agents/<group>/<name>.yaml` — declares the archetype's purpose, model selection, inputs, completion contract, hard rules, and `tools: []` (empty placeholder; the archetype declares no Rensei-specific tools).
-- **Rensei-specific override**: `rensei-architecture/agents/<group>/<name>-rensei.yaml` — declares `extends: agentfactory-architecture/agents/<group>/<name>.yaml` in its frontmatter, then specifies the Rensei-specific `tools:` allowlist (e.g., `pnpm af-linear`, `pnpm af-code`) and any team-specific gates (e.g., the REN-1407 binary-distribution acceptance gate on `migration-coordinator-rensei.yaml`).
+- **Rensei-specific override**: `rensei-architecture/agents/<group>/<name>-rensei.yaml` — declares `extends: agentfactory-architecture/agents/<group>/<name>.yaml` in its frontmatter, then specifies the Rensei-specific `tools:` allowlist (e.g., `pnpm af-linear`, `pnpm af-code`) and any team-specific gates.
 
-The OSS YAML is genuinely runnable as a template — anyone forking AgentFactory can compose their own override layer the same way. The `extends:` field is a documentation convention today; if a future wave ships a YAML composer that actually merges them at agent-load time, the convention becomes structural.
+The OSS YAML is genuinely runnable as a template — anyone forking Donmai can compose their own override layer the same way. The `extends:` field is a documentation convention today; if a future wave ships a YAML composer that actually merges them at agent-load time, the convention becomes structural.
 
 Five agent YAMLs are split this way (verified shipped in Phase 3):
 

@@ -20,7 +20,7 @@ model:
 
 # Tools — OSS canonical declares a generic shape: validation-command +
 # task-spawn primitive. Operators extend this archetype via the `extends:`
-# composition pattern (see BOUNDARY.md). The Rensei-team override lives at
+# composition pattern (see BOUNDARY.md). Platform-team overrides live at
 # rensei-architecture/agents/migration/migration-coordinator-rensei.yaml.
 tools:
   allow:

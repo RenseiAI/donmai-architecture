@@ -9,13 +9,13 @@ boundary: shared
 **Status:** Accepted
 **Date:** 2026-05-10
 **Boundary:** shared (OSS-canonical; mirrored as a stub in `rensei-architecture` per `BOUNDARY.md` § "Cross-cutting ADR dual-publish")
-**Authors:** Mark Kropf (Rensei) + Rensei Agent — synthesized from architectural conversation 2026-05-10 while planning the IssueTrackerProvider abstraction for tracker #2.
+**Authors:** Mark Kropf (Rensei) + Donmai Agent — synthesized from architectural conversation 2026-05-10 while planning the IssueTrackerProvider abstraction for tracker #2.
 
 ## Context
 
 `001-layered-execution-model.md` § "Goal of the platform" commits the architecture to a user-facing promise:
 
-> **using Rensei across LLM providers, sandbox providers, and issue trackers must produce a strictly better result than using any of those providers alone. If we fail at that, we are an integration vendor, not a platform.**
+> **using Donmai across LLM providers, sandbox providers, and issue trackers must produce a strictly better result than using any of those providers alone. If we fail at that, we are an integration vendor, not a platform.**
 
 The eight Provider Families (`002`) — `Sandbox · Workarea · AgentRuntime · VCS · IssueTracker · Deployment · AgentRegistry · Kit` — each have concrete OSS impls today and a list of shipping or planned alternates. Onboarding the second impl in any family forces a design choice that reappears every time:
 
@@ -52,7 +52,7 @@ This surface MUST work across providers without provider-conditional branches in
 Workflow nodes, workflow verbs, CLI subcommands, UI palettes, templates, and any other surface a user authors against MUST stay native-rich per provider. Each provider exposes its full differentiating capability:
 
 - **Workflow nodes:** Linear's 21 native nodes (incl. `linear.agent_session.*`, `linear.issue.create_sub_issue`, etc.) stay as-is. GitHub Issues ships its own native node set (`github_issues.task_list.*`, `github_issues.review.*`, `github_issues.linked_pr.*`). Jira ships epic-aware nodes. Adding a provider grows the catalog; it never trims the existing ones.
-- **CLI:** `af linear *`, `af jira *`, `af github *` are sibling subcommand trees, not a single `af tracker --provider <id>`. (REN-96–REN-105 from `009` rescopes accordingly.)
+- **CLI:** `donmai linear *`, `donmai jira *`, `donmai github *` are sibling subcommand trees, not a single `donmai tracker --provider <id>`.
 - **Workflow verbs:** `vercel.deploy`, `cloudflare.deploy`, `github.pr.create`, `atomic.patch.commit` stay distinct. Generic wrappers like `deploy.run` or `vcs.merge` are explicitly out.
 - **Templates:** A SDLC template for Linear-shaped tenants references Linear-native nodes; a SDLC template for GitHub-Issues-shaped tenants references GitHub-Issues-native nodes. We ship per-provider template variants, not one template with a provider knob.
 - **UI:** The workflow editor, CLI help, and provider-specific dashboards filter by which integrations are enabled and which capabilities each declares. Doubling node count per added provider is the correct cost; the editor's palette filtering is what keeps the surface tractable for users.
@@ -73,7 +73,7 @@ Per `002`'s capability-flags-as-the-abstraction-technique, every provider declar
 
 - **Honors the user-facing commitment from `001`.** Each provider's differentiating capabilities reach end users; the platform earns the "strictly better result than any of those providers alone" promise.
 - **Prevents progressive dilution.** LCD abstractions tend to drift toward the smallest common subset over time as new providers are added. Native-rich peers don't have that gradient.
-- **Plugins gain a real reason to exist.** A "Rensei Vercel Plugin" that ships native-rich `vercel.*` verbs is more valuable to a Vercel-using customer than a generic `deployment.run` wrapper. The native-rich discipline is what makes plugin authors' work visible.
+- **Plugins gain a real reason to exist.** A "Donmai Vercel Plugin" that ships native-rich `vercel.*` verbs is more valuable to a Vercel-using customer than a generic `deployment.run` wrapper. The native-rich discipline is what makes plugin authors' work visible.
 - **Architectural clarity for the next reviewer.** "Should this be generic or per-provider?" is decided by the surface taxonomy: internal contract = generic+typed; user-visible = per-provider+native. No case-by-case re-litigation.
 
 ### Negative
@@ -104,16 +104,16 @@ Per `002`'s capability-flags-as-the-abstraction-technique, every provider declar
 - **`015-plugin-spec.md`** — verb-namespace enforcement section explicitly notes that verbs are provider-shaped, not generic-shaped. Plugin manifests cannot register verbs with cross-provider names (e.g., `tracker.*`, `vcs.*`, `sandbox.*` are reserved against accidental LCD adoption).
 - **`016-workflow-engine.md`** — palette filtering by enabled integrations + provider capability flags is added as a first-class editor concern. Compile-time verb resolution gains the "verb's provider must be enabled" check.
 - [`rensei-architecture/006-cross-provider-interactions-platform-extensions.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/006-cross-provider-interactions-platform-extensions.md) — Seam descriptions reaffirm that cross-provider seams operate at the *internal contract* layer, not the user-visible surface.
-- [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md) — Section A entries for **REN-1142** (Multi-tracker mirror) and **#49** (Linear client → IssueTrackerProvider impl) updated to reflect the two-surface split: contract-side abstraction yes; node-collapse no.
+- `rensei-architecture/009-linear-realignment.md` — updated to reflect the two-surface split: contract-side abstraction yes; node-collapse no.
 
-## Affected work items
+## Follow-on items
 
-- **REN-1142** (Multi-tracker mirror, Jira/Asana) — IssueTrackerProvider abstraction follows this ADR. Internal contract abstracts dispatch / OAuth / webhook / activity. Workflow nodes stay native-rich per tracker.
-- **#49 in `009` Section B** (Linear client → IssueTrackerProvider impl) — refactor scope is internal-contract only; the 21 Linear nodes are not collapsed.
+- **Multi-tracker mirror (Jira/Asana)** — IssueTrackerProvider abstraction follows this ADR. Internal contract abstracts dispatch / OAuth / webhook / activity. Workflow nodes stay native-rich per tracker.
+- **Linear client → IssueTrackerProvider impl** — refactor scope is internal-contract only; the 21 Linear nodes are not collapsed.
 - **(net-new) GitHub Issues IssueTrackerProvider impl** — first validating implementation of the ADR. Ships with its own native-rich workflow node set and its own SDLC template variant.
 - **(net-new) Workflow editor palette filtering by enabled integrations + capability flags** — load-bearing UX consequence of this ADR. Belongs in the workflow-engine work cluster.
-- **REN-148 family** (Vercel Integration / DeploymentProvider) — when a second deployment provider ships (Cloudflare, custom CI), Vercel's native verbs stay; the new provider ships its native verbs alongside.
-- **REN-1143 family** (Agent registry plugins) — the entry-kind taxonomy from the manifest stays per-source; we don't collapse `local-yaml | git-ref | langchain | a2a` to a single generic.
+- **Vercel Integration / DeploymentProvider** — when a second deployment provider ships (Cloudflare, custom CI), Vercel's native verbs stay; the new provider ships its native verbs alongside.
+- **Agent registry plugins** — the entry-kind taxonomy from the manifest stays per-source; we don't collapse `local-yaml | git-ref | langchain | a2a` to a single generic.
 - **Sandbox / Workarea / VCS / AgentRuntime / Kit second-impl work items** — the same discipline applies whenever the second implementation in any of these families lands. Cross-reference this ADR in those issues' scope.
 
 ## Implementation notes

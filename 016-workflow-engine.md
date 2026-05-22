@@ -6,13 +6,13 @@
 
 ## Why this exists
 
-The Rensei Platform shipped a workflow engine inspired by [WeaveMindAI/weft](https://github.com/WeaveMindAI/weft) (REN-1021 competitive intel + decision doc, Accepted 2026-04-17). Workflows are graphs of typed nodes that compose plugin verbs into runnable processes — the SDLC dispatch, custom QA pipelines, eventual scheduled flows. The engine is the runtime substrate the orchestrator embeds; the corpus needs to specify it formally because every Plugin's verbs are invoked through it.
+The platform shipped a workflow engine inspired by [WeaveMindAI/weft](https://github.com/WeaveMindAI/weft) (Accepted 2026-04-17). Workflows are graphs of typed nodes that compose plugin verbs into runnable processes — the SDLC dispatch, custom QA pipelines, eventual scheduled flows. The engine is the runtime substrate the orchestrator embeds; the corpus needs to specify it formally because every Plugin's verbs are invoked through it.
 
-The engine is **versioned grammar** (`apiVersion: workflow/v1`), **typed nodes**, **durable execution**, **compile-time validation**. It inherits from WEFT's "if it compiles, it runs" property and adds Rensei-specific patterns (BFSI approval gates, multi-tracker scoping, agent dispatch as a first-class action class).
+The engine is **versioned grammar** (`apiVersion: workflow/v1`), **typed nodes**, **durable execution**, **compile-time validation**. It inherits from WEFT's "if it compiles, it runs" property and adds domain-specific patterns (BFSI approval gates, multi-tracker scoping, agent dispatch as a first-class action class).
 
 ### What we adopted from WEFT
 
-The W1-W5 imports from REN-1021 (in active backlog as platform issues, including REN-1139 "Loop node type, composes with Weft W2 groups"):
+The W1-W5 imports from WEFT (the loop node type composes with Weft W2 groups):
 
 - **W1: Typed ports + compile-time edge validation.** Reject type-incompatible edges at save time with actionable errors.
 - **W2: Recursive groups with scoped typed interfaces.** Any subgraph collapses to a reusable node with declared inputs/outputs. Single biggest lever for workflow legibility at scale.
@@ -22,7 +22,7 @@ The W1-W5 imports from REN-1021 (in active backlog as platform issues, including
 
 ### What we declined from WEFT
 
-Per REN-1021 §7:
+Per the WEFT research decision:
 
 - **Restate-based durable executor.** Our DB-memoized DAG executor + Redis pub/sub is durable-enough; Restate adds K8s coupling.
 - **Compile-to-Rust standalone binary.** No customer problem this solves.
@@ -47,7 +47,7 @@ metadata:
 # Required providers — refuse to deploy if not active
 requires:
   - plugin: linear@1
-  - plugin: agentfactory@1
+  - plugin: donmai@1
   - plugin: vercel@1
 
 # Triggers — entry points that fire workflow runs
@@ -74,9 +74,9 @@ spec:
     - id: route_by_size
       type: condition
       config:
-        action: agentfactory@1:agent.size_estimate
+        action: donmai@1:agent.size_estimate
         nodeId: agent.size_estimate
-        provider: agentfactory
+        provider: donmai
       branches:
         small: run_unit_tests
         medium: run_unit_and_integration
@@ -90,8 +90,8 @@ spec:
     - id: run_unit_tests
       type: action
       config:
-        action: agentfactory@1:agent.dispatch_to_queue
-        provider: agentfactory
+        action: donmai@1:agent.dispatch_to_queue
+        provider: donmai
         workType: qa
         scope: unit-tests-only
       next: [report_results]
@@ -149,7 +149,7 @@ Branching node. Two modes.
   type: condition
   config:
     mode: switch
-    action: agentfactory@1:agent.work_type.detect
+    action: donmai@1:agent.work_type.detect
     cases: [development, qa, acceptance, refinement, research]
     defaultHandle: true
   branches:
@@ -171,8 +171,8 @@ Side-effect node. Invokes a plugin verb. Outputs feed downstream nodes.
 - id: dispatch_dev
   type: action
   config:
-    action: agentfactory@1:agent.dispatch_to_queue
-    provider: agentfactory
+    action: donmai@1:agent.dispatch_to_queue
+    provider: donmai
     workType: development
     issueId: ${trigger.data.issueId}
   next: [await_completion]
@@ -237,11 +237,11 @@ For gate nodes specifically:
 - When a matching event arrives (from any plugin's webhook handler emitting it onto the signal bus), the gate resumes and continues to its `next` step.
 - Timeouts handle the no-event case: `onTimeout: skip` advances; `error` halts the run; `branch:<step-id>` reroutes.
 
-This is durable-enough for the use cases REN-1021 enumerated. Restate-style cluster-of-actor durability is explicitly declined per the WEFT decline list.
+This is durable-enough for the use cases enumerated in the WEFT research. Restate-style cluster-of-actor durability is explicitly declined per the WEFT decline list.
 
 ## Workflow design discipline
 
-The legacy auto-generated SDLC YAML (`/Users/markkropf/Downloads/rensei-default-sdlc.yaml`) is the canonical example of *what not to do*. Long flat chain of `parent? → ack → dispatch → ack → dispatch` per work type, plus an opaque `Detect Work Type` switch. The pathology W1.b (recursive groups) was imported to fix.
+The legacy auto-generated SDLC YAML (the default SDLC template) is the canonical example of *what not to do*. Long flat chain of `parent? → ack → dispatch → ack → dispatch` per work type, plus an opaque `Detect Work Type` switch. The pathology W1.b (recursive groups) was imported to fix.
 
 **Top-level discipline:** A workflow's root view should fit on a single screen. Detail belongs in groups.
 
@@ -267,7 +267,7 @@ spec:
       type: condition
       config:
         mode: switch
-        action: agentfactory@2:agent.classify_request
+        action: donmai@2:agent.classify_request
         cases: [research, refinement, development, qa, acceptance, ad-hoc]
       branches:
         research: research_group
@@ -316,12 +316,12 @@ The transitions themselves are not the issue. `linear.issue.update`, `linear.iss
 
 5. **The Agent Exit primitive.** Today's "Agent Session Completed" and "Agent Session Failed" exist as two separate trigger node types. They fold into a single **Agent Exit** node with `success` and `fail` output edges, so post-agent flow is one node with two branches rather than two parallel trigger chains. This is the right primitive shape for the canvas; everything downstream (the locus rule, the lifecycle-config compilation target, the cross-link to Topology view) gets cleaner with it.
 
-6. **Node transparency — every node's logic is on its surface.** A node's behavior must be visible and configurable from the canvas, not hidden in node-implementation code or behind opaque JSON payloads. A switch-mode condition that shows a list of case labels while its routing rules live in TypeScript is a black box from the user's perspective: they see *that* a decision happens, not *how*. So is any node that requires pasting a long JSON config blob to invoke hidden code paths the user cannot inspect. If a node's decision logic is non-trivial, that logic must be exposed as named, typed, editable inputs — rules, mappings, prompts, status tables — the user reads and revises without leaving the canvas. Concretely deprecated examples in the legacy default SDLC (`Downloads/rensei-default-sdlc.yaml`):
+6. **Node transparency — every node's logic is on its surface.** A node's behavior must be visible and configurable from the canvas, not hidden in node-implementation code or behind opaque JSON payloads. A switch-mode condition that shows a list of case labels while its routing rules live in TypeScript is a black box from the user's perspective: they see *that* a decision happens, not *how*. So is any node that requires pasting a long JSON config blob to invoke hidden code paths the user cannot inspect. If a node's decision logic is non-trivial, that logic must be exposed as named, typed, editable inputs — rules, mappings, prompts, status tables — the user reads and revises without leaving the canvas. Concretely deprecated examples in the legacy default SDLC template:
 
-   - **`agent.work_type.detect` ("Detect Work Type")** — node surface shows the case set [development, inflight, qa, acceptance, refinement, research]; the actual decision logic (`STATUS_WORK_TYPE_MAP`, mention-keyword scan, first-touch override) lives in `src/lib/nodes/condition/agent.work_type.detect/backend.ts`. Remediation: split into composable nodes (a Linear status condition, a comment-keyword condition, an explicit routing branch) that the user wires; *or* surface the mapping table and override rules as the node's editable config.
+   - **`agent.work_type.detect` ("Detect Work Type")** — node surface shows the case set [development, inflight, qa, acceptance, refinement, research]; the actual decision logic (`STATUS_WORK_TYPE_MAP`, mention-keyword scan, first-touch override) lives in platform-side node implementation code. Remediation: split into composable nodes (a Linear status condition, a comment-keyword condition, an explicit routing branch) that the user wires; *or* surface the mapping table and override rules as the node's editable config.
    - **`linear.issue.status_switch` ("Next Station")** — same shape; routing rules between native states live in code rather than on the canvas. Remediation: replace with `Linear Status Equals` condition nodes wired to user-labelled outgoing branches.
 
-   These are slated for removal as part of unwinding wave 7's hidden SDLC; the principle generalises beyond them. Any future node that proposes "logic in code, labels on canvas" fails this corollary.
+   These are slated for removal as part of unwinding hidden SDLC auto-generation; the principle generalises beyond them. Any future node that proposes "logic in code, labels on canvas" fails this corollary.
 
 ### How to apply this rule in design reviews
 
@@ -363,7 +363,7 @@ Three layers of versioning compose:
 
 ### 1. Engine `apiVersion`
 
-`workflow/v1` is Rensei's current workflow grammar — groups, switch conditions, signal gates, durable execution. (Note: an earlier draft of this spec briefly used `workflow/v2` because the model was Weft-imported; with low adoption and no actual v0 in production, the version space resets to `v1`.) `workflow/v2` is the next bump and adds inter-node output piping (per Open Question above).
+`workflow/v1` is the current workflow grammar — groups, switch conditions, signal gates, durable execution. (Note: an earlier draft of this spec briefly used `workflow/v2` because the model was Weft-imported; with low adoption and no actual v0 in production, the version space resets to `v1`.) `workflow/v2` is the next bump and adds inter-node output piping (per Open Question above).
 
 Engine version bump policy: patch (input-compatible), minor (additive), major (breaking; requires verb-version pinning and deprecation window). Major bumps run multiple `apiVersion` workflows simultaneously during a deprecation window — when the field is exercised at scale.
 
@@ -377,7 +377,7 @@ Workflows reference verbs as `<plugin>@<major>:<verb>`. See `015` versioning sec
 
 ## Topology view (cross-link)
 
-The Rensei Platform's Topology view (live, React Flow-based) renders **workflow runs in flight**, not workflow *definitions*. It shows: Issue Cluster → Sessions → Sub-agents → Satellites. Sub-agents appear when an `AgentRuntimeProvider` emits Task-tool events (Claude does today; Codex/Spring AI may not — `emitsSubagentEvents` capability flag).
+The platform's Topology view (live, React Flow-based) renders **workflow runs in flight**, not workflow *definitions*. It shows: Issue Cluster → Sessions → Sub-agents → Satellites. Sub-agents appear when an `AgentRuntimeProvider` emits Task-tool events (Claude does today; Codex/Spring AI may not — `emitsSubagentEvents` capability flag).
 
 Detail in `013-orchestrator-and-governor.md`. Worth knowing here: the engine emits structured run events that the Topology view subscribes to via SSE; gates show as "waiting for `<eventType>`" with timeout countdown.
 
@@ -396,13 +396,6 @@ Detail in `013-orchestrator-and-governor.md`. Worth knowing here: the engine emi
 | Migration tooling for apiVersion bumps | ✅ ships | inherits |
 
 OSS users get a working workflow engine, can author YAML by hand, run it locally. SaaS adds the visual designer, the marketplace, and multi-tenant administration.
-
-## Linear realignment hooks
-
-- **REN-1021** (Competitive Intel - Weft) — Accepted; the research basis. Workstreams W1-W10 land as platform issues; this doc defines the contracts they implement against.
-- **REN-1139** (Loop node type, composes with Weft W2 groups) — implements W2 group composability.
-- **W1-W5 cluster** (typed ports, groups, AST source-of-truth, null propagation, per-node folders) — the foundation; some shipped, some pending. `009` realignment expansion enumerates current state.
-- **Default SDLC YAML rewrite** — the legacy generated YAML should be replaced with a human-readable group-shaped version once W2 ships. Net-new issue in `009`.
 
 ## Open questions
 

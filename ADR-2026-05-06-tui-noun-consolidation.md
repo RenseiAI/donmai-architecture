@@ -19,7 +19,7 @@ Best-practice CLI guidance (clig.dev's "subcommands are the tree of nouns" rule,
 
 This drift accumulated during the wave-by-wave buildout of the local-daemon model (`011`), the multi-machine fleet, and the workarea+sandbox capacity work (`003`, `004`). Each wave added its own top-level noun; nothing pulled them together.
 
-The CLI noun model itself is OSS — it applies to the `af` binary too via `afcli.RegisterCommands`. Hidden deprecated aliases are OSS-shipped CLI behavior. The platform-side delta (auth retrofit on three worker endpoints, the Live capacity addendum) is documented in the platform extensions doc.
+The CLI noun model itself is OSS — it applies to the `donmai` binary too via `afcli.RegisterCommands`. Hidden deprecated aliases are OSS-shipped CLI behavior. The platform-side delta (auth retrofit on three worker endpoints, the Live capacity addendum) is documented in the platform extensions doc.
 
 ## Decision
 

@@ -193,11 +193,11 @@ All three declare identical capabilities except per-host quirks (e.g., GitHub me
 
 Provenance via commit trailers:
 ```
-Co-Authored-By: <agent-name> <agent@rensei.dev>
-X-Rensei-Session-Id: <sessionId>
-X-Rensei-Kit-Set: spring/java@1.0.0,docker-compose@2.1.0
-X-Rensei-Workarea-Snapshot: <ref>
-X-Rensei-Model: anthropic/claude-opus-4-7
+Co-Authored-By: <agent-name> <agent@donmai.dev>
+X-Donmai-Session-Id: <sessionId>
+X-Donmai-Kit-Set: spring/java@1.0.0,docker-compose@2.1.0
+X-Donmai-Workarea-Snapshot: <ref>
+X-Donmai-Model: anthropic/claude-opus-4-7
 ```
 
 Tagged session SHAs are signed via configured GPG/Sigstore key when `provenanceNative: true` is requested by tenant policy.
@@ -340,12 +340,6 @@ The workarea provider doesn't assume any of these; it asks the right VCS provide
 | Per-tenant trust policy | ❌ | ✅ owns |
 
 OSS users get git + Atomic + S3 working; SaaS adds the more-credentialed providers (GitLab/Bitbucket if not contributed back) and the multi-tenant audit chain.
-
-## Linear realignment hooks
-
-- Per the icebox parse (`009`), nothing in the existing backlog covers VCS abstraction. This is greenfield. Net-new issue to author:
-  > **`VCS provider abstraction with Atomic + git + S3 implementations`** — Defines `VersionControlProvider` per `008`, ships GitHub adapter (rename existing merge-queue logic to consume it), Atomic adapter (CLI shell-out), S3 adapter. Closes the assumption-of-git in core code paths.
-- **REN-148** (Vercel Integration / DeploymentProvider) — DeploymentProvider is a sibling family, not VCS. Co-design timing only — no scope shift.
 
 ## Open questions
 

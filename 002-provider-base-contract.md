@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-The Rensei platform has eight plugin families: `Sandbox`, `Workarea`, `AgentRuntime`, `VersionControl`, `IssueTracker`, `Deployment`, `AgentRegistry`, `Kit`. Without a unified base contract, each family invents its own discovery, capability vocabulary, scope resolution, and trust model. We've already begun to see this drift in the existing Linear backlog — REN-1143 (agent registry plugins), REN-148 (deployment provider), and REN-1142 (issue-tracker registry) were all designed in isolation.
+The platform has eight plugin families: `Sandbox`, `Workarea`, `AgentRuntime`, `VersionControl`, `IssueTracker`, `Deployment`, `AgentRegistry`, `Kit`. Without a unified base contract, each family invents its own discovery, capability vocabulary, scope resolution, and trust model.
 
 This doc defines the single base contract every plugin family extends. Land it once, the policy/security layer (cross-cutting in `001`) has consistent extension points, the SaaS control plane has consistent administration, and tenants can configure providers in one mental model rather than eight.
 
@@ -16,7 +16,7 @@ This doc defines the single base contract every plugin family extends. Land it o
 
 ```ts
 /**
- * Every plugin family in Rensei extends this contract.
+ * Every plugin family extends this contract.
  * Family-specific verbs live on the family-typed sub-interfaces
  * (SandboxProvider, WorkareaProvider, KitProvider, etc.) declared
  * in their own reference docs (003–008).
@@ -342,7 +342,7 @@ This is the surface that policy rules attach to. Examples:
 - `pre-verb sandbox.provision args.region != 'us'` → block, log to audit.
 - `post-verb workarea.acquire` → emit cost event, attach to issue thread.
 - `verb-error vcs.push` → notify oncall.
-- `post-tool-use toolName=Read` → derive `currentFile` context entry; retrieve relevant past observations for the touched file (REN-1184).
+- `post-tool-use toolName=Read` → derive `currentFile` context entry; retrieve relevant past observations for the touched file.
 - `post-tool-use toolName=Bash input.command~/git push/` → notify deployment monitor.
 - `capability-mismatch` → quarantine provider, page security.
 
@@ -350,7 +350,7 @@ The base contract guarantees that these events fire consistently across all seve
 
 ### Cross-process providers and the hook bus
 
-A provider may run **in-process** (TypeScript, instrumented via `InstrumentedProvider`) or **cross-process** (e.g. the Go `af agent run` daemon, future RPC-shaped providers). Cross-process providers emit equivalent hook events through a **bridge owned by the platform's ingest route for that provider's transport**. From a subscriber's view, an event emitted by a cross-process provider is indistinguishable from one emitted in-process; the bus contract is identical.
+A provider may run **in-process** (TypeScript, instrumented via `InstrumentedProvider`) or **cross-process** (e.g. the Go `donmai agent run` daemon, future RPC-shaped providers). Cross-process providers emit equivalent hook events through a **bridge owned by the platform's ingest route for that provider's transport**. From a subscriber's view, an event emitted by a cross-process provider is indistinguishable from one emitted in-process; the bus contract is identical.
 
 For the Go daemon today (per `ADR-2026-05-12-cross-process-hook-bus-bridge`), the bridge surface is the `POST /api/sessions/<id>/activity` ingest route. The daemon's wire payload carries the canonical fields the new event kinds reference (`toolUseId`, `toolInput`, `toolOutput`, `isError`, `durationMs`, `providerName`); the platform side reconstructs the appropriate `pre-tool-use` / `post-tool-use` / `tool-use-error` event and emits it on `globalHookBus`. Cross-replica visibility is achieved by fan-out via the platform's existing Redis session-event channel (a new `provider_hook_event` `SessionEvent` type). See `006-cross-provider-interactions.md` Seam 10 for the cooperation contract.
 
@@ -367,7 +367,7 @@ Per the OSS↔SaaS discipline (`001`), every family must have a working OSS impl
 
 ## Agent Runtime providers — current contract
 
-The `AgentRuntime` family (the runners that execute one agent session — Claude, Codex, Ollama, Gemini, Amp, OpenCode, …) ships in Go in `agentfactory-tui/agent/` and is consumed by the local daemon's per-session `af agent run` subcommand via a `runner.Registry`. It predates the unified manifest-based discovery described above; capabilities are declared on the Provider instance rather than in a separate manifest file. The contract below is what implementations target today; **v2 enrichments accepted 2026-05-06** (end of this section) define the in-place additions that align it with the unified base contract without a major version bump.
+The `AgentRuntime` family (the runners that execute one agent session — Claude, Codex, Ollama, Gemini, Amp, OpenCode, …) ships in Go in `donmai/agent/` and is consumed by the local daemon's per-session `donmai agent run` subcommand via a `runner.Registry`. It predates the unified manifest-based discovery described above; capabilities are declared on the Provider instance rather than in a separate manifest file. The contract below is what implementations target today; **v2 enrichments accepted 2026-05-06** (end of this section) define the in-place additions that align it with the unified base contract without a major version bump.
 
 ### Interface (verbatim, Go)
 
@@ -422,7 +422,7 @@ Reference declarations:
 
 | Provider | Inject | Resume | Tools | BaseInstr | Permissions | CodeIntel | Subagents | Effort | PermFormat | Tier |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `claude` | ✅ | ❌ (v0.5.0; tracked REN-1451) | ✅ | ❌ | ❌ | ❌ (gated on canUseTool) | ✅ | ✅ | claude | T1 |
+| `claude` | ✅ | ❌ (v0.5.0) | ✅ | ❌ | ❌ | ❌ (gated on canUseTool) | ✅ | ✅ | claude | T1 |
 | `codex` | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | codex | T1 |
 | `stub` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | claude | T1-test |
 | `ollama` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | claude (default) | T2 |
@@ -431,18 +431,18 @@ Capability declarations are stable for the lifetime of the Provider instance. Im
 
 ### Reference implementations
 
-Each implementation is a peer-package under `agentfactory-tui/provider/`:
+Each implementation is a peer-package under `donmai/provider/`:
 
 - `provider/claude/` — Claude Code CLI shell-out. Per-session subprocess; JSONL stream-json mode; mid-session injection via fresh `claude --resume <id> -p <text>` subprocess that streams onto the parent Handle's events channel.
 - `provider/codex/` — Codex `app-server` JSON-RPC over stdio. Long-lived subprocess; multiple sessions multiplex via `thread/start`; permission-config bridge implements canUseTool-equivalent.
 - `provider/stub/` — deterministic scripted-event sequences for tests and the F.4 smoke harness; supports every capability so the runner exercises every gating branch.
-- `provider/ollama/` (added 2026-05-06, REN-1502) — local-first HTTP. Probe via `GET /api/tags`; spawn via streaming `POST /api/chat`; deliberately conservative capability profile (no inject, no resume, no tools).
+- `provider/ollama/` (added 2026-05-06) — local-first HTTP. Probe via `GET /api/tags`; spawn via streaming `POST /api/chat`; deliberately conservative capability profile (no inject, no resume, no tools).
 
-Provider construction (`buildAgentRunRegistry`, `afcli/agent_run.go:387`) is best-effort — each ctor probes fail-fast and the daemon logs WARN per failure but only ERRORs when zero providers register. This means an operator without Ollama installed sees the registry skip Ollama silently (visible in the WARN log), while sessions resolved to `provider="ollama"` then fail at `runner.Resolve` with `agent.ErrNoProvider` — the correct loud failure when the requested local runtime is missing.
+Provider construction (`buildAgentRunRegistry`, `donmai/afcli/agent_run.go:387`) is best-effort — each ctor probes fail-fast and the daemon logs WARN per failure but only ERRORs when zero providers register. This means an operator without Ollama installed sees the registry skip Ollama silently (visible in the WARN log), while sessions resolved to `provider="ollama"` then fail at `runner.Resolve` with `agent.ErrNoProvider` — the correct loud failure when the requested local runtime is missing.
 
 ### v2 enrichments — Accepted (2026-05-06)
 
-Adding Ollama (REN-1502), Gemini, and the registration-only Amp / OpenCode probes (this wave) surfaced where the legacy `agent.Provider` contract diverges from the unified base contract above. The five items below are **accepted as v2 enrichments** to the existing contract — there is no `apiVersion: 2` bump and no migration guide (rationale in *Decision 3* below). Each is enriched-in-place against the v1 surface; future "real" Amp / OpenCode implementations drop in against the enriched surface without a contract refactor.
+Adding Ollama, Gemini, and the registration-only Amp / OpenCode probes (this wave) surfaced where the legacy `agent.Provider` contract diverges from the unified base contract above. The five items below are **accepted as v2 enrichments** to the existing contract — there is no `apiVersion: 2` bump and no migration guide (rationale in *Decision 3* below). Each is enriched-in-place against the v1 surface; future "real" Amp / OpenCode implementations drop in against the enriched surface without a contract refactor.
 
 1. **Manifest separation.** *Accepted.* The current contract embeds discovery (binary probe, HTTP probe) in `provider.New`. The base contract requires capabilities to be readable *before* loading code. Each provider package exports a `Manifest()` static value (compile-time constant struct) consumed by daemon startup before calling `New`; `New` becomes activation-only. The existing `New(opts Options)` constructor pattern stays wired in the four call sites; the manifest is added alongside, not in place of, that constructor — so the change is additive at the provider-package boundary.
 
@@ -533,7 +533,7 @@ interface ToolUseSurface {
 }
 ```
 
-Capability declarations must reflect reality, not aspiration. The runner enforces this: `Spec.MCPServers` and `Spec.AllowedTools` are stripped (warn-and-ignore, with a `SpecFieldNote` on the spawn plan) before the call to `Spawn` for any provider that declares the corresponding flag false. Tests in `agentfactory-tui/afcli/tooluse_matrix_test.go` and `agentfactory-tui/runner/spec_translation_test.go` enforce the matrix at compile time — the per-provider declarations and the gating behavior cannot drift. The matrix evolves with provider implementations: when a provider's runner gains real tool support, the capability flag and this doc table update in lockstep.
+Capability declarations must reflect reality, not aspiration. The runner enforces this: `Spec.MCPServers` and `Spec.AllowedTools` are stripped (warn-and-ignore, with a `SpecFieldNote` on the spawn plan) before the call to `Spawn` for any provider that declares the corresponding flag false. Tests in `donmai/afcli/tooluse_matrix_test.go` and `donmai/runner/spec_translation_test.go` enforce the matrix at compile time — the per-provider declarations and the gating behavior cannot drift. The matrix evolves with provider implementations: when a provider's runner gains real tool support, the capability flag and this doc table update in lockstep.
 
 ##### Provider × tool-use surface (2026-05-06, wave 8)
 
@@ -547,13 +547,13 @@ Capability declarations must reflect reality, not aspiration. The runner enforce
 | `amp` | false | false | false | claude | registration-only (Sourcegraph stable HTTP API not shipped) |
 | `opencode` | false | false | false | claude | registration-only (SST pre-1.0; per-minor breakage) |
 
-Note: `ToolPermissionFormat` differs from the wire format the provider consumes — it names the *permission-config grammar* the orchestrator emits. Today only `codex` declares a non-`claude` value (matching the legacy capability matrix earlier in this doc); every other shipped runner consumes the `claude` grammar regardless of native protocol. The matrix above mirrors the live `Capabilities()` declarations in `agentfactory-tui/provider/*/`.
+Note: `ToolPermissionFormat` differs from the wire format the provider consumes — it names the *permission-config grammar* the orchestrator emits. Today only `codex` declares a non-`claude` value (matching the legacy capability matrix earlier in this doc); every other shipped runner consumes the `claude` grammar regardless of native protocol. The matrix above mirrors the live `Capabilities()` declarations in `donmai/provider/*/`.
 
 ### Decisions (2026-05-06)
 
 The four open questions from the prior draft are resolved:
 
-1. **Hot-reload during development — Default NO; opt-in via dev flag.** The host does not re-activate providers when their manifest file changes on disk by default. A `--provider-hot-reload` flag (CLI) or `RENSEI_PROVIDER_HOT_RELOAD=1` env var (daemon) opts into reload-on-manifest-change. The reload boundary: **manifest metadata, capability declarations, and scope selectors are reload-safe**; **long-lived clients (HTTP keep-alive pools, child processes such as the codex app-server, MCP server processes) are NOT reload-safe** and require a full daemon restart to pick up. Reload-safe changes apply at the next session boundary; in-flight sessions retain the pre-reload provider snapshot. Kit authors iterating on declarative manifests benefit; agent-runtime authors hacking on provider implementations should still restart the daemon.
+1. **Hot-reload during development — Default NO; opt-in via dev flag.** The host does not re-activate providers when their manifest file changes on disk by default. A `--provider-hot-reload` flag (CLI) or `DONMAI_PROVIDER_HOT_RELOAD=1` env var (daemon) opts into reload-on-manifest-change. The reload boundary: **manifest metadata, capability declarations, and scope selectors are reload-safe**; **long-lived clients (HTTP keep-alive pools, child processes such as the codex app-server, MCP server processes) are NOT reload-safe** and require a full daemon restart to pick up. Reload-safe changes apply at the next session boundary; in-flight sessions retain the pre-reload provider snapshot. Kit authors iterating on declarative manifests benefit; agent-runtime authors hacking on provider implementations should still restart the daemon.
 
 2. **Cross-family dependencies — Adopt kit manifest spec in lockstep with v2.** A provider may declare it consumes a kit's contributions (e.g., the Claude provider declares it needs the `node-sandbox` kit's toolchain at runtime). The shape lives in `005-kit-manifest-spec.md`'s `dependsOn` / `provides` model; this contract cross-references it rather than redefining it. Concrete shape: a provider's manifest gains an optional `consumesKits: KitDependency[]` field that names kits by `id` and minimum version, with the host resolving the dependency at activation. **Cross-doc lockstep:** `005` is updated in the same wave to introduce the `[provides]` / `[depends_on]` blocks the v2 contract references — see *Cross-doc updates* at the foot of this doc.
 
@@ -567,7 +567,7 @@ The five proposals captured by the prior draft are now accepted as v2 enrichment
 
 ## OSS vs SaaS responsibilities
 
-| Concern | OSS (`agentfactory` / future name) | SaaS (`Rensei Platform`) |
+| Concern | OSS (`donmai`) | SaaS (Donmai Platform) |
 |---|---|---|
 | Base interface definitions | ✅ owns | consumes |
 | Manifest schema + validation | ✅ owns | consumes |
@@ -583,7 +583,7 @@ The OSS layer is fully usable single-tenant — single project, single user, opt
 
 ## Capability-tag-to-typed-struct migration path
 
-The codebase ships a precedent worth citing: `agentfactory-tui/worker/types.go`'s `RegisterRequest.Capabilities []string` field is a lightweight, untyped capability declaration (`["claude", "codex", "amp"]`). Workers tag themselves; the orchestrator matches by string membership.
+The codebase ships a precedent worth citing: `donmai/worker/types.go`'s `RegisterRequest.Capabilities []string` field is a lightweight, untyped capability declaration (`["claude", "codex", "amp"]`). Workers tag themselves; the orchestrator matches by string membership.
 
 The migration to typed structs (per this doc) follows the standard fallback pattern:
 
@@ -593,15 +593,6 @@ The migration to typed structs (per this doc) follows the standard fallback patt
 4. **Phase 3:** tag list removed.
 
 This is the same migration the legacy `AgentProvider.capabilities` struct will follow as it's renamed to `AgentRuntimeProvider.capabilities` (rename in corpus only; codebase keeps the existing type). Apply the same pattern to any future untyped-to-typed capability migration.
-
-## Linear realignment hooks
-
-Issues in the Rensei Platform backlog whose scope changes once this base contract lands. Detail in [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md); pointers here for cross-reference:
-
-- **REN-1143** (A6 agent registry with provider plugins) — agent registry is one of the seven families. It extends `Provider<'agent-registry'>`. Its draft plugin shape (`local-yaml | git-ref | langchain | openai-assistant | a2a`) becomes a set of `entry.kind` values plus a family-specific capabilities struct.
-- **REN-148** (Vercel Integration / DeploymentProvider) — same. `Provider<'deployment'>` with `VercelDeploymentProvider` as one implementation.
-- **REN-1142** (multi-tracker mirror, Jira/Asana) — same. `Provider<'issue-tracker'>` with adapter implementations.
-- **REN-1144** (org/project scoping) — directly maps onto `ProviderScope` resolution. Should be reframed as "implement scope resolution per the base contract" rather than designing a per-family scope model.
 
 ## Cross-doc updates accompanying v2
 

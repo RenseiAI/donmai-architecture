@@ -240,7 +240,7 @@ Contract details:
 
 ## Seam 10 — Cross-process provider hook bridge
 
-**Problem:** Layer 6 hook events (`pre-verb`/`post-verb`/`pre-tool-use`/`post-tool-use`, etc.) are emitted on an in-process TypeScript bus (`globalHookBus`). The Go `af agent run` daemon — the AgentRuntime provider that executes real SDLC sessions today — is a separate OS process and so cannot emit on the bus directly. Without a bridge, every Layer 6 subscriber that targets tool-call-grained events (REN-1184 in-session memory injector, REN-1166 graph-extraction-event-trigger, the Context-satellite derive subscriber, future security/cost subscribers) is dark for production sessions.
+**Problem:** Layer 6 hook events (`pre-verb`/`post-verb`/`pre-tool-use`/`post-tool-use`, etc.) are emitted on an in-process TypeScript bus (`globalHookBus`). The Go `donmai agent run` daemon — the AgentRuntime provider that executes real SDLC sessions today — is a separate OS process and so cannot emit on the bus directly. Without a bridge, every Layer 6 subscriber that targets tool-call-grained events (the in-session memory injector, graph-extraction-event-trigger, the Context-satellite derive subscriber, future security/cost subscribers) is dark for production sessions.
 
 **Cooperation:** Cross-process providers participate in Layer 6 through a **wire-format-as-bridge** owned by the platform-side ingest route for that provider's transport. Per `ADR-2026-05-12-cross-process-hook-bus-bridge`:
 
@@ -252,7 +252,7 @@ Contract details:
 
 4. **Subscriber idempotency requirement.** Redis pub/sub is fire-and-forget with no cross-channel ordering guarantee, so a `pre-tool-use` and `post-tool-use` for the same `toolUseId` may arrive at a subscriber in either order. Subscribers MUST be tolerant of out-of-order pairing and tolerant of replays. The derive-context subscriber acts on `post-tool-use` only and is naturally idempotent; the in-session memory injector ranks by `paths` and is order-tolerant.
 
-5. **The bridge does not violate the OSS↔platform library-composition seam** described in `001-layered-execution-model.md` § "The agentfactory ↔ Rensei Platform contract." That seam describes **build-time** composition (OSS code is consumed as a library by platform code). This seam describes **runtime** composition (an OSS-built binary running as a long-lived subprocess that communicates with the platform service via HTTP). Both seams hold simultaneously; the Go daemon participates only in the runtime axis.
+5. **The bridge does not violate the OSS↔platform library-composition seam** described in `001-layered-execution-model.md` § "The OSS↔Platform contract." That seam describes **build-time** composition (OSS code is consumed as a library by platform code). This seam describes **runtime** composition (an OSS-built binary running as a long-lived subprocess that communicates with the platform service via HTTP). Both seams hold simultaneously; the Go daemon participates only in the runtime axis.
 
 **Bug class prevented:** "Layer 6 subscriber works in unit tests but does nothing in production" — the bug where the subscription wires up correctly, the bus is healthy, and no events ever arrive because the active provider is in a different process. Also prevents the inverse bug where a producer-side wire-format change silently breaks event reconstruction on the platform side; the daemon emits a contract test fixture that pins the JSON shape.
 

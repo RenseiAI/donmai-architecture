@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-A **Plugin** is the unit of distribution. One installable artifact. One OAuth grant. Atomic lifecycle. A plugin declares zero, one, or many implementations of typed Provider Family interfaces, AND zero, one, or many named Workflow Verbs. This decouples *what gets installed* from *what typed contracts the platform reasons about*, which lets a single Rensei plugin (e.g., "Rensei Vercel Integration") provide Deployment + Sandbox + Observability capabilities under one OAuth flow rather than forcing tenants to maintain three separate authentications and three seat allocations.
+A **Plugin** is the unit of distribution. One installable artifact. One OAuth grant. Atomic lifecycle. A plugin declares zero, one, or many implementations of typed Provider Family interfaces, AND zero, one, or many named Workflow Verbs. This decouples *what gets installed* from *what typed contracts the platform reasons about*, which lets a single Donmai plugin (e.g., "Donmai Vercel Integration") provide Deployment + Sandbox + Observability capabilities under one OAuth flow rather than forcing tenants to maintain three separate authentications and three seat allocations.
 
 The shape comes from a survey of mature ecosystems (Backstage, GitHub Apps, Vercel Integrations, n8n, Temporal, Argo Events, Inngest, Pipedream, VSCode extensions). Three findings drove the design:
 
@@ -19,27 +19,27 @@ Kits (`005`) are a sibling concept — also packaged units, but specifically for
 ## The Plugin manifest
 
 ```yaml
-# rensei-plugin.yaml — checked into the plugin's repo root.
-# May also be embedded as `rensei` field in package.json.
+# donmai-plugin.yaml — checked into the plugin's repo root.
+# May also be embedded as `donmai` field in package.json.
 
-apiVersion: rensei.dev/v1
+apiVersion: donmai.dev/v1
 kind: Plugin
 
 metadata:
   id: vercel                          # globally unique within the registry
-  name: Rensei Vercel Integration
+  name: Donmai Vercel Integration
   version: 1.4.0
   description: Vercel deploys, sandbox compute, and log streaming
-  author: Rensei
-  authorIdentity: did:web:rensei.dev
+  author: Donmai
+  authorIdentity: did:web:donmai.dev
   license: Apache-2.0
-  homepage: https://rensei.dev/plugins/vercel
-  repository: https://github.com/renseiai/plugin-vercel
-  iconUrl: https://rensei.dev/plugins/vercel/icon.svg
+  homepage: https://donmai.dev/plugins/vercel
+  repository: https://github.com/donmai-dev/plugin-vercel
+  iconUrl: https://donmai.dev/plugins/vercel/icon.svg
 
 # Compatibility — host checks at install
 engines:
-  rensei: ">=0.9 <2.0"
+  donmai: ">=0.9 <2.0"
 
 # Supported platforms (OS/arch). See 005 for the same convention.
 supports:
@@ -136,7 +136,7 @@ auth:
     - projects:read
     - logs:read
   refreshable: true
-  perOrgInstall: true                 # one install per Rensei org, not per user
+  perOrgInstall: true                 # one install per Donmai org, not per user
 
 # ─── Configuration UI ────────────────────────────────────────────────
 # Optional. The platform renders a config form at install time using
@@ -146,13 +146,13 @@ configSchema: ./schemas/config.schema.json
 
 # ─── Tooling, observability, signing ─────────────────────────────────
 
-metricsPrefix: rensei_plugin_vercel
+metricsPrefix: donmai_plugin_vercel
 logScope: plugin.vercel
 
 # Signature verification at install (002 trust model). Optional in OSS;
 # required in SaaS allowlist + attested modes.
 signature:
-  signer: did:web:rensei.dev
+  signer: did:web:donmai.dev
   algorithm: sigstore
   manifestHash: sha256:abc123...
   signatureValue: base64...
@@ -233,9 +233,9 @@ Detail on how these compose into workflow nodes lives in `016`.
 
 Plugins are found through four sources, resolved in `002`'s standard precedence:
 
-1. **Bundled** — shipped with the host binary (typically core integrations like `linear`, `agentfactory`).
-2. **Project-local** — `.rensei/plugins/*.plugin.{json,yaml}` in the workarea.
-3. **Configured registries** — `registry.rensei.dev` (SaaS-managed; free for OSS users), enterprise self-hosted registries.
+1. **Bundled** — shipped with the host binary (typically core integrations like `linear`, `donmai`).
+2. **Project-local** — `.donmai/plugins/*.plugin.{json,yaml}` in the workarea.
+3. **Configured registries** — `registry.donmai.dev` (SaaS-managed; free for OSS users), enterprise self-hosted registries.
 4. **Programmatic** — for embedding scenarios; manifest still required.
 
 Conflict resolution: most-specific scope wins, then version pin, then registry priority order.
@@ -249,7 +249,7 @@ Atomic per-plugin, regardless of how many capabilities the plugin exposes. The O
 
 If a tenant wants only some capabilities of a vendor's plugin, **the answer is to ship a separate plugin** — `vercel-deploy-only`, etc. This puts the decomposition burden on the publisher (where it belongs) rather than the installer (where it doesn't compose well).
 
-**Per-org install vs per-user.** Plugins declare `auth.perOrgInstall: true` to indicate one OAuth grant covers the entire Rensei tenant org. This is what closes the Vercel friction the user described — a Rensei org installs the Vercel plugin once; individual users don't burn Vercel seats with personal OAuths.
+**Per-org install vs per-user.** Plugins declare `auth.perOrgInstall: true` to indicate one OAuth grant covers the entire Donmai tenant org. This is what closes the Vercel friction the user described — a Donmai org installs the Vercel plugin once; individual users don't burn Vercel seats with personal OAuths.
 
 ## Lifecycle
 
@@ -304,7 +304,7 @@ The workflow engine refuses to compile a workflow whose pinned verb version is p
 
 ## Worked examples
 
-### Rensei Vercel Integration
+### Donmai Vercel Integration
 
 The full manifest above. One install gives the org:
 - Three Provider Family registrations (`DeploymentProvider`, `SandboxProvider`, `ObservabilityProvider`)
@@ -314,12 +314,12 @@ The full manifest above. One install gives the org:
 
 A workflow can use `vercel@1:vercel.deploy` as an action, then `vercel@1:vercel.deployment.completed` as a gate, then route on success/failure. Same install also lets a different workflow query `vercel@1:vercel.list_deployments` for monitoring.
 
-### Rensei Slack Integration (sketch)
+### Donmai Slack Integration (sketch)
 
 ```yaml
-apiVersion: rensei.dev/v1
+apiVersion: donmai.dev/v1
 kind: Plugin
-metadata: { id: slack, name: Rensei Slack Integration, version: 1.0.0 }
+metadata: { id: slack, name: Donmai Slack Integration, version: 1.0.0 }
 
 providers:
   issue-tracker:                       # @-mentions trigger issue creation
@@ -354,7 +354,7 @@ auth:
   perOrgInstall: true
 ```
 
-Same single-artifact, multi-capability shape. A user @-mentions Rensei in a Slack thread → `slack.mention` trigger fires → workflow extracts the request → routes to backlog-writer → creates a Linear issue.
+Same single-artifact, multi-capability shape. A user @-mentions Donmai in a Slack thread → `slack.mention` trigger fires → workflow extracts the request → routes to backlog-writer → creates a Linear issue.
 
 ### Spring Java Kit (referenced from `005`)
 
@@ -367,9 +367,9 @@ A Kit is a specialized Plugin — its manifest emphasizes `[provide]` blocks (to
 | Plugin manifest schema + parser | ✅ owns | consumes |
 | Manifest validation (signature, semver, namespace) | ✅ ships | inherits |
 | Project-local plugin discovery | ✅ ships | inherits |
-| Bundled core plugins (linear, agentfactory) | ✅ ships | inherits |
+| Bundled core plugins (linear, donmai) | ✅ ships | inherits |
 | Verb registry (in-process) | ✅ ships | inherits |
-| Hosted plugin registry | ❌ | ✅ owns (`registry.rensei.dev`) |
+| Hosted plugin registry | ❌ | ✅ owns (`registry.donmai.dev`) |
 | Plugin signing CI + provenance | partial (sigstore) | full (sigstore + tenant allowlist + attestation chain) |
 | Multi-tenant install management | ❌ (single-tenant) | ✅ owns |
 | Plugin marketplace UX | ❌ | ✅ owns |
@@ -377,25 +377,16 @@ A Kit is a specialized Plugin — its manifest emphasizes `[provide]` blocks (to
 
 OSS users can install plugins from local manifests or any registry their config points at. SaaS tenants get the curated registry, the marketplace UX, multi-tenant install isolation, and policy controls.
 
-## Linear realignment hooks
-
-Issues in the existing platform backlog whose scope shifts:
-
-- **REN-148** (Vercel Integration / DeploymentProvider) — concretizes as `RenseiVercelPlugin`. Single artifact implementing Deployment + Sandbox + Observability.
-- **REN-1142** (multi-tracker mirror, Jira/Asana) — IssueTrackerProvider implementations packaged as plugins (`@rensei/plugin-jira`, `@rensei/plugin-asana`).
-- **REN-1143** (Agent registry plugins) — `entry.kind` taxonomy from manifest; plugins implementing `AgentRegistry` family.
-- **REN-1194 §4.f T1.a** (decouple harness from sandbox) — sandbox impls become plugins; orchestrator dispatches via family resolver.
-
-Net-new issues to author (full list in `009` after expansion):
+Net-new items to implement (full list in `009` after expansion):
 
 - Plugin manifest schema + validator implementation
 - Plugin loader runtime (manifest → registered providers + verbs)
-- `registry.rensei.dev` hosting infrastructure
+- `registry.donmai.dev` hosting infrastructure
 - Plugin marketplace UI (SaaS)
 - Sigstore signing CI
-- `RenseiVercelPlugin` reference implementation
-- `RenseiSlackPlugin` reference implementation
-- `RenseiAtomicPlugin` (per `008`)
+- `DonmaiVercelPlugin` reference implementation
+- `DonmaiSlackPlugin` reference implementation
+- `DonmaiAtomicPlugin` (per `008`)
 
 ## Open questions
 

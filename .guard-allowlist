@@ -1,0 +1,64 @@
+# Allowlist: extended-regex per line. Add legitimate parent-brand or sibling-corpus refs here.
+
+# --- ADR author attribution: "Mark Kropf (Rensei)" is legitimate parent-company attribution ---
+ADR-.*\.md:.*Authors:.*Mark Kropf \(Rensei\)
+
+# --- RENSEI_ARCH_PATH renamed to DONMAI_ARCH_PATH in check-boundary-sync.sh ---
+# No longer needed; entry kept as a comment for historical context.
+
+# --- guard-b-lint.sh self-references: the linter defines rule patterns containing the strings it checks ---
+# The script's own RULES array contains the exact patterns it scans for; these are definitional, not violations.
+scripts/guard-b-lint\.sh:.*RENSEI_BRAND
+scripts/guard-b-lint\.sh:.*RENSEI_TUI
+scripts/guard-b-lint\.sh:.*RENSEI_PLATFORM
+scripts/guard-b-lint\.sh:.*RENSEI_AI_DOMAIN
+scripts/guard-b-lint\.sh:.*RENSEI_ENV_VAR
+scripts/guard-b-lint\.sh:.*PLATFORM_PATH
+scripts/guard-b-lint\.sh:.*DEV_ABS_PATH
+
+# --- secret-scan.yml self-references: the CI workflow doc-comment describes the rules it enforces ---
+# Comment lines in the CI workflow enumerate rule names (RENSEI_BRAND, RENSEI_TUI, etc.) for documentation.
+# These are definitional references, not content violations.
+\.github/workflows/secret-scan\.yml:.*RENSEI_BRAND
+\.github/workflows/secret-scan\.yml:.*RENSEI_TUI
+\.github/workflows/secret-scan\.yml:.*RENSEI_PLATFORM
+\.github/workflows/secret-scan\.yml:.*RENSEI_AI_DOMAIN
+\.github/workflows/secret-scan\.yml:.*RENSEI_ENV_VAR
+
+# --- .guard-allowlist self-references: the allowlist file itself contains the patterns it exceptions ---
+# Every comment and rule line in this file may contain the very strings it's whitelisting.
+\.guard-allowlist:.*
+
+# --- BOUNDARY-SYNC marker IDs: the synchronized section marker ID contains "rensei-platform-contract"
+# This is a load-bearing corpus convention (marker IDs must be globally unique across both corpora).
+# The marker ID is NOT a brand reference; it encodes the boundary concept name.
+# Renaming this ID requires a paired-commit update to rensei-architecture as well.
+001-layered-execution-model\.md:.*001-agentfactory-rensei-platform-contract
+BOUNDARY\.md:.*001-agentfactory-rensei-platform-contract
+scripts/check-boundary-sync\.sh:.*001-agentfactory-rensei-platform-contract
+
+# --- "The donmai ↔ Rensei Platform contract" section heading and cross-references
+# This is the load-bearing boundary section heading that names the enterprise product (Rensei).
+# "Rensei Platform" here is legitimate parent-brand attribution for the OSS↔enterprise seam.
+# Renaming this heading requires a paired commit to rensei-architecture (BOUNDARY-SYNC).
+# Pattern covers both the pre-rename (agentfactory) and post-rename (donmai) form during transition.
+001-layered-execution-model\.md:.*(agentfactory|donmai).*Rensei Platform contract
+BOUNDARY\.md:.*(agentfactory|donmai).*Rensei Platform contract
+AGENTS\.md:.*(agentfactory|donmai).*Rensei Platform contract
+ADR-template\.md:.*(agentfactory|donmai).*Rensei Platform contract
+
+# --- BOUNDARY.md enterprise-brand attribution (parent-brand refs describing the OSS↔Rensei seam)
+# "Rensei SaaS dashboard", "Rensei team's backlog", "Rensei org", "Rensei-platform-specific",
+# "Rensei-team-specific", "Rensei-specific" — all legitimate enterprise-product attribution.
+BOUNDARY\.md:.*Rensei([-]| SaaS| team| org| Platform| runs)
+BOUNDARY\.md:.*no Rensei-specific tools
+BOUNDARY\.md:.*Rensei-specific override
+BOUNDARY\.md:.*runs directory
+
+# --- README.md enterprise-brand attribution (OSS↔Rensei platform seam descriptions)
+README\.md:.*Rensei([-]| SaaS| team| Platform| Architecture)
+README\.md:.*(agentfactory|donmai).*Rensei Platform contract
+
+# --- ADR-template.md enterprise-brand attribution (boundary definitions)
+ADR-template\.md:.*Rensei([-]| team| org)
+

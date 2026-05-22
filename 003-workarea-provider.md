@@ -6,9 +6,9 @@
 
 ## Why this exists
 
-The QA coordinator runs in a worktree it inherited with whatever residual state the previous agent left behind — stale `.next/`, partial pnpm symlinks, leftover Turbopack caches. That residue causes deterministic-looking false negatives on `pnpm build`: `WORK_RESULT:failed` while every CI check is green and every AC passes. We've shipped per-bug mitigations (REN-1155 turbopack root, the recurrences REN-1166 / REN-1167 / REN-1190) but each one buys time, not correctness.
+The QA coordinator runs in a worktree it inherited with whatever residual state the previous agent left behind — stale `.next/`, partial pnpm symlinks, leftover Turbopack caches. That residue causes deterministic-looking false negatives on `pnpm build`: `WORK_RESULT:failed` while every CI check is green and every AC passes. Per-bug mitigations each buy time, not correctness.
 
-The architectural fix is to stop treating "the worktree the coordinator happens to be in" as the workarea, and start treating workarea provisioning as a first-class provider contract — the same shape we'd give any sandbox provider. If the workarea is in a known initial state when `acquire` returns, then a non-zero exit from validation means the code is broken, not the environment was. The coordinator's existing hard-fail rule (REN-1263) becomes meaningful instead of fragile.
+The architectural fix is to stop treating "the worktree the coordinator happens to be in" as the workarea, and start treating workarea provisioning as a first-class provider contract — the same shape we'd give any sandbox provider. If the workarea is in a known initial state when `acquire` returns, then a non-zero exit from validation means the code is broken, not the environment was. The coordinator's existing hard-fail rule becomes meaningful instead of fragile.
 
 This contract also handles the cost-vs-determinism tension at fleet scale. A naive "git clean -fdx + pnpm install on every acquire" makes 1000-concurrent-agents mathematically impossible (pnpm install on the Supaku monorepo is multi-minute). The interface below is designed so providers can choose the fastest path that satisfies the determinism guarantee — pool, snapshot clone, pause-resume — without each scheduler having to know which one.
 
@@ -251,8 +251,7 @@ For sandbox providers that ship native snapshot/pause-resume primitives (E2B, Ve
 
 The Intelligence Services layer (`007`) captures FS events during sessions to populate the knowledge graph. Two specific sources matter:
 
-- **REN-1188** — observation capture stream (real-time FS event matching).
-- **REN-1268** — AST-driven file-op extraction.
+Two specific sources matter: the observation capture stream (real-time FS event matching) and AST-driven file-op extraction.
 
 When `release(pause)` and a later `resume()` happen, naive replay would double-emit observations. The contract:
 
@@ -261,7 +260,7 @@ When `release(pause)` and a later `resume()` happen, naive replay would double-e
 3. `snapshot()` MUST capture the cursor; `resume()` MUST restore it. Replays from a snapshot start delivering events from the cursor forward, not from the beginning.
 4. When a workarea is reused (`return-to-pool`), the cursor is RESET — a returned pool member starts fresh on its next acquire, because the prior session is logically over.
 
-This is one of the seams (`006-cross-provider-interactions.md`) where a small contract detail prevents a class of cross-layer bugs. If we miss it, eval reproducibility (REN-1238) and proactive memory (REN-1184) both surface duplicate observations.
+This is one of the seams (`006-cross-provider-interactions.md`) where a small contract detail prevents a class of cross-layer bugs. If we miss it, eval reproducibility and proactive memory both surface duplicate observations.
 
 ## Toolchain matching to sandbox image selection
 
@@ -277,7 +276,7 @@ Detail: `006-cross-provider-interactions.md` covers the kit↔workarea↔sandbox
 
 ## Sharing model (sub-agent coordination)
 
-Today's `agentfactory` shared-worktree convention exists because pnpm install is slow; sub-agents in coordination workflows share a worktree to amortize the install cost. The workarea provider keeps that option but moves it from "implicit convention" to "declared in `WorkareaSpec.mode`":
+Today's shared-worktree convention exists because pnpm install is slow; sub-agents in coordination workflows share a worktree to amortize the install cost. The workarea provider keeps that option but moves it from "implicit convention" to "declared in `WorkareaSpec.mode`":
 
 ```ts
 // Coordinator acquires:
@@ -310,15 +309,6 @@ Mapping the seven sandbox providers to expected workarea capability shapes (info
 | K8s | scoped | ❌ (volume snap optional) | ❌ | ❌ | ❌ | tens of seconds |
 
 These are first-cut declarations; each provider's implementation owns its declared capabilities.
-
-## Linear realignment hooks
-
-- **REN-1140** (A3 long-running runtime — journal+resume) — the journal-and-resume requirement implies snapshot/restore semantics. Reframe REN-1140 to consume `WorkareaProvider.snapshot()` and `resume()` rather than designing its own state model.
-- **REN-1136** (long-running parent epic) — substrate spike scope is queue × sandbox × workarea (three-axis). Workarea is the missing noun.
-- **REN-1166 / 1167 / 1190 / 1155 / 1183** (false-positive QA cluster) — closed by `cleanGuarantee` semantics. Once the workarea provider is in place, the existing hard-fail rule (REN-1263) becomes meaningful.
-- **REN-1244** (runtime agent versioning with pin-to-version) — pin-to-version reproducibility requires deterministic workarea state; consume `cleanStateChecksum`.
-
-Detail in [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md).
 
 ## Open questions
 

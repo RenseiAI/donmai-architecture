@@ -8,7 +8,7 @@
 
 ## Context
 
-REN-1296 (Workflow Engine — inter-node output piping) and REN-1300 (Active Backlog Management workflow) shipped the inter-node templating syntax in `apiVersion: workflow/v2`. The corpus draft in `016-workflow-engine.md` Open Question #1 described the syntax as `{{ steps.<id>.output.<field> }}`. The implementation that landed uses `{{ nodes.<id>.output.<field> }}` instead.
+The Workflow Engine inter-node output piping and the Active Backlog Management workflow shipped the inter-node templating syntax in `apiVersion: workflow/v2`. The corpus draft in `016-workflow-engine.md` Open Question #1 described the syntax as `{{ steps.<id>.output.<field> }}`. The implementation that landed uses `{{ nodes.<id>.output.<field> }}` instead.
 
 The naming choice was made by the implementing sub-agent without explicit corpus author confirmation, but the rationale is sound:
 
@@ -41,7 +41,7 @@ The canonical inter-node templating syntax in `apiVersion: workflow/v2` is `{{ n
 
 ### Risks
 
-- A future plugin / template that hardcodes `steps.*` (e.g., a marketplace template inherited from outside Rensei) would silently fail validation. Mitigation: workflow validator emits a clear error message ("did you mean `nodes.*`?") when it sees `{{ steps. }}` in a workflow/v2 doc.
+- A future plugin / template that hardcodes `steps.*` (e.g., a marketplace template from an external source) would silently fail validation. Mitigation: workflow validator emits a clear error message ("did you mean `nodes.*`?") when it sees `{{ steps. }}` in a workflow/v2 doc.
 
 ## Alternatives considered
 
@@ -51,12 +51,6 @@ The canonical inter-node templating syntax in `apiVersion: workflow/v2` is `{{ n
 ## Affected documents
 
 - `016-workflow-engine.md` — §Templating, replace `{{ steps.<id>.output.<field> }}` with `{{ nodes.<id>.output.<field> }}` throughout. Update Open Question #1 from "open" to "resolved per ADR-2026-04-28-workflow-piping-uses-nodes."
-
-## Affected work items
-
-- REN-1296 (Workflow Engine inter-node piping — originator)
-- REN-1300 (Active Backlog Management workflow — first consumer of the syntax)
-- REN-1312 (Default SDLC YAML rewrite — will use this syntax when REN-1139 unblocks it)
 
 ## Implementation notes
 

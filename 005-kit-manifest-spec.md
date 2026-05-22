@@ -383,7 +383,7 @@ Kits are discovered through multiple sources, identical to the base contract's d
 
 1. **Local manifests** — `.rensei/kits/*.kit.toml` in the workarea. Highest priority. Used for project-bespoke kits.
 2. **Bundled kits** — shipped with the OSS execution layer. Default TS/Next.js kit lives here.
-3. **Rensei-hosted registry** — `registry.rensei.dev` (SaaS-managed, available to OSS users via free tier).
+3. **Donmai-hosted registry** — `registry.donmai.dev` (SaaS-managed, available to OSS users via free tier).
 4. **Tessl registry** — `registry.tessl.io`. Tessl tiles map onto kit contributions: skills (SKILL.md), docs (prompt fragments), rules. Tessl has no detect phase or toolchain demand, so a Tessl-imported kit ships only the contribution subset Tessl declares; the host wraps it with a default detect.
 5. **Anthropic Skills registry** — `agentskills.io`. Same model as Tessl: import a skill, wrap it as a single-skill kit.
 6. **Other community / enterprise registries** — declared in tenant config; same manifest schema and signature requirements.
@@ -398,13 +398,13 @@ The implication for tenants: "import a Tessl tile" is a valid action, and the ho
 
 ## Daemon kit registry
 
-The local `af` daemon ships a minimal in-process Kit registry that scans the
+The local `donmai` daemon ships a minimal in-process Kit registry that scans the
 filesystem for installed kit manifests and exposes them via the operator
 control API. This is the OSS-execution-layer's "Local manifests" registry
 source from the federation list above (item 1), surfaced as HTTP for the
-`af kit` / `rensei kit` command surface.
+`donmai kit` / platform-binary `kit` command surface.
 
-**Scan path.** Default `~/.rensei/kits/*.kit.toml` (TOML files with the
+**Scan path.** Default `~/.donmai/kits/*.kit.toml` (TOML files with the
 `.kit.toml` suffix at the top level of the kits directory). Configurable via
 `daemon.yaml`:
 
@@ -483,19 +483,12 @@ The kit doesn't know which provider satisfied the toolchain. The provider doesn'
 | Default TS/Next.js kit | ✅ ships | inherits |
 | Local manifest discovery | ✅ ships | inherits |
 | Tessl / agentskills.io adapters | ✅ ships | inherits |
-| Registry adapters (Rensei + community) | ✅ ships | ✅ ships hosted registry |
+| Registry adapters (Donmai + community) | ✅ ships | ✅ ships hosted registry |
 | Signing verification | ✅ ships permissive | ✅ ships allowlist + attested |
 | Per-tenant kit policies | ❌ | ✅ owns |
 | Kit publication / curation UI | ❌ | ✅ owns (paid) |
 
 Standard discipline: every interface and adapter ships in OSS. SaaS adds the central registry, multi-tenant policy, and publication UX.
-
-## Linear realignment hooks
-
-- **REN-1241** (per-agent SKILL.md with progressive disclosure) — Anthropic Skills support is now a kit contribution type (`provide.skills`). Reframe as "Kit support for Skill contributions" rather than a standalone feature.
-- **REN-1232** (Harness DX: skills, middleware, tracing, agent versioning) — split into per-contribution-type tasks; each maps onto a `provide.*` field.
-- **REN-1268** (AST-driven memory extraction) — domain-specific extractors become `provide.intelligence_extractors`. Generic AST stays in core; kits extend.
-- **REN-1184** (Proactive memory) — kits may contribute observation/suggestion patterns; not blocking on this doc but worth a follow-up ADR once memory contracts stabilize.
 
 ## Open questions
 

@@ -19,11 +19,11 @@ The previous top-levels (`worker`, `machine`, `execution`, `workarea`, top-level
 
 This means TUI primitives in this doc render under their owning top-level: `WorkerRow` and `WorkareaPoolPanel` are surfaced inside `host`; `FleetGrid` and `MachinePivot` are surfaced inside `fleet`; capacity-shaped panels (provider lists, pool config) live under `capacity`. The widgets are unchanged — only the command-tree under which they render moved.
 
-Both binaries (`af` and `rensei`) speak the noun model — `af host install` is the OSS-binary form; `rensei host install` is the platform-binary form. Composition lives at the cobra-command-factory layer (`afcli.RegisterCommands`), so the noun model is shared across binaries.
+Both binaries (`donmai` and the platform binary) speak the noun model — `donmai host install` is the OSS-binary form; the platform binary's `host install` is the platform form. Composition lives at the cobra-command-factory layer (`afcli.RegisterCommands`), so the noun model is shared across binaries.
 
 ## Why this exists
 
-Surfaced during the `tui-components` exploration: the architecture corpus is contract-shaped, but every capability flag, plugin manifest, and workflow event ultimately needs to render to an operator. Without a corpus-level "operator surface" contract, three different TUI consumers (`agentfactory-tui`, `rensei-tui`, future SaaS dashboard) reinvent the same display primitives independently, each with subtly different vocabulary. We've already seen drift — `tui-components/theme/worktype.go` hardcodes a closed switch of work types while the architecture treats work types as an extensible registry.
+Surfaced during the `tui-components` exploration: the architecture corpus is contract-shaped, but every capability flag, plugin manifest, and workflow event ultimately needs to render to an operator. Without a corpus-level "operator surface" contract, three different TUI consumers (`donmai`, the closed-source TUI client, future SaaS dashboard) reinvent the same display primitives independently, each with subtly different vocabulary. We've already seen drift — `tui-components/theme/worktype.go` hardcodes a closed switch of work types while the architecture treats work types as an extensible registry.
 
 This doc is the contract between the architecture corpus and the TUI consumers. It defines the canonical display vocabulary for architectural concepts: capability flags as chips, scope as pills, attestation as fingerprint chips, audit chains as composed rows.
 
@@ -40,7 +40,7 @@ Throughout the corpus, capability flags are typed enums (`'wall-clock' | 'active
 └───────────────────────────────┘
 ```
 
-The chip widget consumes a `(value, label)` pair. The label comes from the capability's `humanLabel` registry in `002`. This means rendering a SandboxProvider's billing model in `agentfactory-tui`'s local fleet view, in `rensei-tui`'s multi-machine dashboard, and in the SaaS dashboard's routing intelligence panel **always uses the same chip + same label** — drift is impossible because the source of truth is the architecture corpus, not the TUI code.
+The chip widget consumes a `(value, label)` pair. The label comes from the capability's `humanLabel` registry in `002`. This means rendering a SandboxProvider's billing model in `donmai`'s local fleet view, in the closed-source TUI client's multi-machine dashboard, and in the SaaS dashboard's routing intelligence panel **always uses the same chip + same label** — drift is impossible because the source of truth is the architecture corpus, not the TUI code.
 
 The chip widget is generic over the flag's enum type. A toolchain chip (`java=17`) is the same shape as a transport-model chip (`dial-in`). Same generic primitive, different inputs.
 
@@ -151,7 +151,7 @@ This is a v0.2.0 breaking change for `tui-components` (every widget today reads 
 Status already pairs color with Unicode symbol (`tui-components/theme/status.go` has `(label, color, symbol, animate)` tuples). The architecture commitment:
 
 1. **Honor `NO_COLOR` env var** — when set, force symbol-first rendering through `StatusStyle.Symbol` with no color.
-2. **Explicit a11y mode** — `RENSEI_A11Y=true` env var or `--a11y` flag forces high-contrast theme + symbol-first rendering + verbose-label-only-no-icon variants.
+2. **Explicit a11y mode** — `DONMAI_A11Y=true` env var or `--a11y` flag forces high-contrast theme + symbol-first rendering + verbose-label-only-no-icon variants.
 3. **Document non-color signaling** — every status/work-type/activity primitive's documentation states the non-color disambiguator (Unicode symbol).
 4. **Screen-reader-friendly labels** — every primitive declares an `accessibleLabel: string` field that screen readers can consume.
 
@@ -186,7 +186,7 @@ Same shape for work types and activity types. Closes the drift described in the 
 | Capability primitives + chip widget | ✅ ships | consumes |
 | Theme system + swap mechanism | ✅ ships | extends with tenant brand themes |
 | Default + dark + high-contrast themes | ✅ ships | inherits |
-| `agentfactory-tui` (OSS binary surface) | ✅ ships | consumed via `afcli.RegisterCommands` |
+| `donmai` (OSS binary surface) | ✅ ships | consumed via `afcli.RegisterCommands` |
 | Architecture-concept registries (status, worktype, activity) | ✅ ships generic | extends domain-specific |
 
 The OSS layer ships a complete TUI for the local-daemon flow (per `011`). The platform extensions doc carries the SaaS-distinct surfaces — multi-tenant brand theme administration, the Live capacity contract, the dual-surface discipline obligation, the routing-intelligence/audit-chain TUI counterparts.
