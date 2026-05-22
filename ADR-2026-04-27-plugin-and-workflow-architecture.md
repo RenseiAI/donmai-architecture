@@ -137,10 +137,10 @@ The architecture explicitly commits to closing the Day-1-vs-Day-40 gap (where ag
 
 - **`001-layered-execution-model.md`** — major update: new layered picture (Plugin / Provider Family / Workflow Verb / Workflow Definition / Workflow Engine), AgentRuntimeProvider added as 8th family, Three Principles section, Day-1-vs-Day-40 commitment, dual-surface discipline, two-binary boundary canonical realization.
 - **`002-provider-base-contract.md`** — clarify Plugin vs Provider Family relationship, add `humanLabel` companion to capability flags, add capability-tag-to-typed-struct migration path.
-- **`004-sandbox-capability-matrix.md`** — cite `agentfactory-tui/worker/types.go` dial-out impl as reference for worker registration model.
+- **`004-sandbox-capability-matrix.md`** — cite `donmai/worker/types.go` dial-out impl as reference for worker registration model.
 - **`007-intelligence-services.md`** — add language-host boundary subsection (multi-impl behind one consumer interface), add active context injection section (Day-1-vs-Day-40).
 - **`011-local-daemon-fleet.md`** — answer the GUI status open question (the TUI's `daemon status` IS the GUI surface).
-- [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md) — major expansion: cross-repo findings (agentfactory, agentfactory-tui, closed-source TUI, tui-components), plugin/workflow reframe consequences, ~40 net-new issues.
+- [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md) — major expansion: cross-repo findings (agentfactory, donmai, closed-source TUI, tui-components), plugin/workflow reframe consequences, ~40 net-new issues.
 
 ## Follow-on implementation items
 

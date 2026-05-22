@@ -398,13 +398,13 @@ The implication for tenants: "import a Tessl tile" is a valid action, and the ho
 
 ## Daemon kit registry
 
-The local `af` daemon ships a minimal in-process Kit registry that scans the
+The local `donmai` daemon ships a minimal in-process Kit registry that scans the
 filesystem for installed kit manifests and exposes them via the operator
 control API. This is the OSS-execution-layer's "Local manifests" registry
 source from the federation list above (item 1), surfaced as HTTP for the
-`af kit` / `rensei kit` command surface.
+`donmai kit` / platform-binary `kit` command surface.
 
-**Scan path.** Default `~/.rensei/kits/*.kit.toml` (TOML files with the
+**Scan path.** Default `~/.donmai/kits/*.kit.toml` (TOML files with the
 `.kit.toml` suffix at the top level of the kits directory). Configurable via
 `daemon.yaml`:
 

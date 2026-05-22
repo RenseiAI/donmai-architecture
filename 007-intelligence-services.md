@@ -21,8 +21,8 @@ Per Wave 10 Phase 1 resolutions Q4: this doc is the **forward-looking canonical 
 
 | Surface | OSS-shipped today | Scheduled |
 |---|---|---|
-| Code Intelligence (`@renseiai/agentfactory-code-intelligence`, six MCP tools) | yes | n/a |
-| Code Intelligence (Go reimpl, `af code` subcommands) | partial (in flight) | finish in next-N waves |
+| Code Intelligence (`@donmai/code-intelligence`, six MCP tools) | yes | n/a |
+| Code Intelligence (Go reimpl, `donmai code` subcommands) | partial (in flight) | finish in next-N waves |
 | Memory query/write API + sqlite single-tenant reference impl | no | scheduled — see "Implementation status" annotation in § Memory below |
 | Architectural Intelligence (single-project synthesis) | no | scheduled |
 
@@ -118,20 +118,20 @@ This is a constraint on the implementation, not a design choice: tenants who can
 
 ### Architecture summary
 
-The existing `@renseiai/agentfactory-code-intelligence` package is the OSS-shipped reference implementation. Six in-process MCP tools today:
+The existing `@donmai/code-intelligence` package (formerly `@renseiai/agentfactory-code-intelligence`, being deprecated; functionality migrating to the Go `donmai` binary) is the OSS-shipped reference implementation. Six in-process MCP tools today:
 
-- `af_code_get_repo_map` — PageRank-ranked file importance map
-- `af_code_search_symbols` — function/class/type definition search
-- `af_code_search_code` — BM25 keyword search with code-aware tokenization
-- `af_code_check_duplicate` — exact + near-duplicate detection before writing code
-- `af_code_find_type_usages` — switch/case + mapping + usage sites for a type
-- `af_code_validate_cross_deps` — cross-package import validation
+- `donmai_code_get_repo_map` — PageRank-ranked file importance map
+- `donmai_code_search_symbols` — function/class/type definition search
+- `donmai_code_search_code` — BM25 keyword search with code-aware tokenization
+- `donmai_code_check_duplicate` — exact + near-duplicate detection before writing code
+- `donmai_code_find_type_usages` — switch/case + mapping + usage sites for a type
+- `donmai_code_validate_cross_deps` — cross-package import validation
 
 Optional enhancements when API keys are configured:
 - `VOYAGE_AI_API_KEY` — semantic vector embeddings (hybrid BM25 + vector mode)
 - `COHERE_API_KEY` — cross-encoder reranking for precision
 
-Index persists to `.agentfactory/code-index/` (Merkle-diff incremental indexing). First-run cost ~5–10s; subsequent reuses near-instant.
+Index persists to `.donmai/code-index/` (Merkle-diff incremental indexing). First-run cost ~5–10s; subsequent reuses near-instant.
 
 ### Contract: what kits and agents see
 
@@ -139,7 +139,7 @@ Code Intelligence exposes its surface in two ways:
 
 ```ts
 // As MCP tools (the dominant path for agent use)
-// Already shipped via the af_code_* tools listed above.
+// Already shipped via the donmai_code_* tools listed above.
 // Kits don't redefine these; they consume them transitively when an
 // agent runs in a workarea where Code Intelligence is registered.
 
@@ -308,7 +308,7 @@ Lose either principle and Architectural Intelligence becomes a wrapper, not a di
 
 ## Language-host boundary for Code Intelligence
 
-The agentfactory exploration produced a Go reimplementation of Code Intelligence (`af code` subcommands using Go AST). The TS package `@renseiai/agentfactory-code-intelligence` is one of multiple OSS-shipped implementations.
+The Donmai exploration produced a Go reimplementation of Code Intelligence (`donmai code` subcommands using Go AST). The TS package `@donmai/code-intelligence` (formerly `@renseiai/agentfactory-code-intelligence`) is one of multiple OSS-shipped implementations.
 
 The principle: **the indexer must be written in the language of the codebase being indexed; the consumer interface stays uniform.**
 
@@ -320,7 +320,7 @@ The principle: **the indexer must be written in the language of the codebase bei
 
 Each implementation registers as a `CodeIntelligenceProvider` (a sub-shape of the Provider Family pattern from `002`); the resolver picks one per workarea based on the detected primary language. Consumers (agents, kits, MCP tools) call the same interface regardless. This is the same shape as `WorkareaProvider`'s multiple implementations behind one contract.
 
-Practical implication: the corpus does not pick "the OSS impl" — it specifies the contract. Every language ecosystem ships its own indexer; the registry federates them. The `af_code_*` MCP tools resolve to whichever indexer claims the workarea's language.
+Practical implication: the corpus does not pick "the OSS impl" — it specifies the contract. Every language ecosystem ships its own indexer; the registry federates them. The `donmai_code_*` MCP tools resolve to whichever indexer claims the workarea's language.
 
 ## Eval and Scoring (related, not the same)
 
@@ -352,9 +352,9 @@ The dedicated eval/scoring doc is deferred until we have implementation experien
 | Open-format API (export schema + endpoints) | ✅ ships per-tenant | ✅ ships hosted |
 | MCP tool exposure | ✅ ships | inherits + extends |
 | Code Intelligence API | ✅ owns | consumes |
-| `af_code_*` MCP tools | ✅ ships | inherits |
+| `donmai_code_*` MCP tools | ✅ ships | inherits |
 | Voyage / Cohere optional integration | ✅ ships when keys present | ✅ ships hosted alternative |
-| Index storage (`.rensei/code-index/`) | ✅ ships | inherits |
+| Index storage (`.donmai/code-index/`) | ✅ ships | inherits |
 | Domain extractors | shipped via kits (both layers) | shipped via kits |
 | Eval/scoring system | ❌ basic local logs only | ✅ owns dashboards + routing intelligence |
 

@@ -12,9 +12,9 @@ Each provider has different lifecycle primitives, different cost shapes, differe
 
 This doc defines the capability struct, profiles each shipped provider against it, and specifies the cross-provider scheduling algorithm that routes work to capacity.
 
-## Reference implementation: agentfactory-tui worker dial-out
+## Reference implementation: donmai worker dial-out
 
-The architecture's worker registration model is grounded in a working OSS implementation. From `agentfactory-tui/worker/types.go`:
+The architecture's worker registration model is grounded in a working OSS implementation. From `donmai/worker/types.go`:
 
 ```go
 type RegisterRequest struct {
@@ -339,7 +339,7 @@ A remote A2A agent registers as a `SandboxProvider` with `isA2ARemote: true`. Pr
 
 The Local sandbox provider has two operational modes. Tenants pick one per machine.
 
-### Foreground mode (today's `agentfactory` default)
+### Foreground mode (legacy default, pre-daemon)
 
 A worker fleet is spawned alongside the user's editor session — typically by a VSCode/Cursor SessionStart hook or `pnpm orchestrator` invocation. The fleet's lifetime is tied to that editor process; closing the editor stops the fleet. Each project's workspace runs its own fleet, scoped to that project.
 

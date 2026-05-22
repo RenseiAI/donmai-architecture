@@ -7,7 +7,7 @@
 
 ## Why this exists
 
-The Layer 3 (Execution) abstractions in `001` are typed contracts — Sandbox, Workarea, AgentRuntime, Worker. This doc covers the **runtime that orchestrates them**: the orchestrator service that dispatches sessions, the governor scan loop that watches for work, the worker process model, and the AgentRuntime dispatch surface. The Topology view (React Flow operator dashboard) and the `agentfactory` repo's PR merge-queue specifics live on the platform side; see the platform-extensions doc.
+The Layer 3 (Execution) abstractions in `001` are typed contracts — Sandbox, Workarea, AgentRuntime, Worker. This doc covers the **runtime that orchestrates them**: the orchestrator service that dispatches sessions, the governor scan loop that watches for work, the worker process model, and the AgentRuntime dispatch surface. The Topology view (React Flow operator dashboard) and the Donmai merge-queue specifics live on the platform side; see the platform-extensions doc.
 
 ## The orchestrator
 
@@ -55,7 +55,7 @@ graph TB
 
 ## The governor
 
-The governor is the **scan-and-dispatch loop** that watches external systems for new work. In the legacy agentfactory codebase, this is `packages/cli/src/orchestrator.ts`'s scan loop and `packages/server/src/governor*` files. It is being ported to Go in `agentfactory-tui`.
+The governor is the **scan-and-dispatch loop** that watches external systems for new work. In the legacy agentfactory codebase, this is `packages/cli/src/orchestrator.ts`'s scan loop and `packages/server/src/governor*` files. It is being ported to Go in `donmai`.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -78,11 +78,11 @@ Governor is **stateless across cycles** — all state lives in the work queue, t
 
 ## The worker
 
-A **worker** is the OS process that runs an agent session. It registers with the orchestrator at start, claims work from the queue, executes the session (driving the AgentRuntime), and reports results. The reference implementation lives in `agentfactory-tui/worker/` (Go).
+A **worker** is the OS process that runs an agent session. It registers with the orchestrator at start, claims work from the queue, executes the session (driving the AgentRuntime), and reports results. The reference implementation lives in `donmai/worker/` (Go).
 
 ### Worker registration (the dial-out flow)
 
-The codebase ships a working dial-out registration model. From `agentfactory-tui/worker/types.go`:
+The codebase ships a working dial-out registration model. From `donmai/worker/types.go`:
 
 ```go
 type RegisterRequest struct {
@@ -196,11 +196,11 @@ Fields requiring agent judgment (`work_result`, `comment_posted`) cannot be back
 
 **Rule (the OSS architectural commitment):** every macOS binary published from this corpus's reference implementations MUST be Developer-ID-signed with hardened runtime enabled, notarized via Apple's `notarytool`, and have its notarization ticket stapled to the archive.
 
-This is a reproducible-anywhere knowledge: any forked OSS deployment of `agentfactory-tui` that publishes macOS binaries must follow this same signing model with its own Developer ID. The platform-side operational state (which Apple Team ID, which secret store, which cask repo) lives in the platform extensions doc.
+This is a reproducible-anywhere knowledge: any forked OSS deployment of `donmai` that publishes macOS binaries must follow this same signing model with its own Developer ID. The platform-side operational state (which Apple Team ID, which secret store, which cask repo) lives in the platform extensions doc.
 
 ### Why this matters
 
-Unsigned macOS binaries trigger Gatekeeper popups in System Settings → Privacy & Security on first launch, requiring user-level approval. Worse, when an unsigned binary is registered as a launchd user-level service (e.g., via `af host install`), launchd may **silently** fail to spawn it — there's no popup, the daemon just never comes up. Both cases violate the binary distribution acceptance gate: a release whose install path requires user-clickthrough is not "clean" by any product standard.
+Unsigned macOS binaries trigger Gatekeeper popups in System Settings → Privacy & Security on first launch, requiring user-level approval. Worse, when an unsigned binary is registered as a launchd user-level service (e.g., via `donmai host install`), launchd may **silently** fail to spawn it — there's no popup, the daemon just never comes up. Both cases violate the binary distribution acceptance gate: a release whose install path requires user-clickthrough is not "clean" by any product standard.
 
 CI-green is necessary but not sufficient: GitHub-Actions Linux runners don't exercise Gatekeeper, so unsigned macOS releases pass CI while breaking real users on every install.
 
@@ -213,7 +213,7 @@ For any forked OSS deployment shipping macOS binaries:
 - Hardened runtime MUST be enabled.
 - Notarization MUST succeed and the ticket MUST be stapled to the archive.
 
-The reference implementation in `agentfactory-tui/.goreleaser.yaml` ships a working `notarize.macos` block that any fork can copy.
+The reference implementation in `donmai/.goreleaser.yaml` ships a working `notarize.macos` block that any fork can copy.
 
 ### Verification gate
 

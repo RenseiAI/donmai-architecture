@@ -52,7 +52,7 @@ This surface MUST work across providers without provider-conditional branches in
 Workflow nodes, workflow verbs, CLI subcommands, UI palettes, templates, and any other surface a user authors against MUST stay native-rich per provider. Each provider exposes its full differentiating capability:
 
 - **Workflow nodes:** Linear's 21 native nodes (incl. `linear.agent_session.*`, `linear.issue.create_sub_issue`, etc.) stay as-is. GitHub Issues ships its own native node set (`github_issues.task_list.*`, `github_issues.review.*`, `github_issues.linked_pr.*`). Jira ships epic-aware nodes. Adding a provider grows the catalog; it never trims the existing ones.
-- **CLI:** `af linear *`, `af jira *`, `af github *` are sibling subcommand trees, not a single `af tracker --provider <id>`.
+- **CLI:** `donmai linear *`, `donmai jira *`, `donmai github *` are sibling subcommand trees, not a single `donmai tracker --provider <id>`.
 - **Workflow verbs:** `vercel.deploy`, `cloudflare.deploy`, `github.pr.create`, `atomic.patch.commit` stay distinct. Generic wrappers like `deploy.run` or `vcs.merge` are explicitly out.
 - **Templates:** A SDLC template for Linear-shaped tenants references Linear-native nodes; a SDLC template for GitHub-Issues-shaped tenants references GitHub-Issues-native nodes. We ship per-provider template variants, not one template with a provider knob.
 - **UI:** The workflow editor, CLI help, and provider-specific dashboards filter by which integrations are enabled and which capabilities each declares. Doubling node count per added provider is the correct cost; the editor's palette filtering is what keeps the surface tractable for users.

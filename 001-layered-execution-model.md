@@ -4,7 +4,7 @@
 **Last updated:** 2026-04-27
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/001-layered-execution-model-platform-extensions.md`)
 
-This is the canonical mental model for the AgentFactory OSS execution layer. Every other doc in this corpus elaborates one slice of what's described here. If a contributor reads only one doc, it should be this one.
+This is the canonical mental model for the Donmai OSS execution layer. Every other doc in this corpus elaborates one slice of what's described here. If a contributor reads only one doc, it should be this one.
 
 ## Goal of the platform
 
@@ -159,7 +159,7 @@ Detail: **`005-kit-manifest-spec.md`**.
 The differentiator. Memory and Code Intelligence accumulate value across sessions, providers, and tenants. They are not optional — every session reads from and writes to them, regardless of which sandbox hosted it or which Kit configured it.
 
 - **Memory** — knowledge graph (Postgres + pgvector), in-session observation capture, AST-driven file-op extraction, cross-session injection, proactive context-aware suggestions.
-- **Code Intelligence** — BM25 + vector hybrid search, repo map (PageRank), symbol search, dedup detection, cross-package dependency validation, type usage finding. The existing `@renseiai/agentfactory-code-intelligence` package is the OSS-shipped implementation.
+- **Code Intelligence** — BM25 + vector hybrid search, repo map (PageRank), symbol search, dedup detection, cross-package dependency validation, type usage finding. The existing `@donmai/code-intelligence` package (formerly `@renseiai/agentfactory-code-intelligence`, being deprecated) is the OSS-shipped implementation; functionality migrates to the Go `donmai` binary over time.
 
 These services are **provider-orthogonal**: an agent running on Vercel Sandbox with an E2B-paused workarea using a Spring Java Kit still benefits from the same memory graph and same code index. Routing across providers is what makes the platform composable; *enriching across providers* is what makes it differentiated.
 
@@ -263,7 +263,7 @@ The boundary stated as a discipline:
 
 <!-- BOUNDARY-SYNC-END: 001-agentfactory-rensei-platform-contract -->
 
-**Canonical realization.** The cleanest demonstration of this discipline lives in the closed-source TUI consumer's main entry point, which calls `afcli.RegisterCommands(rootCmd, afcli.Config{...})` to import the OSS TUI's full command surface and extends with platform-specific commands on top. Public packages (`afclient`, `afcli`, `worker` in `agentfactory-tui`) carry the OSS interfaces; `internal/views` stays internal. The two-binary boundary works because the OSS layer never reaches up; the SaaS layer reaches down through public APIs only.
+**Canonical realization.** The cleanest demonstration of this discipline lives in the closed-source TUI consumer's main entry point, which calls `afcli.RegisterCommands(rootCmd, afcli.Config{...})` to import the OSS TUI's full command surface and extends with platform-specific commands on top. Public packages (`afclient`, `afcli`, `worker` in `donmai`) carry the OSS interfaces; `internal/views` stays internal. The two-binary boundary works because the OSS layer never reaches up; the SaaS layer reaches down through public APIs only.
 
 **Where this principle has tension: webhooks.** The OSS Linear integration today requires a public URL. Long-term answer: a localtunnel-style ephemeral URL spun up by the OSS CLI. Short-term: OSS users deploy a small webhook target on Railway or equivalent. SaaS users get the platform's webhook proxy (see platform extensions). Neither violates the principle — the OSS layer remains usable; webhooks are an integration concern, not a core dependency.
 
@@ -271,9 +271,9 @@ The boundary stated as a discipline:
 
 ## What this corpus is not
 
-- **Not implementation reference.** Concrete code lives in source repos (`agentfactory-tui`, future Kit repos). This corpus is *contracts*. Where this corpus and code diverge, the corpus is right and the code needs to align (or an ADR amends the corpus).
+- **Not implementation reference.** Concrete code lives in source repos (`donmai`, future Kit repos). This corpus is *contracts*. Where this corpus and code diverge, the corpus is right and the code needs to align (or an ADR amends the corpus).
 - **Not a roadmap.** Sequencing belongs in Linear; OSS readers can ignore Linear-realignment specifics — those live in `rensei-architecture/009-linear-realignment.md` and operate against the platform team's backlog.
-- **Not the brand book.** Naming decisions (the `agentfactory` rename, the Kit-or-Ofuda question) are tracked separately and updated here only after the brand team confirms.
+- **Not the brand book.** Naming decisions (the completed `agentfactory`→`donmai` rename, the Kit-or-Ofuda question) are tracked in the rebrand runbook; this corpus reflects approved final names.
 
 ## Reading order for new contributors
 

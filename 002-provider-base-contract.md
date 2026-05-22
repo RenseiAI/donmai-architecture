@@ -350,7 +350,7 @@ The base contract guarantees that these events fire consistently across all seve
 
 ### Cross-process providers and the hook bus
 
-A provider may run **in-process** (TypeScript, instrumented via `InstrumentedProvider`) or **cross-process** (e.g. the Go `af agent run` daemon, future RPC-shaped providers). Cross-process providers emit equivalent hook events through a **bridge owned by the platform's ingest route for that provider's transport**. From a subscriber's view, an event emitted by a cross-process provider is indistinguishable from one emitted in-process; the bus contract is identical.
+A provider may run **in-process** (TypeScript, instrumented via `InstrumentedProvider`) or **cross-process** (e.g. the Go `donmai agent run` daemon, future RPC-shaped providers). Cross-process providers emit equivalent hook events through a **bridge owned by the platform's ingest route for that provider's transport**. From a subscriber's view, an event emitted by a cross-process provider is indistinguishable from one emitted in-process; the bus contract is identical.
 
 For the Go daemon today (per `ADR-2026-05-12-cross-process-hook-bus-bridge`), the bridge surface is the `POST /api/sessions/<id>/activity` ingest route. The daemon's wire payload carries the canonical fields the new event kinds reference (`toolUseId`, `toolInput`, `toolOutput`, `isError`, `durationMs`, `providerName`); the platform side reconstructs the appropriate `pre-tool-use` / `post-tool-use` / `tool-use-error` event and emits it on `globalHookBus`. Cross-replica visibility is achieved by fan-out via the platform's existing Redis session-event channel (a new `provider_hook_event` `SessionEvent` type). See `006-cross-provider-interactions.md` Seam 10 for the cooperation contract.
 
@@ -367,7 +367,7 @@ Per the OSS↔SaaS discipline (`001`), every family must have a working OSS impl
 
 ## Agent Runtime providers — current contract
 
-The `AgentRuntime` family (the runners that execute one agent session — Claude, Codex, Ollama, Gemini, Amp, OpenCode, …) ships in Go in `agentfactory-tui/agent/` and is consumed by the local daemon's per-session `af agent run` subcommand via a `runner.Registry`. It predates the unified manifest-based discovery described above; capabilities are declared on the Provider instance rather than in a separate manifest file. The contract below is what implementations target today; **v2 enrichments accepted 2026-05-06** (end of this section) define the in-place additions that align it with the unified base contract without a major version bump.
+The `AgentRuntime` family (the runners that execute one agent session — Claude, Codex, Ollama, Gemini, Amp, OpenCode, …) ships in Go in `donmai/agent/` and is consumed by the local daemon's per-session `donmai agent run` subcommand via a `runner.Registry`. It predates the unified manifest-based discovery described above; capabilities are declared on the Provider instance rather than in a separate manifest file. The contract below is what implementations target today; **v2 enrichments accepted 2026-05-06** (end of this section) define the in-place additions that align it with the unified base contract without a major version bump.
 
 ### Interface (verbatim, Go)
 
@@ -431,14 +431,14 @@ Capability declarations are stable for the lifetime of the Provider instance. Im
 
 ### Reference implementations
 
-Each implementation is a peer-package under `agentfactory-tui/provider/`:
+Each implementation is a peer-package under `donmai/provider/`:
 
 - `provider/claude/` — Claude Code CLI shell-out. Per-session subprocess; JSONL stream-json mode; mid-session injection via fresh `claude --resume <id> -p <text>` subprocess that streams onto the parent Handle's events channel.
 - `provider/codex/` — Codex `app-server` JSON-RPC over stdio. Long-lived subprocess; multiple sessions multiplex via `thread/start`; permission-config bridge implements canUseTool-equivalent.
 - `provider/stub/` — deterministic scripted-event sequences for tests and the F.4 smoke harness; supports every capability so the runner exercises every gating branch.
 - `provider/ollama/` (added 2026-05-06) — local-first HTTP. Probe via `GET /api/tags`; spawn via streaming `POST /api/chat`; deliberately conservative capability profile (no inject, no resume, no tools).
 
-Provider construction (`buildAgentRunRegistry`, `afcli/agent_run.go:387`) is best-effort — each ctor probes fail-fast and the daemon logs WARN per failure but only ERRORs when zero providers register. This means an operator without Ollama installed sees the registry skip Ollama silently (visible in the WARN log), while sessions resolved to `provider="ollama"` then fail at `runner.Resolve` with `agent.ErrNoProvider` — the correct loud failure when the requested local runtime is missing.
+Provider construction (`buildAgentRunRegistry`, `donmai/afcli/agent_run.go:387`) is best-effort — each ctor probes fail-fast and the daemon logs WARN per failure but only ERRORs when zero providers register. This means an operator without Ollama installed sees the registry skip Ollama silently (visible in the WARN log), while sessions resolved to `provider="ollama"` then fail at `runner.Resolve` with `agent.ErrNoProvider` — the correct loud failure when the requested local runtime is missing.
 
 ### v2 enrichments — Accepted (2026-05-06)
 
@@ -533,7 +533,7 @@ interface ToolUseSurface {
 }
 ```
 
-Capability declarations must reflect reality, not aspiration. The runner enforces this: `Spec.MCPServers` and `Spec.AllowedTools` are stripped (warn-and-ignore, with a `SpecFieldNote` on the spawn plan) before the call to `Spawn` for any provider that declares the corresponding flag false. Tests in `agentfactory-tui/afcli/tooluse_matrix_test.go` and `agentfactory-tui/runner/spec_translation_test.go` enforce the matrix at compile time — the per-provider declarations and the gating behavior cannot drift. The matrix evolves with provider implementations: when a provider's runner gains real tool support, the capability flag and this doc table update in lockstep.
+Capability declarations must reflect reality, not aspiration. The runner enforces this: `Spec.MCPServers` and `Spec.AllowedTools` are stripped (warn-and-ignore, with a `SpecFieldNote` on the spawn plan) before the call to `Spawn` for any provider that declares the corresponding flag false. Tests in `donmai/afcli/tooluse_matrix_test.go` and `donmai/runner/spec_translation_test.go` enforce the matrix at compile time — the per-provider declarations and the gating behavior cannot drift. The matrix evolves with provider implementations: when a provider's runner gains real tool support, the capability flag and this doc table update in lockstep.
 
 ##### Provider × tool-use surface (2026-05-06, wave 8)
 
@@ -547,7 +547,7 @@ Capability declarations must reflect reality, not aspiration. The runner enforce
 | `amp` | false | false | false | claude | registration-only (Sourcegraph stable HTTP API not shipped) |
 | `opencode` | false | false | false | claude | registration-only (SST pre-1.0; per-minor breakage) |
 
-Note: `ToolPermissionFormat` differs from the wire format the provider consumes — it names the *permission-config grammar* the orchestrator emits. Today only `codex` declares a non-`claude` value (matching the legacy capability matrix earlier in this doc); every other shipped runner consumes the `claude` grammar regardless of native protocol. The matrix above mirrors the live `Capabilities()` declarations in `agentfactory-tui/provider/*/`.
+Note: `ToolPermissionFormat` differs from the wire format the provider consumes — it names the *permission-config grammar* the orchestrator emits. Today only `codex` declares a non-`claude` value (matching the legacy capability matrix earlier in this doc); every other shipped runner consumes the `claude` grammar regardless of native protocol. The matrix above mirrors the live `Capabilities()` declarations in `donmai/provider/*/`.
 
 ### Decisions (2026-05-06)
 
@@ -583,7 +583,7 @@ The OSS layer is fully usable single-tenant — single project, single user, opt
 
 ## Capability-tag-to-typed-struct migration path
 
-The codebase ships a precedent worth citing: `agentfactory-tui/worker/types.go`'s `RegisterRequest.Capabilities []string` field is a lightweight, untyped capability declaration (`["claude", "codex", "amp"]`). Workers tag themselves; the orchestrator matches by string membership.
+The codebase ships a precedent worth citing: `donmai/worker/types.go`'s `RegisterRequest.Capabilities []string` field is a lightweight, untyped capability declaration (`["claude", "codex", "amp"]`). Workers tag themselves; the orchestrator matches by string membership.
 
 The migration to typed structs (per this doc) follows the standard fallback pattern:
 

@@ -240,7 +240,7 @@ Contract details:
 
 ## Seam 10 — Cross-process provider hook bridge
 
-**Problem:** Layer 6 hook events (`pre-verb`/`post-verb`/`pre-tool-use`/`post-tool-use`, etc.) are emitted on an in-process TypeScript bus (`globalHookBus`). The Go `af agent run` daemon — the AgentRuntime provider that executes real SDLC sessions today — is a separate OS process and so cannot emit on the bus directly. Without a bridge, every Layer 6 subscriber that targets tool-call-grained events (the in-session memory injector, graph-extraction-event-trigger, the Context-satellite derive subscriber, future security/cost subscribers) is dark for production sessions.
+**Problem:** Layer 6 hook events (`pre-verb`/`post-verb`/`pre-tool-use`/`post-tool-use`, etc.) are emitted on an in-process TypeScript bus (`globalHookBus`). The Go `donmai agent run` daemon — the AgentRuntime provider that executes real SDLC sessions today — is a separate OS process and so cannot emit on the bus directly. Without a bridge, every Layer 6 subscriber that targets tool-call-grained events (the in-session memory injector, graph-extraction-event-trigger, the Context-satellite derive subscriber, future security/cost subscribers) is dark for production sessions.
 
 **Cooperation:** Cross-process providers participate in Layer 6 through a **wire-format-as-bridge** owned by the platform-side ingest route for that provider's transport. Per `ADR-2026-05-12-cross-process-hook-bus-bridge`:
 

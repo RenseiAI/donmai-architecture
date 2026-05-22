@@ -15,7 +15,7 @@ The four daemon-targeted operator surfaces — Provider, Kit, Workarea, Routing
 `closed-source-tui/internal/api/{provider,kit,workarea,routing}_*.go` that reference
 `/v1/providers`, `/v1/kits`, `/v1/workareas`, and `/v1/routing/*`. Those
 endpoints are not implemented anywhere — neither on the SaaS platform nor on
-the local `af` daemon — so the commands have always returned misleading
+the local `donmai` daemon — so the commands have always returned misleading
 errors.
 
 Mapping the four surfaces against `001-layered-execution-model.md`:
@@ -31,22 +31,22 @@ None has a platform-specific concern. Per the boundary discipline in
 `001-layered-execution-model.md` § "The OSS↔Platform contract"
 and the closed-source TUI's boundary guidance:
 
-> Generic AgentFactory commands … are implemented in `agentfactory-tui` and
+> Generic Donmai commands … are implemented in `donmai` and
 > imported here via `afcli.RegisterCommands`. **If a generic command is
-> missing, contribute it upstream to agentfactory-tui first**, then it
+> missing, contribute it upstream to donmai first**, then it
 > automatically appears in the downstream binary.
 
 Today's placement is a pre-existing boundary violation. This ADR records the
 canonical shape of the daemon's HTTP control API and the
-agentfactory-tui-resident command surface that consumes it. Wave 9 (planned
+donmai-resident command surface that consumes it. Wave 9 (planned
 in `runs/WAVE9_DAEMON_OSS_BOUNDARY_MIGRATION_PLAN.md`) implements it.
 
 ## Decision
 
-The local `af` daemon owns an HTTP control API at the canonical namespace
+The local `donmai` daemon owns an HTTP control API at the canonical namespace
 `/api/daemon/*`. The four migrating surfaces' endpoints, types, client
 methods, cobra commands, and renderers move from closed-source-tui to public
-agentfactory-tui packages. The rensei binary picks them up automatically via
+donmai packages. The rensei binary picks them up automatically via
 the existing `afcli.RegisterCommands` seam.
 
 Five sub-decisions:
@@ -55,7 +55,7 @@ Five sub-decisions:
 
 The daemon already serves seven `/api/daemon/*` routes (status, stats, pause,
 resume, stop, drain, update, capacity, pool/*, sessions, sessions/<id>,
-heartbeat, doctor — see `agentfactory-tui/daemon/server.go:95-114`). The
+heartbeat, doctor — see `donmai/daemon/server.go:95-114`). The
 four new surfaces extend the same namespace:
 
 ```
@@ -101,9 +101,9 @@ authenticated client. afcli inherits that separation: `afclient.Client`'s
 new daemon-targeted methods take a `daemonBaseURL` (defaulting to
 `http://127.0.0.1:7734`) and never attach bearer headers.
 
-### D3 — Public package surface in agentfactory-tui
+### D3 — Public package surface in donmai
 
-Per `agentfactory-tui/AGENTS.md` §"Package Architecture", public packages
+Per `donmai/AGENTS.md` §"Package Architecture", public packages
 expose what downstream consumers (rensei) compose. Wave 9 lands:
 
 | Concern | Package | New file(s) |
@@ -111,9 +111,9 @@ expose what downstream consumers (rensei) compose. Wave 9 lands:
 | Wire types | `afclient/` | `provider_types.go`, `kit_types.go`, `workarea_types.go`, `routing_types.go` |
 | HTTP client methods | `afclient/` | extend `Client` with `ListProviders`, `GetProvider`, `ListKits`, `GetKit`, `InstallKit`, `EnableKit`, `DisableKit`, `VerifyKitSignature`, `ListKitSources`, `EnableKitSource`, `DisableKitSource`, `ListWorkareas`, `GetWorkarea`, `RestoreWorkarea`, `DiffWorkareas`, `GetRoutingConfig`, `ExplainRouting` |
 | Cobra commands | `afcli/` | `provider.go`, `kit.go`, `workarea.go`, `routing.go` (plus `_test.go` per file) |
-| Renderers | `afview/` (new public package in agentfactory-tui) | `afview/provider/`, `afview/kit/`, `afview/workarea/`, `afview/routing/` |
+| Renderers | `afview/` (new public package in donmai) | `afview/provider/`, `afview/kit/`, `afview/workarea/`, `afview/routing/` |
 
-**Renderers go in a new public `afview/` package in agentfactory-tui** —
+**Renderers go in a new public `afview/` package in donmai** —
 not `internal/views/`, not `tui-components`. The reasoning:
 
 - `internal/views/` (option a) blocks closed-source-tui from importing the canonical
@@ -131,7 +131,7 @@ not `internal/views/`, not `tui-components`. The reasoning:
   layer.
 
 `afview/` follows the same package-naming discipline as the rest of
-agentfactory-tui: lowercase single-word sub-packages
+donmai: lowercase single-word sub-packages
 (`afview/provider/`, `afview/kit/`, etc.), exported types
 (`afview/provider.ListView`, `afview/kit.DetailModel`).
 
@@ -274,7 +274,7 @@ This ADR resolves the four open questions from the Wave 9 plan:
 
 | Q | Resolution |
 |---|---|
-| Q1 — renderer placement (a) `internal/views/` vs (b) public `afview/` | **(b)** — public `afview/` package in agentfactory-tui. See D3. |
+| Q1 — renderer placement (a) `internal/views/` vs (b) public `afview/` | **(b)** — public `afview/` package in donmai. See D3. |
 | Q2 — `tui-components` vs new `afview/` | **`afview/`**. tui-components stays primitives; afview hosts composed surface-specific renderers. See D3 reasoning. |
 | Q3 — kit registry scan path | **`~/.rensei/kits/*.kit.toml`** (default), configurable via `daemon.yaml` key `kit.scanPaths`. See D4. |
 | Q4 — diff streaming threshold | **Default 1000 entries** before switching to NDJSON, configurable via `daemon.yaml` key `workarea.diffStreamingThreshold`. See D4a. |
@@ -297,13 +297,13 @@ This ADR resolves the four open questions from the Wave 9 plan:
 
 ### Negative
 
-- Two repos must move in lockstep this wave: agentfactory-tui ships the
+- Two repos must move in lockstep this wave: donmai ships the
   surface; closed-source-tui simultaneously bumps its dep and deletes its old
   copies. A botched bump leaves closed-source-tui unable to build. Mitigation:
   Track B is sequential after Track A is green; closed-source-tui's CI must run
   full `go test -race ./...` before the dep bump merges.
 - The `afview/` package is new and joins `afclient`/`afcli`/`worker` as a
-  fourth public agentfactory-tui package. Each new public package is a
+  fourth public donmai package. Each new public package is a
   small permanent maintenance commitment (godoc, semver discipline). We
   judge the boundary clarity worth the cost.
 - The Provider HTTP endpoint's `partialCoverage: true` flag is a
@@ -323,7 +323,7 @@ This ADR resolves the four open questions from the Wave 9 plan:
   rather than half-materialising a broken pool member. Mitigation: A3
   tests cover the corrupted-archive path explicitly.
 - Renderer churn: lifting renderers from `closed-source-tui/internal/views/` to
-  `agentfactory-tui/afview/` may surface previously-internal interface
+  `donmai/afview/` may surface previously-internal interface
   shapes (model state, msg types) that the current renderer code relied
   on. Mitigation: Track A sub-agents do the lift surface-by-surface and
   flag any tui-components changes back through coordinator review before
@@ -387,7 +387,7 @@ consumer of the same data; nothing in this ADR precludes that.
 ## Affected work items
 
 - Wave 9 plan: `runs/WAVE9_DAEMON_OSS_BOUNDARY_MIGRATION_PLAN.md`.
-- Tracks Track A (4 sub-agents in agentfactory-tui), Track B (closed-source-tui
+- Tracks Track A (4 sub-agents in donmai), Track B (closed-source-tui
   cleanup), Track C (rensei-smokes coverage). Phase numbering and
   dispatch order are owned by the coordinator session.
 - Future wave: per-Provider-Family registries (Sandbox, Workarea, VCS,
@@ -398,7 +398,7 @@ consumer of the same data; nothing in this ADR precludes that.
 
 ## Implementation notes
 
-- agentfactory-tui sub-agents extend `daemon/server.go:register` (one new
+- donmai sub-agents extend `daemon/server.go:register` (one new
   `mux.HandleFunc` per route) and add per-surface handler files
   (`daemon/handle_provider.go`, `daemon/handle_kit.go`,
   `daemon/handle_workarea.go`, `daemon/handle_routing.go`).

@@ -276,7 +276,7 @@ Detail: `006-cross-provider-interactions.md` covers the kit↔workarea↔sandbox
 
 ## Sharing model (sub-agent coordination)
 
-Today's `agentfactory` shared-worktree convention exists because pnpm install is slow; sub-agents in coordination workflows share a worktree to amortize the install cost. The workarea provider keeps that option but moves it from "implicit convention" to "declared in `WorkareaSpec.mode`":
+Today's shared-worktree convention exists because pnpm install is slow; sub-agents in coordination workflows share a worktree to amortize the install cost. The workarea provider keeps that option but moves it from "implicit convention" to "declared in `WorkareaSpec.mode`":
 
 ```ts
 // Coordinator acquires:

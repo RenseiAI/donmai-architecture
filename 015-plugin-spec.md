@@ -233,7 +233,7 @@ Detail on how these compose into workflow nodes lives in `016`.
 
 Plugins are found through four sources, resolved in `002`'s standard precedence:
 
-1. **Bundled** — shipped with the host binary (typically core integrations like `linear`, `agentfactory`).
+1. **Bundled** — shipped with the host binary (typically core integrations like `linear`, `donmai`).
 2. **Project-local** — `.donmai/plugins/*.plugin.{json,yaml}` in the workarea.
 3. **Configured registries** — `registry.donmai.dev` (SaaS-managed; free for OSS users), enterprise self-hosted registries.
 4. **Programmatic** — for embedding scenarios; manifest still required.

@@ -1,6 +1,6 @@
-# AgentFactory Architecture
+# Donmai Architecture
 
-Canonical OSS architecture corpus for the **AgentFactory execution layer** — the `af` binary, the local daemon (`af daemon`), the runner, the eight Provider Families, the Kit composition framework, and the workflow engine that underlies them.
+Canonical OSS architecture corpus for the **Donmai execution layer** — the `donmai` binary, the local daemon (`donmai daemon`), the runner, the eight Provider Families, the Kit composition framework, and the workflow engine that underlies them.
 
 This corpus is the single source of truth for cross-repo architectural decisions affecting the OSS execution layer. Where any project's documentation conflicts with what's written here, this wins.
 
@@ -40,8 +40,8 @@ That discipline — particularly point (4), "removing the platform leaves a usab
 
 ### Distribution & runtime
 
-- **`011-local-daemon-fleet.md`** — Operator manual for the local daemon mode of the `af` binary. Install paths (macOS launchd, Linux systemd, Docker), first-run wizard, config knobs, drain semantics, recovery, observability, HTTP control API. Multi-machine fleet aggregation lives in `rensei-architecture`.
-- **`013-orchestrator-and-governor.md`** — Orchestrator, governor, worker, AgentRuntime dispatch, completion contracts, macOS signing & notarization rule. Topology view + agentfactory merge-queue specifics live in `rensei-architecture`.
+- **`011-local-daemon-fleet.md`** — Operator manual for the local daemon mode of the `donmai` binary. Install paths (macOS launchd, Linux systemd, Docker), first-run wizard, config knobs, drain semantics, recovery, observability, HTTP control API. Multi-machine fleet aggregation lives in `rensei-architecture`.
+- **`013-orchestrator-and-governor.md`** — Orchestrator, governor, worker, AgentRuntime dispatch, completion contracts, macOS signing & notarization rule. Topology view + Donmai merge-queue specifics live in `rensei-architecture`.
 - **`014-tui-operator-surfaces.md`** — TUI display primitives, capability-chip pattern, theme + accessibility, primitive registry. Live capacity contract + dual-surface discipline live in `rensei-architecture`.
 - **`015-plugin-spec.md`** — Plugin manifest, single-artifact distribution, atomic auth, verb registry, namespacing, lifecycle, versioning.
 - **`016-workflow-engine.md`** — Workflow grammar, node taxonomy, compile contract, durable execution, locus-of-definition rule, inter-node piping.
@@ -52,7 +52,7 @@ That discipline — particularly point (4), "removing the platform leaves a usab
 - **`ADR-2026-04-27-plugin-and-workflow-architecture.md`** — Plugin / Provider Family / Workflow taxonomy + AgentRuntime as 8th family. Cross-cutting; mirrored as stub in `rensei-architecture`.
 - **`ADR-2026-04-28-sandbox-capabilities-in-types.md`** — TypeScript file-layout in `packages/core/src/providers/`.
 - **`ADR-2026-04-28-workflow-piping-uses-nodes.md`** — `{{ nodes.*.output.* }}` workflow grammar.
-- **`ADR-2026-04-29-long-running-runtime-substrate.md`** — `@renseiai/agentfactory-server` substrate. Platform schema mirror + JWT trust anchor extensions live in `rensei-architecture`.
+- **`ADR-2026-04-29-long-running-runtime-substrate.md`** — `@donmai/server` substrate. Platform schema mirror + JWT trust anchor extensions live in `rensei-architecture`.
 - **`ADR-2026-05-03-locus-of-workflow-definition.md`** — Workflow-grammar discipline. Cross-cutting; mirrored as stub in `rensei-architecture`.
 - **`ADR-2026-05-06-tui-noun-consolidation.md`** — `host` / `fleet` / `capacity` consolidation. User-auth retrofit + Live capacity addendum extensions live in `rensei-architecture`.
 - **`ADR-2026-05-07-daemon-http-control-api.md`** — Local daemon's `/api/daemon/*` HTTP control API. Wave 9 ADR — canonical example of "OSS daemon owns its own surface."
@@ -80,7 +80,7 @@ Humans and fleet agents alike should consume in this order:
 4. **`016-workflow-engine.md`** — Workflow grammar, node taxonomy, durable execution.
 5. The reference doc for whichever layer you are working on: `003` (workarea), `004` (sandbox), `005` (kit), `007` (intelligence), `008` (VCS).
 6. **`013-orchestrator-and-governor.md`** — The runtime that embeds the workflow engine.
-7. **`011-local-daemon-fleet.md`** — Operator manual for the local daemon mode of the `af` binary.
+7. **`011-local-daemon-fleet.md`** — Operator manual for the local daemon mode of the `donmai` binary.
 8. **`014-tui-operator-surfaces.md`** — TUI display primitives, capability-chip pattern, theme + accessibility.
 9. **`006-cross-provider-interactions.md`** — The seams; where most subtle bugs live.
 
@@ -98,5 +98,5 @@ This repo follows permissive-direct-to-main norms. Both humans and fleet agents 
 
 - Doc numbering is stable. Don't renumber without an ADR. New docs append (`010-`, `017-`, etc.).
 - Diagrams use Mermaid embedded in markdown. Avoid external image assets.
-- Code samples are TypeScript or Go depending on subject; concrete code lives in source repos (`agentfactory-tui`, `agentfactory`, future Kit repos), not here.
+- Code samples are TypeScript or Go depending on subject; concrete code lives in source repos (`donmai`, `donmai-libraries`, future Kit repos), not here.
 - "Kit" is a placeholder name pending brand decision; do not search/replace until the rename ADR lands.
