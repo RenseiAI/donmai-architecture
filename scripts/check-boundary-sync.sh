@@ -40,12 +40,16 @@ THIS_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THIS_REPO_NAME="$(basename "${THIS_REPO_ROOT}")"
 
 case "${THIS_REPO_NAME}" in
-  agentfactory-architecture)
+  agentfactory-architecture|donmai-architecture)
     SIBLING_DEFAULT="${THIS_REPO_ROOT}/../rensei-architecture"
     SIBLING_NAME="rensei-architecture"
     ;;
   rensei-architecture)
-    SIBLING_DEFAULT="${THIS_REPO_ROOT}/../agentfactory-architecture"
+    if [ -d "${THIS_REPO_ROOT}/../donmai-architecture" ]; then
+      SIBLING_DEFAULT="${THIS_REPO_ROOT}/../donmai-architecture"
+    else
+      SIBLING_DEFAULT="${THIS_REPO_ROOT}/../agentfactory-architecture"
+    fi
     SIBLING_NAME="agentfactory-architecture"
     ;;
   *)

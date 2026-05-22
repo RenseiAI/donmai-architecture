@@ -9,7 +9,7 @@
 
 The initial architectural corpus (`001`–`009`, `011`) defined seven plugin families (Sandbox, Workarea, VCS, IssueTracker, Deployment, AgentRegistry, Kit) with a unified Provider base contract. Two pieces of context emerged late in the architectural conversation that require a corpus-level reframe before further docs can land coherently:
 
-1. **The agentfactory codebase has two existing provider concepts not unified by the corpus.** `AgentProvider` (claude/codex/amp/spring-ai/a2a) — a typed LLM dispatch interface with its own capability struct — and `ProviderPlugin` (Slack/GitHub/Jira-shaped integration plugins with actions, triggers, conditions). Neither maps onto the seven families as drafted.
+1. **The donmai-libraries codebase has two existing provider concepts not unified by the corpus.** `AgentProvider` (claude/codex/amp/spring-ai/a2a) — a typed LLM dispatch interface with its own capability struct — and `ProviderPlugin` (Slack/GitHub/Jira-shaped integration plugins with actions, triggers, conditions). Neither maps onto the seven families as drafted.
 
 2. **The platform has shipped a workflow engine** (`apiVersion: workflow/v1`) inspired by WEFT (`WeaveMindAI/weft`). Workflows are graphs of typed nodes (`trigger | condition | action | gate`), and every functional node references a `provider` namespace + `verb`. The workflow engine is the runtime substrate for the orchestrator and is absent from the corpus.
 
@@ -140,7 +140,7 @@ The architecture explicitly commits to closing the Day-1-vs-Day-40 gap (where ag
 - **`004-sandbox-capability-matrix.md`** — cite `donmai/worker/types.go` dial-out impl as reference for worker registration model.
 - **`007-intelligence-services.md`** — add language-host boundary subsection (multi-impl behind one consumer interface), add active context injection section (Day-1-vs-Day-40).
 - **`011-local-daemon-fleet.md`** — answer the GUI status open question (the TUI's `daemon status` IS the GUI surface).
-- [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md) — major expansion: cross-repo findings (agentfactory, donmai, closed-source TUI, tui-components), plugin/workflow reframe consequences, ~40 net-new issues.
+- [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md) — major expansion: cross-repo findings (donmai-libraries, donmai, closed-source TUI, tui-components), plugin/workflow reframe consequences, ~40 net-new issues.
 
 ## Follow-on implementation items
 

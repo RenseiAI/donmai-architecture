@@ -25,7 +25,7 @@ The header comment of `afcli/linear.go:9-13` even calls the gap out as "future":
 
 ```
 //   1. LINEAR_API_KEY env var → direct GraphQL calls to api.linear.app.
-//   2. No key + AGENTFACTORY_API_URL + WORKER_AUTH_TOKEN → proxy mode (future).
+//   2. No key + DONMAI_API_URL + WORKER_AUTH_TOKEN → proxy mode (future).
 //   3. Neither → hard error for commands that require auth.
 ```
 

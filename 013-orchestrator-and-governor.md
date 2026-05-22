@@ -55,7 +55,7 @@ graph TB
 
 ## The governor
 
-The governor is the **scan-and-dispatch loop** that watches external systems for new work. In the legacy agentfactory codebase, this is `packages/cli/src/orchestrator.ts`'s scan loop and `packages/server/src/governor*` files. It is being ported to Go in `donmai`.
+The governor is the **scan-and-dispatch loop** that watches external systems for new work. In the legacy donmai-libraries codebase, this is `packages/cli/src/orchestrator.ts`'s scan loop and `packages/server/src/governor*` files. It is being ported to Go in `donmai`.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -244,7 +244,7 @@ OSS users get a fully working orchestrator + governor + worker fleet on their Ma
 ## Open questions
 
 1. **Worker draining when daemon updates.** Per `011`, the daemon drains in-flight work before self-update. Sub-agents in a Claude session count as in-flight; do we wait for them too? Default: yes — sub-agent completion rolls up to parent session completion.
-2. **Cross-machine sub-agent fan-out.** Today's session-tree model handles parent-child relationships within one daemon. If a coordinator wants to dispatch parallel sub-sessions across machines, those become *separate* sessions in the orchestrator (parented via metadata). Operator-surface views render them as siblings of the coordinator with edges. Worth surfacing in the workflow engine as a verb (`agentfactory.spawn_parallel_subsession`)?
+2. **Cross-machine sub-agent fan-out.** Today's session-tree model handles parent-child relationships within one daemon. If a coordinator wants to dispatch parallel sub-sessions across machines, those become *separate* sessions in the orchestrator (parented via metadata). Operator-surface views render them as siblings of the coordinator with edges. Worth surfacing in the workflow engine as a verb (`donmai.spawn_parallel_subsession`)?
 3. **Workflow-engine vs orchestrator-vs-governor boundary clarity.** Three things are involved in turning a Linear issue into a session: workflow trigger fires, governor (or workflow engine?) creates a SessionSpec, orchestrator dispatches. Today the boundary is fuzzy — the legacy SDLC YAML implements logic that arguably belongs in the governor. As workflows mature, more logic migrates from governor to workflow definition, and the governor shrinks toward "fire workflow on trigger event." Worth tracking; not blocking.
 
 These are intentional gaps for ADRs as we get implementation experience.

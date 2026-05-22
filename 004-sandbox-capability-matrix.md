@@ -414,8 +414,8 @@ projects:
     git:
       credentialHelper: osxkeychain
       sshKey: ~/.ssh/id_ed25519_renseiai
-  - id: agentfactory
-    repository: github.com/renseiai/agentfactory
+  - id: donmai
+    repository: github.com/RenseiAI/donmai-libraries
     cloneStrategy: full
     git:
       credentialHelper: osxkeychain

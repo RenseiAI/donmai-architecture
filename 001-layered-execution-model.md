@@ -243,7 +243,7 @@ interface SandboxProviderCapabilities {
 
 This unlocks two things: (1) a scheduler that routes by capability (`acquire(spec)` picks the cheapest/fastest provider satisfying the demand), and (2) graceful introduction of new providers — adding `BlaxelSandbox` doesn't require teaching the scheduler about Blaxel; it just declares its capabilities. Every reference doc in this corpus follows the same pattern: the contract is a capability struct + a small set of lifecycle methods.
 
-## The agentfactory ↔ Rensei Platform contract
+## The donmai ↔ Rensei Platform contract
 
 <!-- BOUNDARY-SYNC-START: 001-agentfactory-rensei-platform-contract -->
 <!-- This section is mirrored verbatim across
@@ -284,7 +284,7 @@ Humans and fleet agents alike should consume in this order:
 3. **`015-plugin-spec.md`** — Plugin manifest, single-artifact distribution, atomic auth, verb registry. Read second; it formalizes how Provider Families and Workflow Verbs come together in one shippable artifact.
 4. **`016-workflow-engine.md`** — Workflow grammar, node taxonomy, durable execution, versioning. Read third; it's the runtime substrate that consumes everything below.
 5. The reference doc for whichever layer you are working on: `003` (workarea), `004` (sandbox), `005` (kit), `007` (intelligence + context injection), `008` (VCS).
-6. **`013-orchestrator-and-governor.md`** — orchestrator, governor, worker, AgentRuntime dispatch. The runtime that embeds the workflow engine. (Topology view + agentfactory merge-queue specifics live in `rensei-architecture`.)
+6. **`013-orchestrator-and-governor.md`** — orchestrator, governor, worker, AgentRuntime dispatch. The runtime that embeds the workflow engine. (Topology view + donmai merge-queue specifics live in `rensei-architecture`.)
 7. **`014-tui-operator-surfaces.md`** — TUI display primitives + capability-chip pattern; read if you're building TUI features. (Live capacity contract + dual-surface discipline live in `rensei-architecture`.)
 8. **`006-cross-provider-interactions.md`** — the seams. Read once you understand the individual layers; this is where most subtle bugs live. (Seam 4 platform implementation block + Seam 6 audit-chain extension live in `rensei-architecture`.)
 9. **`010-security-architecture.md`** — once landed. Until then, the "Security as defense in depth" section above is the source of truth.
@@ -300,4 +300,4 @@ This doc is the canonical synthesis of an architectural conversation, not a fina
 
 Direct edits without an ADR are fine for clarifications, examples, and typo fixes. Anything that changes a contract, a layer's responsibility, or a discipline statement requires an ADR.
 
-**Edits to the BOUNDARY-SYNC section** ("The agentfactory ↔ Rensei Platform contract" five-point discipline above) require paired commits to both `agentfactory-architecture/001-layered-execution-model.md` and `rensei-architecture/001-layered-execution-model-platform-extensions.md`. See `BOUNDARY.md` § "Mechanism 3: synchronized verbatim mirror".
+**Edits to the BOUNDARY-SYNC section** ("The donmai ↔ Rensei Platform contract" five-point discipline above) require paired commits to both `agentfactory-architecture/001-layered-execution-model.md` and `rensei-architecture/001-layered-execution-model-platform-extensions.md`. See `BOUNDARY.md` § "Mechanism 3: synchronized verbatim mirror".

@@ -47,7 +47,7 @@ metadata:
 # Required providers — refuse to deploy if not active
 requires:
   - plugin: linear@1
-  - plugin: agentfactory@1
+  - plugin: donmai@1
   - plugin: vercel@1
 
 # Triggers — entry points that fire workflow runs
@@ -74,9 +74,9 @@ spec:
     - id: route_by_size
       type: condition
       config:
-        action: agentfactory@1:agent.size_estimate
+        action: donmai@1:agent.size_estimate
         nodeId: agent.size_estimate
-        provider: agentfactory
+        provider: donmai
       branches:
         small: run_unit_tests
         medium: run_unit_and_integration
@@ -90,8 +90,8 @@ spec:
     - id: run_unit_tests
       type: action
       config:
-        action: agentfactory@1:agent.dispatch_to_queue
-        provider: agentfactory
+        action: donmai@1:agent.dispatch_to_queue
+        provider: donmai
         workType: qa
         scope: unit-tests-only
       next: [report_results]
@@ -149,7 +149,7 @@ Branching node. Two modes.
   type: condition
   config:
     mode: switch
-    action: agentfactory@1:agent.work_type.detect
+    action: donmai@1:agent.work_type.detect
     cases: [development, qa, acceptance, refinement, research]
     defaultHandle: true
   branches:
@@ -171,8 +171,8 @@ Side-effect node. Invokes a plugin verb. Outputs feed downstream nodes.
 - id: dispatch_dev
   type: action
   config:
-    action: agentfactory@1:agent.dispatch_to_queue
-    provider: agentfactory
+    action: donmai@1:agent.dispatch_to_queue
+    provider: donmai
     workType: development
     issueId: ${trigger.data.issueId}
   next: [await_completion]
@@ -267,7 +267,7 @@ spec:
       type: condition
       config:
         mode: switch
-        action: agentfactory@2:agent.classify_request
+        action: donmai@2:agent.classify_request
         cases: [research, refinement, development, qa, acceptance, ad-hoc]
       branches:
         research: research_group
