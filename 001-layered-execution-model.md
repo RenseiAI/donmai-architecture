@@ -247,7 +247,7 @@ This unlocks two things: (1) a scheduler that routes by capability (`acquire(spe
 
 <!-- BOUNDARY-SYNC-START: 001-agentfactory-rensei-platform-contract -->
 <!-- This section is mirrored verbatim across
-     agentfactory-architecture/001-layered-execution-model.md and
+     donmai-architecture/001-layered-execution-model.md and
      rensei-architecture/001-layered-execution-model-platform-extensions.md.
      Any change MUST land simultaneously in both corpora via paired commits.
      See BOUNDARY.md § "Mechanism 3: synchronized verbatim mirror" and
@@ -300,4 +300,4 @@ This doc is the canonical synthesis of an architectural conversation, not a fina
 
 Direct edits without an ADR are fine for clarifications, examples, and typo fixes. Anything that changes a contract, a layer's responsibility, or a discipline statement requires an ADR.
 
-**Edits to the BOUNDARY-SYNC section** ("The donmai ↔ Rensei Platform contract" five-point discipline above) require paired commits to both `agentfactory-architecture/001-layered-execution-model.md` and `rensei-architecture/001-layered-execution-model-platform-extensions.md`. See `BOUNDARY.md` § "Mechanism 3: synchronized verbatim mirror".
+**Edits to the BOUNDARY-SYNC section** ("The donmai ↔ Rensei Platform contract" five-point discipline above) require paired commits to both `donmai-architecture/001-layered-execution-model.md` and `rensei-architecture/001-layered-execution-model-platform-extensions.md`. See `BOUNDARY.md` § "Mechanism 3: synchronized verbatim mirror".
