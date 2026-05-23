@@ -8,7 +8,7 @@ This corpus is the single source of truth for cross-repo architectural decisions
 
 This repository is the **OSS-public canonical corpus**. Its sibling, [`rensei-architecture`](https://github.com/RenseiAI/rensei-architecture), is the **Rensei-Platform-extensions corpus** — it carries the platform-only docs (Linear realignment against the Rensei team's backlog, PM agent definitions tied to that backlog, the SaaS dashboard parity discipline, multi-tenant control-plane decisions) and the platform-side `<doc>-platform-extensions.md` deltas that extend shared docs in this repo.
 
-The boundary discipline — verbatim from `001-layered-execution-model.md` § "The agentfactory ↔ Rensei Platform contract":
+The boundary discipline — verbatim from `001-layered-execution-model.md` § "The donmai ↔ Rensei Platform contract":
 
 > 1. The OSS layer defines all interfaces in this corpus.
 > 2. The OSS layer ships a working implementation of every interface — never *only* the type.
@@ -26,7 +26,7 @@ That discipline — particularly point (4), "removing the platform leaves a usab
 
 ### Canonical
 
-- **`001-layered-execution-model.md`** — Layered model, terminology, the eight Provider Families, the OSS↔platform boundary, capability-flag abstraction. Read first. This doc carries a **synchronized** "agentfactory ↔ Rensei Platform contract" section that is mirrored verbatim in `rensei-architecture/001`; see `BOUNDARY.md`.
+- **`001-layered-execution-model.md`** — Layered model, terminology, the eight Provider Families, the OSS↔platform boundary, capability-flag abstraction. Read first. This doc carries a **synchronized** "donmai ↔ Rensei Platform contract" section that is mirrored verbatim in `rensei-architecture/001`; see `BOUNDARY.md`.
 
 ### Reference docs (per layer)
 

@@ -37,7 +37,7 @@ metadata:
   name: Backlog Writer (platform team)
 
 # Point at the OSS canonical base.
-extends: agentfactory-architecture/agents/pm/backlog-writer.yaml
+extends: donmai-architecture/agents/pm/backlog-writer.yaml
 boundary: platform-only
 
 # Add platform-specific tool allowlist.

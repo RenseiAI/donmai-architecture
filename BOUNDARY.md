@@ -1,6 +1,6 @@
 # Boundary convention
 
-This doc is how `agentfactory-architecture` and `rensei-architecture` stay honest about which corpus owns which content. Every doc in either corpus carries a verdict; every shared doc has a defined split mechanism; every cross-cutting ADR follows the dual-publish-stub pattern.
+This doc is how `donmai-architecture` and `rensei-architecture` stay honest about which corpus owns which content. Every doc in either corpus carries a verdict; every shared doc has a defined split mechanism; every cross-cutting ADR follows the dual-publish-stub pattern.
 
 The convention here was authored at Wave 10 Phase 2 stand-up and refined at Phase 5; the resolutions feeding it (Phase 1 audit + coordinator decisions on six open questions) are at `runs/WAVE10_PHASE1_AUDIT.md` and `runs/WAVE10_PHASE1_RESOLUTIONS.md` in the Rensei runs directory.
 
@@ -25,9 +25,9 @@ The convention here was authored at Wave 10 Phase 2 stand-up and refined at Phas
 
 Every doc, ADR, and agent definition that affects either corpus carries one of three verdicts. Each maps to a `boundary:` frontmatter value (see [Frontmatter `boundary:` field](#frontmatter-boundary-field) for the four-value enum, including the fourth `mirrored` value used by stub files):
 
-- **`OSS-only`** — The content is OSS-execution-layer plumbing. Implementations of every interface ship in OSS code; no part of the contract requires the SaaS control plane to function. Lives only in `agentfactory-architecture`. Examples: provider base contract, workarea provider contract, kit manifest spec, daemon HTTP control API.
+- **`OSS-only`** — The content is OSS-execution-layer plumbing. Implementations of every interface ship in OSS code; no part of the contract requires the SaaS control plane to function. Lives only in `donmai-architecture`. Examples: provider base contract, workarea provider contract, kit manifest spec, daemon HTTP control API.
 - **`platform-only`** — The content is Rensei-platform-specific. Tied to the Rensei team's Linear backlog, the Rensei SaaS dashboard, multi-tenant control-plane policy, or operational state of the Rensei org. Lives only in `rensei-architecture`. Examples: `009-linear-realignment.md`, the PM agent rosters tied to Rensei team's backlog, multi-tenant Postgres+RLS+Cedar policy.
-- **`shared`** — The content has both OSS-substance and platform-extension portions. The OSS-substance lives in `agentfactory-architecture`; the platform-extension delta lives in `rensei-architecture` either as a sibling `<doc>-platform-extensions.md` or as inline addenda in the `rensei-architecture` copy. Examples: `001-layered-execution-model.md`, `011-local-daemon-fleet.md`, `014-tui-operator-surfaces.md`.
+- **`shared`** — The content has both OSS-substance and platform-extension portions. The OSS-substance lives in `donmai-architecture`; the platform-extension delta lives in `rensei-architecture` either as a sibling `<doc>-platform-extensions.md` or as inline addenda in the `rensei-architecture` copy. Examples: `001-layered-execution-model.md`, `011-local-daemon-fleet.md`, `014-tui-operator-surfaces.md`.
 
 The Phase 1 audit (`runs/WAVE10_PHASE1_AUDIT.md`) is the source of truth for the initial verdict assignment of every existing doc. Every new doc declares its verdict in frontmatter (see [Frontmatter `boundary:` field](#frontmatter-boundary-field) below).
 
@@ -37,9 +37,9 @@ Three sub-mechanisms cover all shared-doc content:
 
 ### Mechanism 1: sibling `<doc>-platform-extensions.md`
 
-The default. The OSS-substance of a shared doc lives at `agentfactory-architecture/<doc>.md`; the platform delta lives at `rensei-architecture/<doc>-platform-extensions.md`. The platform-extensions file:
+The default. The OSS-substance of a shared doc lives at `donmai-architecture/<doc>.md`; the platform delta lives at `rensei-architecture/<doc>-platform-extensions.md`. The platform-extensions file:
 
-- Declares `extends: agentfactory-architecture/<doc>.md` in frontmatter.
+- Declares `extends: donmai-architecture/<doc>.md` in frontmatter.
 - Contains only the platform-specific sections (the OSS-substance is **not** duplicated).
 - Cross-references the OSS doc for any layer/contract context.
 
@@ -47,11 +47,11 @@ Use when: most of a shared doc's content is OSS-pure with a few clearly-bounded 
 
 ### Mechanism 2: inline addenda in `rensei-architecture`'s copy
 
-Some shared docs have platform extensions that are too thin or too inline-coupled to lift into a sibling file. In those cases the OSS doc lives in `agentfactory-architecture` as canonical, and the `rensei-architecture` copy is a re-export that references the canonical and adds short inline addenda. Mechanism 1 is preferred; use Mechanism 2 only when the platform delta is < ~200 lines and tightly threaded through the OSS body.
+Some shared docs have platform extensions that are too thin or too inline-coupled to lift into a sibling file. In those cases the OSS doc lives in `donmai-architecture` as canonical, and the `rensei-architecture` copy is a re-export that references the canonical and adds short inline addenda. Mechanism 1 is preferred; use Mechanism 2 only when the platform delta is < ~200 lines and tightly threaded through the OSS body.
 
 ### Mechanism 3: synchronized verbatim mirror
 
-Reserved for content that is by definition load-bearing in both corpora — most prominently `001-layered-execution-model.md` § "The agentfactory ↔ Rensei Platform contract", which **defines** the boundary itself and would be incomplete in either corpus alone.
+Reserved for content that is by definition load-bearing in both corpora — most prominently `001-layered-execution-model.md` § "The donmai ↔ Rensei Platform contract", which **defines** the boundary itself and would be incomplete in either corpus alone.
 
 Synchronized sections carry a paired marker — see [BOUNDARY-SYNC inline marker syntax](#boundary-sync-inline-marker-syntax) for the exact shape and [Synchronized-section CI hook](#synchronized-section-ci-hook) for the integrity check.
 
@@ -63,13 +63,13 @@ Some ADRs are conceptually OSS-canonical but apply to both layers. Examples: `AD
 
 Pattern (per `runs/WAVE10_PHASE1_RESOLUTIONS.md` Q2 resolution):
 
-- The **OSS corpus owns the canonical ADR file**. Full content lives at `agentfactory-architecture/ADR-YYYY-MM-DD-...md`.
+- The **OSS corpus owns the canonical ADR file**. Full content lives at `donmai-architecture/ADR-YYYY-MM-DD-...md`.
 - The **platform corpus carries a thin stub** at `rensei-architecture/ADR-YYYY-MM-DD-...md` with `boundary: shared` (`status: Mirrored` to flag the stub) and a `canonical:` pointer:
 
   ```yaml
   ---
   status: Mirrored
-  canonical: agentfactory-architecture/ADR-YYYY-MM-DD-...md
+  canonical: donmai-architecture/ADR-YYYY-MM-DD-...md
   boundary: shared
   ---
   ```
@@ -80,7 +80,7 @@ This avoids divergence (the canonical never lives in two places at once) while p
 
 When a cross-cutting ADR's content materially affects platform-only behavior, the platform stub may carry a small platform-extensions section under the link (kept short — long enough to capture the platform implication, short enough that it doesn't become a divergence target). If that section grows beyond ~50 lines, lift it into a separate platform-extensions ADR that cross-references the OSS canonical.
 
-Verified live mirrors as of Wave 10 Phase 3 (each pair: canonical lives in `agentfactory-architecture`, stub lives in `rensei-architecture`):
+Verified live mirrors as of Wave 10 Phase 3 (each pair: canonical lives in `donmai-architecture`, stub lives in `rensei-architecture`):
 
 - `ADR-2026-04-27-plugin-and-workflow-architecture.md`
 - `ADR-2026-05-03-locus-of-workflow-definition.md`
@@ -88,7 +88,7 @@ Verified live mirrors as of Wave 10 Phase 3 (each pair: canonical lives in `agen
 
 ## Frontmatter `boundary:` field
 
-Every new ADR (in either corpus) — and every new reference doc whose verdict isn't trivially obvious from its filename — declares its boundary in frontmatter. The field is **required** for ADRs and shared-doc files; OSS-only reference docs in `agentfactory-architecture` whose verdict is obviously `OSS-only` MAY omit it for brevity but SHOULD declare it when promoting clarity.
+Every new ADR (in either corpus) — and every new reference doc whose verdict isn't trivially obvious from its filename — declares its boundary in frontmatter. The field is **required** for ADRs and shared-doc files; OSS-only reference docs in `donmai-architecture` whose verdict is obviously `OSS-only` MAY omit it for brevity but SHOULD declare it when promoting clarity.
 
 ```yaml
 ---
@@ -102,7 +102,7 @@ split: sibling-extensions | synchronized-mirror | inline-addenda  # recommended 
 
 Acceptable values:
 
-- **`OSS-only`** — file lives in `agentfactory-architecture` only. Use when the contract has a working OSS-shipped implementation and no part of it requires the SaaS control plane. The vast majority of new contract docs and ADRs land here.
+- **`OSS-only`** — file lives in `donmai-architecture` only. Use when the contract has a working OSS-shipped implementation and no part of it requires the SaaS control plane. The vast majority of new contract docs and ADRs land here.
 - **`platform-only`** — file lives in `rensei-architecture` only. Use when the content describes Rensei-platform-specific behavior — multi-tenant policy, the SaaS dashboard, the platform's webhook proxy, the Rensei team's backlog, or operational state of the Rensei org.
 - **`shared`** — file has both OSS-substance and platform-extension portions, split via one of the three mechanisms above. Use when the content has clearly separable OSS-pure and platform-pure halves. The frontmatter SHOULD also declare a `split:` field (`sibling-extensions`, `synchronized-mirror`, or `inline-addenda`) so the split mechanism is unambiguous from the frontmatter alone.
 - **`mirrored`** — used **only** by stub files in `rensei-architecture` that point at a canonical OSS file. The stub MUST declare a `canonical:` field. Reserved for cross-cutting ADRs (see [Cross-cutting ADR dual-publish](#cross-cutting-adr-dual-publish)). The OSS canonical of a mirrored stub still uses one of `OSS-only` / `shared` for its own boundary; `mirrored` flags the stub-side, not the canonical-side.
@@ -132,7 +132,7 @@ Rules:
 
 As of Wave 10 Phase 5, the canonical example lives at:
 
-- `agentfactory-architecture/001-layered-execution-model.md` (canonical)
+- `donmai-architecture/001-layered-execution-model.md` (canonical)
 - `rensei-architecture/001-layered-execution-model-platform-extensions.md` (mirror)
 
 Both carry the marker id `001-agentfactory-rensei-platform-contract` around the five-point boundary discipline.
@@ -161,7 +161,7 @@ Phase 5 ships `scripts/check-boundary-sync.sh` to detect drift on `BOUNDARY-SYNC
 Local invocation:
 
 ```bash
-# from agentfactory-architecture/
+# from donmai-architecture/
 ./scripts/check-boundary-sync.sh                                          # check all pairs
 ./scripts/check-boundary-sync.sh 001-agentfactory-rensei-platform-contract  # check one pair
 ```
@@ -174,8 +174,8 @@ The script and the workflow are sibling-repo aware: both corpora ship the same s
 
 Per the Phase 1 audit, several agent definition YAMLs have OSS-archetype substance + Rensei-team-specific tool allowlists. The split (per `runs/WAVE10_PHASE1_RESOLUTIONS.md` Q1 resolution) follows a composition pattern modeled on how the closed-source TUI imports `donmai`'s command factories:
 
-- **OSS canonical**: `agentfactory-architecture/agents/<group>/<name>.yaml` — declares the archetype's purpose, model selection, inputs, completion contract, hard rules, and `tools: []` (empty placeholder; the archetype declares no Rensei-specific tools).
-- **Rensei-specific override**: `rensei-architecture/agents/<group>/<name>-rensei.yaml` — declares `extends: agentfactory-architecture/agents/<group>/<name>.yaml` in its frontmatter, then specifies the Rensei-specific `tools:` allowlist (e.g., `pnpm af-linear`, `pnpm af-code`) and any team-specific gates.
+- **OSS canonical**: `donmai-architecture/agents/<group>/<name>.yaml` — declares the archetype's purpose, model selection, inputs, completion contract, hard rules, and `tools: []` (empty placeholder; the archetype declares no Rensei-specific tools).
+- **Rensei-specific override**: `rensei-architecture/agents/<group>/<name>-rensei.yaml` — declares `extends: donmai-architecture/agents/<group>/<name>.yaml` in its frontmatter, then specifies the Rensei-specific `tools:` allowlist (e.g., `pnpm af-linear`, `pnpm af-code`) and any team-specific gates.
 
 The OSS YAML is genuinely runnable as a template — anyone forking Donmai can compose their own override layer the same way. The `extends:` field is a documentation convention today; if a future wave ships a YAML composer that actually merges them at agent-load time, the convention becomes structural.
 
@@ -193,28 +193,28 @@ Concrete checklist for the three common cases.
 
 ### Case A — New OSS-only doc
 
-1. Author the doc at `agentfactory-architecture/<NNN>-<slug>.md`.
+1. Author the doc at `donmai-architecture/<NNN>-<slug>.md`.
 2. Declare `boundary: OSS-only` in frontmatter (or in a "Boundary:" line in the doc preamble for plain-prose files that don't carry YAML frontmatter, e.g., `001`).
-3. Add to the read order in `agentfactory-architecture/README.md` § "Index" and `agentfactory-architecture/AGENTS.md` § "Read order".
+3. Add to the read order in `donmai-architecture/README.md` § "Index" and `donmai-architecture/AGENTS.md` § "Read order".
 4. Cross-link from related docs. Internal links use bare filenames (`002-provider-base-contract.md`); cross-corpus links use absolute GitHub URLs (`https://github.com/RenseiAI/rensei-architecture/blob/main/...`).
 5. No platform-side mirror is needed.
 
 ### Case B — New shared doc (with platform-extension delta)
 
-1. Author the OSS-substance at `agentfactory-architecture/<NNN>-<slug>.md`. Declare `boundary: shared` and `split: sibling-extensions` in frontmatter.
-2. Author the platform-extension sibling at `rensei-architecture/<NNN>-<slug>-platform-extensions.md`. Declare `extends: agentfactory-architecture/<NNN>-<slug>.md` and `boundary: platform-only` in frontmatter (the platform-extensions file is itself platform-only; its `extends:` field captures the contractual link to the shared parent).
+1. Author the OSS-substance at `donmai-architecture/<NNN>-<slug>.md`. Declare `boundary: shared` and `split: sibling-extensions` in frontmatter.
+2. Author the platform-extension sibling at `rensei-architecture/<NNN>-<slug>-platform-extensions.md`. Declare `extends: donmai-architecture/<NNN>-<slug>.md` and `boundary: platform-only` in frontmatter (the platform-extensions file is itself platform-only; its `extends:` field captures the contractual link to the shared parent).
 3. Optionally drop a thin re-export at `rensei-architecture/<NNN>-<slug>.md` that points readers at the OSS canonical and the platform-extensions sibling, so platform-corpus readers land on either when scanning by doc number. This re-export is convenience, not contract; skip it if the doc isn't expected to be browsed by doc-number alone.
 4. Add to read orders in both corpora's README + AGENTS.md.
 
 ### Case C — New cross-cutting ADR (or any cross-cutting doc using Mechanism 3 or stub-mirror)
 
-1. Author the canonical ADR at `agentfactory-architecture/ADR-YYYY-MM-DD-<slug>.md`. Declare `boundary: shared` (or `OSS-only` if the ADR is genuinely OSS-only and just happens to interest platform readers).
+1. Author the canonical ADR at `donmai-architecture/ADR-YYYY-MM-DD-<slug>.md`. Declare `boundary: shared` (or `OSS-only` if the ADR is genuinely OSS-only and just happens to interest platform readers).
 2. Add a thin stub at `rensei-architecture/ADR-YYYY-MM-DD-<slug>.md` with frontmatter:
 
    ```yaml
    ---
    status: Mirrored
-   canonical: agentfactory-architecture/ADR-YYYY-MM-DD-<slug>.md
+   canonical: donmai-architecture/ADR-YYYY-MM-DD-<slug>.md
    boundary: shared
    ---
    ```
@@ -227,7 +227,7 @@ Concrete checklist for the three common cases.
 
 - **Not the audit itself.** The per-doc verdicts and detailed shared-doc section splits live at `runs/WAVE10_PHASE1_AUDIT.md` (Rensei runs/ directory). This doc states the convention; the audit applies it.
 - **Not exhaustive tooling.** The `scripts/check-boundary-sync.sh` hook ships in Phase 5 for synchronized-section integrity; broader boundary lints (frontmatter validation, cross-corpus link-checking) remain process discipline backed by reviewer attention.
-- **Not the boundary rule.** That rule lives in `001-layered-execution-model.md` § "The agentfactory ↔ Rensei Platform contract" (synchronized between both corpora). This doc operationalizes the rule into a doc/ADR/agent-YAML convention.
+- **Not the boundary rule.** That rule lives in `001-layered-execution-model.md` § "The donmai ↔ Rensei Platform contract" (synchronized between both corpora). This doc operationalizes the rule into a doc/ADR/agent-YAML convention.
 
 ## Status
 

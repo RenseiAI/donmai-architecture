@@ -1,4 +1,4 @@
-# Pre-commit hooks for agentfactory-architecture corpus.
+# Pre-commit hooks for donmai-architecture corpus.
 #
 # Install: pip install pre-commit && pre-commit install
 # Run manually: pre-commit run --all-files

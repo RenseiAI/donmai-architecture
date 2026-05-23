@@ -1,8 +1,8 @@
-# agentfactory-architecture
+# donmai-architecture
 
 Canonical OSS architecture corpus for the **Donmai execution layer** — the `donmai` binary, the local daemon, the runner, the eight Provider Families, the Kit composition framework, and the workflow engine that underlies them.
 
-**Module / repo**: `github.com/RenseiAI/agentfactory-architecture` (public)
+**Module / repo**: `github.com/RenseiAI/donmai-architecture` (public)
 
 ## Purpose
 
@@ -16,7 +16,7 @@ The OSS-canonical framing is load-bearing: every doc in this corpus is something
 
 This repo is the **OSS-public canonical corpus**. Its sibling, [`rensei-architecture`](https://github.com/RenseiAI/rensei-architecture), carries the **platform-extensions** — Linear realignment against the platform team's backlog, PM agent definitions tied to that backlog, multi-tenant control-plane decisions, the SaaS dashboard parity discipline, and `<doc>-platform-extensions.md` deltas that extend shared docs in this repo.
 
-The boundary discipline — verbatim from `001-layered-execution-model.md` § "The agentfactory ↔ Rensei Platform contract":
+The boundary discipline — verbatim from `001-layered-execution-model.md` § "The donmai ↔ Rensei Platform contract":
 
 > 1. The OSS layer defines all interfaces in this corpus.
 > 2. The OSS layer ships a working implementation of every interface — never *only* the type.
@@ -30,7 +30,7 @@ The boundary discipline — verbatim from `001-layered-execution-model.md` § "T
 - No references to platform-resident endpoints (`/api/cli/capacity`, `/api/cli/whoami`, etc.) as if they were OSS-shipped. Daemon endpoints (`/api/daemon/*`) are OSS; platform CLI endpoints (`/api/cli/*`) are not.
 - No SaaS-dashboard parity claims. The dual-surface discipline ("every dashboard panel ships a TUI counterpart") is a platform commitment; it lives in `rensei-architecture`.
 - No multi-tenant policy hooks (Cedar, RLS, org allowlists) presented as OSS-shipped. The OSS layer ships single-tenant; the platform ships multi-tenant on top.
-- No closed-source repo references (the legacy TS `agentfactory/` monorepo, `platform/`, closed-source TUI extensions) as if they were canonical sources of truth for the contract. Cite OSS repos (`donmai`, `tui-components`, future OSS Kit repos) and the public TS package names (`@donmai/server`, `@donmai/code-intelligence`) when illustrating the contract.
+- No closed-source repo references (the legacy TS `donmai-libraries/` monorepo, `platform/`, closed-source TUI extensions) as if they were canonical sources of truth for the contract. Cite OSS repos (`donmai`, `tui-components`, future OSS Kit repos) and the public TS package names (`@donmai/server`, `@donmai/code-intelligence`) when illustrating the contract.
 
 If a proposed change to this corpus brings any of the above with it, the right move is **split**: the OSS-substance lands here, the platform delta lands in `rensei-architecture/<doc>-platform-extensions.md`. See `BOUNDARY.md` for the mechanics.
 
@@ -38,7 +38,7 @@ If a proposed change to this corpus brings any of the above with it, the right m
 
 Humans and fleet agents alike should consume in this order:
 
-1. **`001-layered-execution-model.md`** — Layered model, terminology, the eight Provider Families, the OSS↔platform boundary, capability-flag abstraction. Read first. Carries the synchronized "agentfactory ↔ Rensei Platform contract" section that mirrors verbatim in `rensei-architecture/001-layered-execution-model-platform-extensions.md`.
+1. **`001-layered-execution-model.md`** — Layered model, terminology, the eight Provider Families, the OSS↔platform boundary, capability-flag abstraction. Read first. Carries the synchronized "donmai ↔ Rensei Platform contract" section that mirrors verbatim in `rensei-architecture/001-layered-execution-model-platform-extensions.md`.
 2. **`002-provider-base-contract.md`** — Without the base contract, the rest looks like a list of unrelated provider types.
 3. **`015-plugin-spec.md`** — Plugin manifest, single-artifact distribution, atomic auth, verb registry. Read second; it formalizes how Provider Families and Workflow Verbs come together in one shippable artifact.
 4. **`016-workflow-engine.md`** — Workflow grammar, node taxonomy, durable execution, versioning. Read third; it's the runtime substrate that consumes everything below.
@@ -98,8 +98,8 @@ Direct edits without an ADR are fine for clarifications, examples, typo fixes, a
 - Code samples are TypeScript or Go depending on subject; concrete code lives in source repos, not here.
 - "Kit" is a placeholder name pending brand decision; do not search/replace until the rename ADR lands.
 - ADR frontmatter declares `boundary:` upfront — one of `OSS-only | platform-only | shared | mirrored`. See `BOUNDARY.md` § "Frontmatter `boundary:` field" for the four-value enum and required-field discipline.
-- Synchronized sections (currently: `001` § "The agentfactory ↔ Rensei Platform contract") carry paired `BOUNDARY-SYNC-START: <id>` / `BOUNDARY-SYNC-END: <id>` markers; edits require paired PRs to both corpora and the regions stay byte-identical (verified by `scripts/check-boundary-sync.sh`). See `BOUNDARY.md` § "BOUNDARY-SYNC inline marker syntax", § "Simultaneous-PR rule for synchronized sections", and § "Synchronized-section CI hook".
+- Synchronized sections (currently: `001` § "The donmai ↔ Rensei Platform contract") carry paired `BOUNDARY-SYNC-START: <id>` / `BOUNDARY-SYNC-END: <id>` markers; edits require paired PRs to both corpora and the regions stay byte-identical (verified by `scripts/check-boundary-sync.sh`). See `BOUNDARY.md` § "BOUNDARY-SYNC inline marker syntax", § "Simultaneous-PR rule for synchronized sections", and § "Synchronized-section CI hook".
 
 ## Status
 
-**Wave 10 Phase 3 migration complete.** OSS-only and shared-with-OSS-substance docs have migrated from `rensei-architecture` here in a series of per-doc commits. Cross-reference rewrites (Phase 4) come next; expect some markdown cross-links to currently point at bare filename references that Phase 4 promotes to absolute `agentfactory-architecture` URLs or platform-extensions sibling URLs as appropriate.
+**Wave 10 Phase 3 migration complete.** OSS-only and shared-with-OSS-substance docs have migrated from `rensei-architecture` here in a series of per-doc commits. Cross-reference rewrites (Phase 4) come next; expect some markdown cross-links to currently point at bare filename references that Phase 4 promotes to absolute `donmai-architecture` URLs or platform-extensions sibling URLs as appropriate.
