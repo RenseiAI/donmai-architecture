@@ -25,9 +25,9 @@
 #                        defaults to ../rensei-architecture relative to this repo
 #
 # Layout assumption: this script ships byte-identical in both
-# agentfactory-architecture and rensei-architecture (paired-commit discipline
+# donmai-architecture and rensei-architecture (paired-commit discipline
 # per BOUNDARY.md). When invoked from rensei-architecture, the "sibling" is
-# agentfactory-architecture and the script auto-detects which repo it's in
+# donmai-architecture and the script auto-detects which repo it's in
 # via the .git/config remote URL.
 
 set -euo pipefail
@@ -40,20 +40,16 @@ THIS_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THIS_REPO_NAME="$(basename "${THIS_REPO_ROOT}")"
 
 case "${THIS_REPO_NAME}" in
-  agentfactory-architecture|donmai-architecture)
+  donmai-architecture)
     SIBLING_DEFAULT="${THIS_REPO_ROOT}/../rensei-architecture"
     SIBLING_NAME="rensei-architecture"
     ;;
   rensei-architecture)
-    if [ -d "${THIS_REPO_ROOT}/../donmai-architecture" ]; then
-      SIBLING_DEFAULT="${THIS_REPO_ROOT}/../donmai-architecture"
-    else
-      SIBLING_DEFAULT="${THIS_REPO_ROOT}/../agentfactory-architecture"
-    fi
-    SIBLING_NAME="agentfactory-architecture"
+    SIBLING_DEFAULT="${THIS_REPO_ROOT}/../donmai-architecture"
+    SIBLING_NAME="donmai-architecture"
     ;;
   *)
-    echo "ERROR: this script must be invoked from inside agentfactory-architecture or rensei-architecture (got: ${THIS_REPO_NAME})" >&2
+    echo "ERROR: this script must be invoked from inside donmai-architecture or rensei-architecture (got: ${THIS_REPO_NAME})" >&2
     exit 2
     ;;
 esac
