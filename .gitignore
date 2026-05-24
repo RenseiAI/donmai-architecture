@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Editor / IDE
+*.swp
+*.swo
+*~
+.idea/
+.vscode/*
+!.vscode/*.code-workspace
+
+# Go (build artefacts, coverage, vendor caches; this corpus is doc-only today
+# but the .gitignore is forward-looking — boundary lints / link-checkers may
+# land here as small Go tools per Phase 5/6).
+*.exe
+*.test
+*.out
+*.coverage
+*.prof
+/bin/
+/dist/
+vendor/

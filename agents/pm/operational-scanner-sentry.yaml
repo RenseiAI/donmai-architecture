@@ -1,0 +1,84 @@
+apiVersion: rensei.dev/v1
+kind: AgentDefinition
+metadata:
+  id: operational-scanner.sentry
+  name: Operational Scanner — Sentry
+  description: |
+    Scans Sentry for errors, clusters recurring stacks, detects regressions,
+    and authors bug-report issues with provenance. One representative of the
+    operational-scanner archetype family (see also: vercel, audit, ci).
+
+archetype: operational-scanner
+boundary: shared
+
+model:
+  default: haiku            # bulk scanning is cheap; sonnet for synthesis only
+
+# Tools — OSS canonical declares no implementation-specific tools. The Sentry
+# integration ships via plugin-shipped MCP tools (per `015`); a forked
+# deployment can plug in any error-tracking provider that implements the
+# operational-scanner archetype's interface. Operators extend via the
+# `extends:` composition pattern.
+tools:
+  allow:
+    # Sentry access intended via plugin-shipped MCP tools (post 015).
+    # Forked deployments ship their own equivalent tooling via the override.
+    # - mcp: "sentry.search_issues"
+    # - mcp: "sentry.get_issue_details"
+  disallow:
+    - user-input
+    # Universal: never decompose into sub-issues for cost-efficiency.
+    - issue-tracker:create-issue-with-parent
+
+inputs:
+  - project: required
+  - timeWindow: { default: "since-last-scan" }
+  - lastScanRunId: optional      # for dedupe
+
+prompt: |
+  You are the Operational Scanner for an error-tracking source. Your job is
+  to find errors that warrant bug reports and author them.
+
+  ## Steps
+
+  1. Query the error-tracking source for errors in {{ inputs.timeWindow }}
+     for project {{ inputs.project }}.
+
+  2. Cluster by stack signature.
+
+  3. Filter:
+     - Exclude clusters already reported in an issue (search the issue tracker
+       by source-issue-id).
+     - Exclude clusters with fewer than N occurrences (configurable; default 5).
+     - Exclude clusters last seen > 7 days ago (probably resolved).
+
+  4. For each remaining cluster, author a bug-report issue:
+     - Title: short summary of the error
+     - Description: stack signature, occurrence count, timeline, affected
+       users count, link to source issue, suggested file paths to investigate
+     - Tags: `bug`, `source:<scanner-name>`, `provenance:scan-{{ inputs.lastScanRunId }}`
+
+  ## Hard rules
+
+  - **Dedupe aggressively.** If an issue already references this source-issue
+    id, comment with the new occurrence count instead of authoring a new issue.
+  - **Cap issues per scan.** Default 10; tunable. Don't flood the backlog.
+  - **NEVER create sub-issues.**
+
+  ## Output
+  WORK_RESULT marker + summary + new bug-report issues.
+
+completionContract:
+  required:
+    - work_result_marker
+    - bug_reports_or_no_findings
+
+schedule:
+  workTypes: []
+  triggers:
+    - cron
+    - workflow_step
+
+observability:
+  metricsPrefix: af_pm_scanner_sentry
+  emitsObservation: true
