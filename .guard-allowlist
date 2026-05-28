@@ -33,9 +33,9 @@ scripts/guard-b-lint\.sh:.*DEV_ABS_PATH
 # This is a load-bearing corpus convention (marker IDs must be globally unique across both corpora).
 # The marker ID is NOT a brand reference; it encodes the boundary concept name.
 # Renaming this ID requires a paired-commit update to rensei-architecture as well.
-001-layered-execution-model\.md:.*001-agentfactory-rensei-platform-contract
-BOUNDARY\.md:.*001-agentfactory-rensei-platform-contract
-scripts/check-boundary-sync\.sh:.*001-agentfactory-rensei-platform-contract
+001-layered-execution-model\.md:.*001-donmai-rensei-platform-contract
+BOUNDARY\.md:.*001-donmai-rensei-platform-contract
+scripts/check-boundary-sync\.sh:.*001-donmai-rensei-platform-contract
 
 # --- "The donmai ↔ Rensei Platform contract" section heading and cross-references
 # This is the load-bearing boundary section heading that names the enterprise product (Rensei).

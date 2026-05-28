@@ -245,7 +245,7 @@ This unlocks two things: (1) a scheduler that routes by capability (`acquire(spe
 
 ## The donmai ↔ Rensei Platform contract
 
-<!-- BOUNDARY-SYNC-START: 001-agentfactory-rensei-platform-contract -->
+<!-- BOUNDARY-SYNC-START: 001-donmai-rensei-platform-contract -->
 <!-- This section is mirrored verbatim across
      donmai-architecture/001-layered-execution-model.md and
      rensei-architecture/001-layered-execution-model-platform-extensions.md.
@@ -261,7 +261,7 @@ The boundary stated as a discipline:
 4. The OSS layer never depends on the SaaS plane to function. Removing the platform leaves a usable single-machine product.
 5. The boundary between them is a small set of pluggable function callbacks (`setAgentLauncher`-shaped), not subprocess or RPC. The platform composes the OSS layer as a library; both ship as one binary to end users.
 
-<!-- BOUNDARY-SYNC-END: 001-agentfactory-rensei-platform-contract -->
+<!-- BOUNDARY-SYNC-END: 001-donmai-rensei-platform-contract -->
 
 **Canonical realization.** The cleanest demonstration of this discipline lives in the closed-source TUI consumer's main entry point, which calls `afcli.RegisterCommands(rootCmd, afcli.Config{...})` to import the OSS TUI's full command surface and extends with platform-specific commands on top. Public packages (`afclient`, `afcli`, `worker` in `donmai`) carry the OSS interfaces; `internal/views` stays internal. The two-binary boundary works because the OSS layer never reaches up; the SaaS layer reaches down through public APIs only.
 

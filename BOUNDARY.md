@@ -55,7 +55,7 @@ Reserved for content that is by definition load-bearing in both corpora — most
 
 Synchronized sections carry a paired marker — see [BOUNDARY-SYNC inline marker syntax](#boundary-sync-inline-marker-syntax) for the exact shape and [Synchronized-section CI hook](#synchronized-section-ci-hook) for the integrity check.
 
-Use sparingly. Mechanism 3 is the highest-cost option (paired-PR maintenance + CI gate) and exists only for content where Mechanisms 1/2 would leave either corpus genuinely incomplete. As of Wave 10 Phase 5, exactly one synchronized region exists: `001-agentfactory-rensei-platform-contract`.
+Use sparingly. Mechanism 3 is the highest-cost option (paired-PR maintenance + CI gate) and exists only for content where Mechanisms 1/2 would leave either corpus genuinely incomplete. As of Wave 10 Phase 5, exactly one synchronized region exists: `001-donmai-rensei-platform-contract`.
 
 ## Cross-cutting ADR dual-publish
 
@@ -124,7 +124,7 @@ Synchronized verbatim sections (Mechanism 3) carry a paired HTML-comment marker.
 
 Rules:
 
-- **Marker ids are kebab-case** and globally unique across both corpora. Use the form `<doc-number>-<short-slug>` so a reader can find the canonical home from the id alone — e.g., `001-agentfactory-rensei-platform-contract` (the only synchronized region today).
+- **Marker ids are kebab-case** and globally unique across both corpora. Use the form `<doc-number>-<short-slug>` so a reader can find the canonical home from the id alone — e.g., `001-donmai-rensei-platform-contract` (the only synchronized region today).
 - **Markers are paired.** Every `START: <id>` MUST have a matching `END: <id>` later in the same file, in the same order. The CI script (see [Synchronized-section CI hook](#synchronized-section-ci-hook)) fails if pairs are imbalanced.
 - **Both corpora must carry the same marker ids.** Adding a new synchronized region requires adding the start/end pair in both repos in paired commits.
 - **Content between markers is byte-identical.** Whitespace, punctuation, link text, everything. The CI script compares byte-for-byte, not whitespace-normalized.
@@ -135,7 +135,7 @@ As of Wave 10 Phase 5, the canonical example lives at:
 - `donmai-architecture/001-layered-execution-model.md` (canonical)
 - `rensei-architecture/001-layered-execution-model-platform-extensions.md` (mirror)
 
-Both carry the marker id `001-agentfactory-rensei-platform-contract` around the five-point boundary discipline.
+Both carry the marker id `001-donmai-rensei-platform-contract` around the five-point boundary discipline.
 
 ## Simultaneous-PR rule for synchronized sections
 
@@ -154,7 +154,7 @@ If a synchronized region needs to *grow* (e.g., a new sub-bullet in the boundary
 Phase 5 ships `scripts/check-boundary-sync.sh` to detect drift on `BOUNDARY-SYNC`-marked sections between the two corpora. Contract:
 
 - **Lookup mode.** With no arguments, the script enumerates all marker ids in this repo, locates the matching marker pair in the sibling repo (`../rensei-architecture/`), extracts the bounded text in both, and `diff`s.
-- **Single-id mode.** With one argument (a marker id), the script checks that one pair only. Useful for fast iteration during a sync edit: `./scripts/check-boundary-sync.sh 001-agentfactory-rensei-platform-contract`.
+- **Single-id mode.** With one argument (a marker id), the script checks that one pair only. Useful for fast iteration during a sync edit: `./scripts/check-boundary-sync.sh 001-donmai-rensei-platform-contract`.
 - **Exit codes.** `0` if all pairs match. `1` if any pair drifts (with `diff` output to stderr). `2` if a marker is unpaired or missing in the sibling repo (configuration error).
 - **Sibling layout assumption.** The sibling repo is at `../rensei-architecture/` relative to this repo. Override with `DONMAI_ARCH_PATH=/abs/path` for non-default layouts.
 
@@ -163,7 +163,7 @@ Local invocation:
 ```bash
 # from donmai-architecture/
 ./scripts/check-boundary-sync.sh                                          # check all pairs
-./scripts/check-boundary-sync.sh 001-agentfactory-rensei-platform-contract  # check one pair
+./scripts/check-boundary-sync.sh 001-donmai-rensei-platform-contract  # check one pair
 ```
 
 GitHub Actions integration: a workflow stub lives at `.github/workflows/boundary-sync.yml` (mirrored to `rensei-architecture/.github/workflows/boundary-sync.yml`). It triggers on PR for `*.md` changes, checks out both repos, and runs the script. The stub is **disabled by default** (commented `on:` triggers) until Wave 11 picks up the operational green-light — at which point flipping the on-block live is a one-line change. Until then, run the script locally before pushing a paired-PR pair.
