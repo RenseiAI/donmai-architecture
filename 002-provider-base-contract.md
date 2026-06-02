@@ -437,6 +437,7 @@ Each implementation is a peer-package under `donmai/provider/`:
 - `provider/codex/` — Codex `app-server` JSON-RPC over stdio. Long-lived subprocess; multiple sessions multiplex via `thread/start`; permission-config bridge implements canUseTool-equivalent.
 - `provider/stub/` — deterministic scripted-event sequences for tests and the F.4 smoke harness; supports every capability so the runner exercises every gating branch.
 - `provider/ollama/` (added 2026-05-06) — local-first HTTP. Probe via `GET /api/tags`; spawn via streaming `POST /api/chat`; deliberately conservative capability profile (no inject, no resume, no tools).
+- `provider/gemini/` (added 2026-06-02) — native HTTPS client to `generativelanguage.googleapis.com`. Auth via `GEMINI_API_KEY` (BYOK); `GOOGLE_API_KEY` accepted as fallback at probe time. Probe via `GET /v1beta/models` or API-key presence check. Per-session `generateContent` with SSE streaming (`POST /v1beta/models/{model}:streamGenerateContent?alt=sse`). Tool-use via native `functionDeclarations` in the request `tools` array; MCP servers are bridged by converting each MCP tool manifest to a `FunctionDeclaration` at session spawn, with round-trip dispatch handled inside the provider. Stability tier: `beta`.
 
 Provider construction (`buildAgentRunRegistry`, `donmai/afcli/agent_run.go:387`) is best-effort — each ctor probes fail-fast and the daemon logs WARN per failure but only ERRORs when zero providers register. This means an operator without Ollama installed sees the registry skip Ollama silently (visible in the WARN log), while sessions resolved to `provider="ollama"` then fail at `runner.Resolve` with `agent.ErrNoProvider` — the correct loud failure when the requested local runtime is missing.
 
@@ -475,15 +476,15 @@ type ProviderStability =
 
 The runtime warns when an `unstable` provider is selected for production work and refuses (by tenant policy) to dispatch to a `registration-only` provider unless the session is explicitly tagged as a probe / dry-run. The orchestrator (`013`) consults stability tiers when placing work. Today's matrix:
 
-| Provider | Tier (2026-05-06) |
-|---|---|
-| `claude` | `stable` |
-| `codex` | `stable` |
-| `stub` | `stable` (test-only) |
-| `ollama` | `beta` |
-| `gemini` | `beta` |
-| `amp` | `registration-only` (Sourcegraph public stable HTTP API not shipped) |
-| `opencode` | `registration-only` (SST pre-1.0; per-minor breakage) |
+| Provider | Tier (2026-05-06) | Updated |
+|---|---|---|
+| `claude` | `stable` | |
+| `codex` | `stable` | |
+| `stub` | `stable` (test-only) | |
+| `ollama` | `beta` | |
+| `gemini` | `beta` | Promoted to first-class 2026-06-02; tool-use now `beta` (native function-calling + MCP bridge shipped) |
+| `amp` | `registration-only` (Sourcegraph public stable HTTP API not shipped) | |
+| `opencode` | `registration-only` (SST pre-1.0; per-minor breakage) | |
 
 Tier upgrades are a manifest change and a one-line PR; no contract revision required.
 
@@ -542,7 +543,7 @@ Capability declarations must reflect reality, not aspiration. The runner enforce
 | `claude` | true | true | true | claude | `tools[]` from `AllowedTools`; MCP via `--mcp-config <tmpfile>` |
 | `codex` | true | false | true | codex | MCP supported via `config/batchWrite mcpServers`; flat `AllowedTools` list not honored (per-tool permission flows through the approval-bridge grammar in `Spec.PermissionConfig`) |
 | `ollama` | false | false | false | claude | future: openai-compat tools on supported models (llama3.1, gemma3) |
-| `gemini` | false | false | false | claude | future: function calling via `generateContent` `tools` array |
+| `gemini` | true | true | true | claude | native `functionDeclarations` in `generateContent` `tools` array; MCP servers bridged via an MCP-as-function-declarations adapter at spawn time; `AllowedTools` list honored by filtering the declaration set before the request |
 | `stub` | true | true | true | claude | test affordance only — fields observed by the runner gating layer; the scripted handler does not consume them |
 | `amp` | false | false | false | claude | registration-only (Sourcegraph stable HTTP API not shipped) |
 | `opencode` | false | false | false | claude | registration-only (SST pre-1.0; per-minor breakage) |

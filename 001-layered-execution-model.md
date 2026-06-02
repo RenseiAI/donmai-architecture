@@ -187,7 +187,7 @@ Bringing the layers together, here are the eight typed Provider Family contracts
 |---|---|---|---|
 | **SandboxProvider** | Execution | Local (Mac Studio fleet) | Vercel Sandbox · E2B · Modal · Daytona · Docker · K8s |
 | **WorkareaProvider** | Execution | Local-pool (scoped clean) | Snapshot-aware variants per sandbox |
-| **AgentRuntimeProvider** | Execution | Claude (Anthropic) | Codex · Amp · Spring AI · OpenCode · Ollama · A2A |
+| **AgentRuntimeProvider** | Execution | Claude (Anthropic) | Codex · Gemini · Amp · Spring AI · OpenCode · Ollama · A2A |
 | **VersionControlProvider** | Integration | Git (GitHub) | Atomic · S3 · structured-content backends |
 | **IssueTrackerProvider** | Integration | Linear | Jira · Asana · Monday · Sheets/Notion · proxy mode |
 | **DeploymentProvider** | Integration | (none — opt-in) | Vercel · Cloudflare · custom |
