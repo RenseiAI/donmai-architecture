@@ -1,7 +1,7 @@
 ---
 status: Accepted
 boundary: shared
-split: synchronized-mirror
+split: sibling-extensions
 ---
 
 # ADR-2026-06-02-oss-brand-neutral-runtime-contract

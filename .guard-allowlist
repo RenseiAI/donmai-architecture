@@ -68,3 +68,8 @@ ADR-template\.md:.*Rensei([-]| team| org)
 # vars, rensei.dev URLs, and platform/src paths being removed; the whole file is
 # definitional, not a content leak.
 ADR-2026-06-02-oss-brand-neutral-runtime-contract\.md:.*
+
+# --- Sibling ADR (parallel agent): parent-brand + Linear-ID context in a design doc ---
+# ADR-2026-06-02-interactive-agent-run-mode.md discusses the Rensei interview
+# product + its Linear lane; parent-brand/tracker context in an ADR is allowed.
+ADR-2026-06-02-interactive-agent-run-mode\.md:.*
