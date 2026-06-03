@@ -57,6 +57,13 @@ That discipline — particularly point (4), "removing the platform leaves a usab
 - **`ADR-2026-05-06-tui-noun-consolidation.md`** — `host` / `fleet` / `capacity` consolidation. User-auth retrofit + Live capacity addendum extensions live in `rensei-architecture`.
 - **`ADR-2026-05-07-daemon-http-control-api.md`** — Local daemon's `/api/daemon/*` HTTP control API. Wave 9 ADR — canonical example of "OSS daemon owns its own surface."
 - **`ADR-2026-05-10-native-rich-providers.md`** — Provider abstractions split into typed-internal contract + native-rich user-visible surface; never lowest-common-denominator. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-05-12-cli-linear-proxy.md`** — CLI Linear proxy via platform login session; `rensei linear` command routes through platform OAuth on behalf of the agent. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-05-12-cross-process-hook-bus-bridge.md`** — Cross-process Layer 6 hook bus bridge for daemon-driven sessions; enables hook events to propagate from worker children back to the daemon host. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-06-01-code-survival-pool-execution.md`** — Code-survival batch execution in the worker pool: ephemeral-clone posture, atomic claim, concurrent fan-out, soft reachability weight. Cross-cutting; platform extensions in `rensei-architecture`.
+- **`ADR-2026-06-02-interactive-agent-run-mode.md`** — Interactive (non-headless) agent run mode; in-pool streaming sessions with token output and all auth modes. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-06-02-oss-brand-neutral-runtime-contract.md`** — Removes closed-source Rensei brand from OSS donmai runtime (env names, default URLs, state paths); pushes all Rensei identity into composition layers. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-06-03-batch-work-type-category.md`** — Formalizes `batch` as a first-class work-type category in the execution model, amending `001` §Layer 3 and `013`; covers KG extraction and code-survival as examples. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-06-03-injectable-state-dir.md`** — Makes daemon host-state dir (state + log paths) injectable by the embedding binary via a `donmai/runtime/statehome` seam; OSS default stays `donmai`, closed composing binary sets its own brand. Cross-cutting; mirrored as stub in `rensei-architecture`.
 
 ### Agents (archetypes)
 
