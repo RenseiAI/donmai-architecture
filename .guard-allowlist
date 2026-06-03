@@ -73,3 +73,19 @@ ADR-2026-06-02-oss-brand-neutral-runtime-contract\.md:.*
 # ADR-2026-06-02-interactive-agent-run-mode.md discusses the Rensei interview
 # product + its Linear lane; parent-brand/tracker context in an ADR is allowed.
 ADR-2026-06-02-interactive-agent-run-mode\.md:.*
+
+# --- Code-survival ADR references its Linear lane + platform scan path by necessity ---
+# ADR-2026-06-01-code-survival-pool-execution.md is a design doc that names the
+# code-survival Linear lane and the platform-side scan-contract path it replaces;
+# tracker/platform context in an ADR is allowed (see 06-02 precedent).
+ADR-2026-06-01-code-survival-pool-execution\.md:.*
+
+# --- Batch work-type ADR references the KG / code-survival Linear lanes by necessity ---
+# ADR-2026-06-03-batch-work-type-category.md names the Linear lanes that motivate
+# the batch generalization; tracker context in an ADR is allowed.
+ADR-2026-06-03-batch-work-type-category\.md:.*
+
+# --- Injectable-state-dir ADR documents the OSS<->closed-composition boundary by necessity ---
+# ADR-2026-06-03-injectable-state-dir.md names rensei-tui and the parent brand to
+# document the composition-layer state-dir seam; the whole file is definitional.
+ADR-2026-06-03-injectable-state-dir\.md:.*

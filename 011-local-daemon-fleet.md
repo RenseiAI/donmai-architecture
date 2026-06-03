@@ -3,7 +3,7 @@
 **Status:** Reference (initial draft)
 **Last updated:** 2026-05-06
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/011-local-daemon-fleet-platform-extensions.md`)
-**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-05-07-daemon-http-control-api.md`.
+**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`).
 
 > **Command surface note (2026-05-06):** Per `ADR-2026-05-06-tui-noun-consolidation.md`, the daemon CLI lifecycle commands (install, status, doctor, drain, update) are now invoked as `<binary> host *` (e.g., `donmai host install` for the OSS binary; the platform binary's equivalent on the platform). Both binaries share the same noun model via `afcli.RegisterCommands`. The `<binary> daemon *` form shown in the example fences below remains as a hidden deprecated alias for one release.
 
