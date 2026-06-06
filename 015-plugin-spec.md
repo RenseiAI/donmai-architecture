@@ -178,6 +178,10 @@ The runtime treats each registration as it would a standalone provider declarati
 
 A plugin can register zero providers in a family (purely workflow-verb-only plugins exist), one provider (the common case), or multiple (e.g., a plugin that ships both `vercel.sandbox.iad` and `vercel.sandbox.sfo` as separate sandbox providers — though typically capabilities like `regions` make this unnecessary).
 
+**Two-axis LLM families (per ADR-2026-06-06).** The `providers` map now also hosts the two LLM axes as Go provider manifests: `harness` (the renamed `AgentRuntime` loop-driver — discriminant string stays `agent-runtime`) and `model-endpoint` (the company-named model-serving family). A `harness` registration declares the agent-loop caps plus the Drive surface (`drives`/`drivesHosts`); a `model-endpoint` registration declares the company, its serving hosts, auth modes, wire protocol(s), and cost model. Both are signed manifests registered exactly like any other family entry; the registry computes the valid `(harness × model-endpoint)` cells from the protocol intersection — the cells are never hand-authored. See ADR-2026-06-06 for the family contract.
+
+**Third-party LLM-provider onboarding.** A company contributes a `model-endpoint` (and/or a `harness`) by shipping a signed manifest via a `ProviderEntry kind: static | npm | binary | remote` (the same trust model and two-tier listing below). The safest path is **zero-Go**: `kind: remote` + `protocol: openai-compat`, driven by the OSS OpenAI-compat client — Rensei holds the key and calls *out* to the vendor's `baseUrl`, so the vendor never receives a key. As with every other family, listings are two-tier: `verified` (Rensei-probed, allowlisted, in the curated matrix) vs `community` (signed and installable, flagged unverified, excluded from the curated matrix). The valid cells against existing axes appear automatically once the manifest is merged — no Rensei code change and no lock-step release.
+
 ## Workflow Verb registry
 
 Verbs are the operational vocabulary. Each verb declares:
