@@ -6,7 +6,9 @@
 
 ## Why this exists
 
-The platform has eight plugin families: `Sandbox`, `Workarea`, `AgentRuntime`, `VersionControl`, `IssueTracker`, `Deployment`, `AgentRegistry`, `Kit`. Without a unified base contract, each family invents its own discovery, capability vocabulary, scope resolution, and trust model.
+The platform has nine plugin families: `Sandbox`, `Workarea`, `AgentRuntime`, `VersionControl`, `IssueTracker`, `Deployment`, `AgentRegistry`, `Kit`, `ModelEndpoint`. Without a unified base contract, each family invents its own discovery, capability vocabulary, scope resolution, and trust model.
+
+`ModelEndpoint` (added per ADR-2026-06-06) names the model-serving company (Anthropic / OpenAI / Google / Local) and is consumed by the `AgentRuntime`/Harness providers (or called directly by the one-shot lane); it is a deliberately thin family — its sole verb is `Resolve` — and an accepted exception to the "families have user-facing verbs" norm.
 
 This doc defines the single base contract every plugin family extends. Land it once, the policy/security layer (cross-cutting in `001`) has consistent extension points, the SaaS control plane has consistent administration, and tenants can configure providers in one mental model rather than eight.
 
@@ -57,6 +59,7 @@ type ProviderFamily =
   | 'deployment'
   | 'agent-registry'
   | 'kit'
+  | 'model-endpoint'  // 9th family per ADR-2026-06-06
 
 type ProviderHealth =
   | { status: 'ready' }
@@ -445,11 +448,11 @@ Provider construction (`buildAgentRunRegistry`, `donmai/afcli/agent_run.go:387`)
 
 Adding Ollama, Gemini, and the registration-only Amp / OpenCode probes (this wave) surfaced where the legacy `agent.Provider` contract diverges from the unified base contract above. The five items below are **accepted as v2 enrichments** to the existing contract — there is no `apiVersion: 2` bump and no migration guide (rationale in *Decision 3* below). Each is enriched-in-place against the v1 surface; future "real" Amp / OpenCode implementations drop in against the enriched surface without a contract refactor.
 
-1. **Manifest separation.** *Accepted.* The current contract embeds discovery (binary probe, HTTP probe) in `provider.New`. The base contract requires capabilities to be readable *before* loading code. Each provider package exports a `Manifest()` static value (compile-time constant struct) consumed by daemon startup before calling `New`; `New` becomes activation-only. The existing `New(opts Options)` constructor pattern stays wired in the four call sites; the manifest is added alongside, not in place of, that constructor — so the change is additive at the provider-package boundary.
+1. **Manifest separation.** *Accepted.* The current contract embeds discovery (binary probe, HTTP probe) in `provider.New`. The base contract requires capabilities to be readable *before* loading code. Each provider package exports a `Manifest()` static value (compile-time constant struct) consumed by daemon startup before calling `New`; `New` becomes activation-only. The existing `New(opts Options)` constructor pattern stays wired in the four call sites; the manifest is added alongside, not in place of, that constructor — so the change is additive at the provider-package boundary. **Real for the HARNESS family per ADR-2026-06-06:** the AgentRuntime/Harness providers now ship the pre-load `Manifest()` (a `HarnessManifest` carrying agent-loop caps + the new **Drive surface**), making this enrichment concrete rather than forward-looking.
 
 2. **`Health()` lifecycle verb.** *Accepted.* The base contract defines `health() → ProviderHealth { ready | degraded | unhealthy }`. Today only `Shutdown` is part of the lifecycle; degraded states are surfaced ad-hoc via ErrorEvents. v2 adds `Health(ctx) (Health, error)` to `agent.Provider` so the daemon can drop unhealthy providers from rotation without a full re-registration. Stub-by-default for providers that have no meaningful liveness signal beyond Spawn.
 
-3. **`Family()` discriminant.** *Accepted.* The current `agent.ProviderName` is a string enum (`"claude" | "codex" | "ollama" | "gemini" | "amp" | "opencode" | …`). The base contract scopes provider IDs by family (`Provider<F>`); the AgentRuntime family is implicit today. v2 keeps `ProviderName` as the within-family identifier and adds `Family() ProviderFamily = "agent-runtime"` so future cross-family registries can group by family.
+3. **`Family()` discriminant.** *Accepted.* The current `agent.ProviderName` is a string enum (`"claude" | "codex" | "ollama" | "gemini" | "amp" | "opencode" | …`). The base contract scopes provider IDs by family (`Provider<F>`); the AgentRuntime family is implicit today. v2 keeps `ProviderName` as the within-family identifier and adds `Family() ProviderFamily = "agent-runtime"` so future cross-family registries can group by family. **Per ADR-2026-06-06, the AgentRuntime family's human surface is renamed "Harness"** — the family-discriminant string stays `agent-runtime` (byte-identical), and only the user-facing label changes. Its providers now declare a **Drive surface** (`Drives []WireProtocol` + `DrivesHosts []ServingHost` — which wire protocols/serving hosts the harness can drive), so a harness is "a driver that can drive these protocols via these serving styles," not a fused vendor id. The companion model-serving axis moves to the new `model-endpoint` family (see the `ProviderFamily` enum above).
 
 4. **Capability flags split into Core + typed Extensions.** *Accepted.* The v0.5.0 matrix is family-specific and not extensible without a struct change — adding e.g. `SupportsImageInput` for multimodal models requires a coordinated cross-package edit rather than a per-provider extension. v2 splits flags into `Core` (always present, defined here) and `Extensions` (a typed map keyed by extension name; each extension is itself a typed struct). An extension graduates into `Core` once two providers ship it. This is the same fallback pattern used for worker `Capabilities []string` (see §"Capability-tag-to-typed-struct migration path").
 
@@ -565,6 +568,10 @@ The four open questions from the prior draft are resolved:
 ### Status of the seven legacy proposals against the current stack
 
 The five proposals captured by the prior draft are now accepted as v2 enrichments (above). None are blocking the current stack — Ollama, Gemini, Amp, and OpenCode were all added against the v1 contract without forcing a refactor. The v2 enrichment is alignment work that lets the *next* wave of provider work (real Amp, real OpenCode, multimodal extensions) land without churn. The four architectural-space additions (A–D above) are decided as part of the contract; the orchestrator (`013`) and the kit spec (`005`) consume them.
+
+### Two-axis decomposition (per ADR-2026-06-06)
+
+The full `ModelEndpoint` capability shape (the company-named `Resolve(EndpointRequest) → EndpointBinding` verb, `HostDesc` cells, the 5-mode AuthMode vocabulary, cost model) and the HARNESS **Drive surface** (`Drives`/`DrivesHosts` and the `(harness × endpoint)` validity rule) are specified in **ADR-2026-06-06-two-axis-provider-model**. Go-manifest hosting for both new axes (the `harness` and `model-endpoint` provider-manifest registrations) is defined in `015-plugin-spec.md` § "Provider Family registrations".
 
 ## OSS vs SaaS responsibilities
 
