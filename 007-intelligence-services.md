@@ -17,6 +17,8 @@ This doc defines the three services, the contracts they expose to kits and agent
 
 ## Implementation status (2026-05-07)
 
+> **AMENDED 2026-06-07 by `ADR-2026-06-07-intelligence-implementation-is-platform.md`:** the OSS reference-impl commitment for **Memory** and **Architectural Intelligence** is **retracted**. There is no Go-reachable delivery path (the OSS binary is Go; these libraries are TS) and no OSS-standalone consumer (the fleet dashboard doesn't use them; the Node CLI is being retired). Intelligence *implementation* is platform-only; OSS keeps the **contracts + kit extension points** in this doc, plus execution and the fleet dashboard. Code Intelligence (which has a shipped reference impl + a Go reimpl in flight) is unaffected. Read the ADR for the boundary rationale and the migration.
+
 Per Wave 10 Phase 1 resolutions Q4: this doc is the **forward-looking canonical contract**. Three of the implementation surfaces below have OSS-shipped reference impls today; the others are scheduled.
 
 | Surface | OSS-shipped today | Scheduled |
@@ -39,9 +41,9 @@ The contracts below are stable; they predate complete OSS implementations. This 
 - **Context compaction** keeps long sessions productive.
 - **Memory governance + open-format API** are explicit positioning constraints — the open-format API survives the OSS↔platform split; lock-in around accumulated graphs is the *opposite* of differentiation.
 
-The OSS layer commits to ship **a working single-tenant memory store** (sqlite + minimal vector index) so OSS users get a meaningfully better experience than no memory at all. Multi-tenant variants (Postgres + RLS + Cedar) live on the platform side; see the platform extensions doc.
+The OSS layer owns the Memory **contract** (`MemoryQuery`/`MemoryWrite`) and the kit extension points; the **implementation** (storage, recall, multi-tenant tenant model) lives on the platform side. See the platform extensions doc.
 
-> **Implementation status (2026-05-07):** OSS-shipped sqlite reference impl is **scheduled** — interfaces below are forward-looking canonical contract. Forward-looking claim retained because the contract is stable and the OSS layer commits to ship the reference impl.
+> **Implementation status — AMENDED 2026-06-07 (`ADR-2026-06-07-intelligence-implementation-is-platform.md`):** the prior commitment to ship an OSS single-tenant sqlite memory store is **retracted**. The interface below stays the canonical contract kits/agents target; the implementation is platform-only. A standalone OSS memory store, if ever pursued, must be built Go-native (the TS libraries can't serve the Go binary) — out of scope until there is a consumer.
 
 ### Contract: what kits and agents see
 
@@ -173,7 +175,7 @@ Detail in `006` (Seam 9). Summary:
 
 The third intelligence service. Pairs with Code Intelligence (file/symbol level) and Memory (event level) by operating at the **system level**: synthesized understanding of the user's architecture that compounds across PRs, refactors, and agent decisions.
 
-> **Implementation status (2026-05-07):** OSS-shipped reference impl is **scheduled** — single-project synthesis with sqlite + local LLM is on the OSS roadmap. The contract below is forward-looking canonical. Multi-project federated synthesis + the user-facing architecture browser live on the platform side (see platform extensions doc).
+> **Implementation status — AMENDED 2026-06-07 (`ADR-2026-06-07-intelligence-implementation-is-platform.md`):** the OSS single-project-synthesis reference impl is **retracted** (was "scheduled"). The `ArchitecturalIntelligence` contract below stays OSS-canonical for kits/agents; the implementation — single- and multi-project synthesis, storage, the architecture browser — is platform-only. The `@donmai/architectural-intelligence` package's platform-coupled `postgres-impl` + `rensei.current_org_id` RLS adapter is removed from OSS as the platform migrates onto its own graph store.
 
 ### The user-facing premise
 
