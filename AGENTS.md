@@ -71,6 +71,10 @@ Humans and fleet agents alike should consume in this order:
 - **`ADR-2026-06-02-oss-brand-neutral-runtime-contract.md`** — Removes the closed-source brand from the OSS donmai runtime (env names, default URLs, state paths); pushes all closed-brand identity into the composition layer. Cross-cutting; mirrored as stub in `rensei-architecture`.
 - **`ADR-2026-06-03-batch-work-type-category.md`** — Formalizes `batch` as a first-class work-type category in the execution model, amending `001` §Layer 3 and `013`; covers KG extraction and code-survival as examples. Cross-cutting; mirrored as stub in `rensei-architecture`.
 - **`ADR-2026-06-03-injectable-state-dir.md`** — Makes daemon host-state dir (state + log paths) injectable by the embedding binary via a `donmai/runtime/statehome` seam; OSS default stays `donmai`, closed composing binary sets its own brand. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-06-06-two-axis-provider-model.md`** — Two-axis provider model: engine × transport with a manifest-first AgentRuntime contract. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-06-07-intelligence-implementation-is-platform.md`** — Intelligence implementation is platform-only; OSS = execution + contracts + kit extension points. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-06-08-arch-intel-go-native-af-arch-deprecation.md`** — Legacy arch-intel TS CLI/package retired; Layer-1 drift gate Go-native in OSS, Layer-2 stays platform-owned. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-06-10-durable-ci-wait.md`** — CI wait is orchestration-owned and durable (signal gate on `Result.CommitSHA`); agent sessions never wait for remote CI or park on in-process timers. Amends `013` § Completion contracts. Cross-cutting; mirrored as stub in `rensei-architecture`.
 - **`ADR-template.md`** — Template for new architectural decisions. Copy when proposing changes. Mirrored to `rensei-architecture` via stub.
 
 **Agents (archetypes):**

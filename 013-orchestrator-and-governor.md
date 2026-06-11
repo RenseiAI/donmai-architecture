@@ -196,6 +196,31 @@ The orchestrator's session-end backstop (`packages/core/src/orchestrator/session
 
 Fields requiring agent judgment (`work_result`, `comment_posted`) cannot be backstopped — the orchestrator posts a diagnostic comment and blocks status promotion. This contract survives the architecture reframe; it's already provider-agnostic.
 
+### CI verification is orchestration-owned and durable (ADR-2026-06-10)
+
+The `development` row above ends at "PR created" **deliberately** — remote-CI
+verification is not part of the agent session's completion contract:
+
+- The agent emits its durable `WORK_RESULT` marker as soon as the
+  implementation is complete, **local** verification (tests / typecheck /
+  lint) is green, and the branch is pushed (+ PR opened where the agent owns
+  PR-open). It MUST NOT wait for remote CI inside the session — and more
+  generally MUST NOT park on in-process harness timers (schedule-wakeup
+  tools, background polls) expecting to be woken after its final message.
+  The runner treats the terminal event as end-of-session and tears the
+  provider down; in-process wake-up state dies with it.
+- The CI wait happens at the orchestration layer as a **durable
+  suspend/resume gate** correlated on the session's head commit SHA. The
+  runner captures the SHA at envelope-build time (after the backstop, which
+  may add commits) into `Result.CommitSHA` and carries it on the terminal
+  status post; the develop→verify hop suspends on a `workflow_run.completed`
+  signal gate and resumes by webhook (pass/fail) or timer (timeout →
+  reconciliation). See `ADR-2026-06-10-durable-ci-wait.md` and
+  `016-workflow-engine.md` § `gate`.
+- Consequence for the backstop: `work_result` remains non-backstoppable
+  agent judgment, but CI outcome is **never** agent judgment — it is
+  reconciled by the orchestration layer from the CI provider's events.
+
 ## macOS binary distribution — signing + notarization required
 
 **Rule (the OSS architectural commitment):** every macOS binary published from this corpus's reference implementations MUST be Developer-ID-signed with hardened runtime enabled, notarized via Apple's `notarytool`, and have its notarization ticket stapled to the archive.
