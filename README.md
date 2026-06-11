@@ -62,7 +62,7 @@ That discipline — particularly point (4), "removing the platform leaves a usab
 - **`ADR-2026-06-01-code-survival-pool-execution.md`** — Code-survival batch execution in the worker pool: ephemeral-clone posture, atomic claim, concurrent fan-out, soft reachability weight. Cross-cutting; platform extensions in `rensei-architecture`.
 - **`ADR-2026-06-02-interactive-agent-run-mode.md`** — Interactive (non-headless) agent run mode; in-pool streaming sessions with token output and all auth modes. Cross-cutting; mirrored as stub in `rensei-architecture`.
 - **`ADR-2026-06-02-oss-brand-neutral-runtime-contract.md`** — Removes the closed-source brand from the OSS donmai runtime (env names, default URLs, state paths); pushes all closed-brand identity into the composition layer. Cross-cutting; mirrored as stub in `rensei-architecture`.
-- **`ADR-2026-06-03-batch-work-type-category.md`** — Formalizes `batch` as a first-class work-type category in the execution model, amending `001` §Layer 3 and `013`; covers KG extraction and code-survival as examples. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-06-03-batch-work-type-category.md`** — Formalizes `batch` as a first-class work-type category in the execution model, amending `001` §Layer 3 and `013`; covers KG extraction and code-survival as examples. Cross-cutting; the platform delta (the KG-extraction batch lane) lives as a sibling ADR in `rensei-architecture`.
 - **`ADR-2026-06-03-injectable-state-dir.md`** — Makes daemon host-state dir (state + log paths) injectable by the embedding binary via a `donmai/runtime/statehome` seam; OSS default stays `donmai`, closed composing binary sets its own brand. Cross-cutting; mirrored as stub in `rensei-architecture`.
 
 ### Agents (archetypes)

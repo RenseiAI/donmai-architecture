@@ -1,12 +1,12 @@
 ---
-status: Proposed
+status: Accepted
 boundary: shared
 split: sibling-extensions
 ---
 
 # ADR-2026-06-03-batch-work-type-category
 
-**Status:** Proposed
+**Status:** Accepted (2026-06-10)
 **Date:** 2026-06-03
 **Boundary:** shared
 **Authors:** mark, claude
@@ -90,4 +90,21 @@ Platform sibling (the platform-extension delta — cron driver, per-org queue, i
 
 - OSS substance: the worker poll loop already decodes `batchWork[]` and routes by `workType` to a registered batch handler (`donmai/worker`, `donmai/codesurvival`). The KG handler (`donmai/kgextract/`) mirrors the code-survival handler and adds the LLM-emit + structured-result POST path.
 - The platform-side time-driven driver, per-org queue, result ingestion, and KG-pinned auth resolution are the platform delta (see the sibling ADR); they reuse the model-access matrix (`ADR-2026-06-02-model-access-matrix`) and credential-provider family (`ADR-2026-05-17-credential-provider-family`).
+
+## Acceptance note — 2026-06-10
+
+Accepted with both workloads shipped against the category. The `001` §Layer 3 and `013`
+governor/worker amendments declared above landed alongside this ADR and were re-verified
+at acceptance.
+
+One as-built refinement to §1 / the implementation notes: the poll response carries the
+kg-extraction lane as a **separate top-level `kgExtractWork[]` array** beside `batchWork[]`
+rather than inside it (`worker/types.go`, `worker/poll.go`). Both lanes share the
+`BatchWorkItem` envelope (`workType` discriminant + raw payload), the same isolation
+guarantees (never routed to the agent path, never counted toward agent quota or
+`activeSessions`), and flow through the **same** `workType`-mux batch handler — so the
+category semantics in §1/§4 are unchanged: one poll/claim loop, `workType`-discriminated
+handlers, no `AgentRuntimeProvider`. Unknown work-types and unknown JSON keys still degrade
+gracefully on stale workers. Platform-side dispatch of the KG lane is gated per-org (see
+the platform sibling ADR).
 </content>
