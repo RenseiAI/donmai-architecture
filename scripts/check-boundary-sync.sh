@@ -21,14 +21,18 @@
 #         or sibling repo not found
 #
 # Environment:
-#     DONMAI_ARCH_PATH   override path to sibling rensei-architecture repo;
-#                        defaults to ../rensei-architecture relative to this repo
+#     DONMAI_ARCH_PATH   override path to the sibling corpus repo; defaults to
+#                        the first existing of ../<sibling>,
+#                        ../../<sibling>.wt/<this-worktree-name>, and
+#                        ../../<sibling> — covering side-by-side canonical
+#                        checkouts and the <repo>.wt/<name> worktree layout.
 #
 # Layout assumption: this script ships byte-identical in both
 # donmai-architecture and rensei-architecture (paired-commit discipline
 # per BOUNDARY.md). When invoked from rensei-architecture, the "sibling" is
 # donmai-architecture and the script auto-detects which repo it's in
-# via the .git/config remote URL.
+# via the .git/config remote URL (falling back to the directory basename
+# for non-git copies, e.g. the CI checkout).
 
 set -euo pipefail
 
@@ -37,15 +41,26 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 
 THIS_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-THIS_REPO_NAME="$(basename "${THIS_REPO_ROOT}")"
+
+# Which corpus is this? Prefer the git remote URL — it is stable across
+# worktrees, whatever the checkout directory is named — and fall back to the
+# directory basename.
+detect_repo_name() {
+  local url
+  url="$(git -C "${THIS_REPO_ROOT}" config --get remote.origin.url 2>/dev/null || true)"
+  case "${url}" in
+    *donmai-architecture*) echo "donmai-architecture" ;;
+    *rensei-architecture*) echo "rensei-architecture" ;;
+    *) basename "${THIS_REPO_ROOT}" ;;
+  esac
+}
+THIS_REPO_NAME="$(detect_repo_name)"
 
 case "${THIS_REPO_NAME}" in
   donmai-architecture)
-    SIBLING_DEFAULT="${THIS_REPO_ROOT}/../rensei-architecture"
     SIBLING_NAME="rensei-architecture"
     ;;
   rensei-architecture)
-    SIBLING_DEFAULT="${THIS_REPO_ROOT}/../donmai-architecture"
     SIBLING_NAME="donmai-architecture"
     ;;
   *)
@@ -54,11 +69,28 @@ case "${THIS_REPO_NAME}" in
     ;;
 esac
 
+# Default sibling location, first match wins:
+#   1. ../<sibling>                       — side-by-side canonical checkouts
+#   2. ../../<sibling>.wt/<worktree-name> — the paired worktree under the
+#                                           <repo>.wt/<name> convention
+#   3. ../../<sibling>                    — canonical, from inside a worktree
+SIBLING_DEFAULT=""
+for candidate in \
+  "${THIS_REPO_ROOT}/../${SIBLING_NAME}" \
+  "${THIS_REPO_ROOT}/../../${SIBLING_NAME}.wt/$(basename "${THIS_REPO_ROOT}")" \
+  "${THIS_REPO_ROOT}/../../${SIBLING_NAME}"; do
+  if [ -d "${candidate}" ]; then
+    SIBLING_DEFAULT="${candidate}"
+    break
+  fi
+done
+
 SIBLING_REPO_ROOT="${DONMAI_ARCH_PATH:-${SIBLING_DEFAULT}}"
 
-if [ ! -d "${SIBLING_REPO_ROOT}" ]; then
-  echo "ERROR: sibling repo not found at ${SIBLING_REPO_ROOT}" >&2
-  echo "       set DONMAI_ARCH_PATH to override the default ../${SIBLING_NAME} layout" >&2
+if [ -z "${SIBLING_REPO_ROOT}" ] || [ ! -d "${SIBLING_REPO_ROOT}" ]; then
+  echo "ERROR: sibling ${SIBLING_NAME} repo not found" >&2
+  echo "       tried ../${SIBLING_NAME}, ../../${SIBLING_NAME}.wt/$(basename "${THIS_REPO_ROOT}"), ../../${SIBLING_NAME}" >&2
+  echo "       set DONMAI_ARCH_PATH to point at its checkout" >&2
   exit 2
 fi
 
@@ -73,9 +105,11 @@ SIBLING_REPO_ROOT="$(cd "${SIBLING_REPO_ROOT}" && pwd)"
 # BOUNDARY-SYNC-START marker found under <repo-root>/*.md.
 enumerate_markers() {
   local repo_root="$1"
+  # The trailing `|| true` keeps a no-match grep (exit 1) from aborting the
+  # whole script under `set -o pipefail` — no markers is a valid state.
   # shellcheck disable=SC2016
-  grep -RHnE '<!-- BOUNDARY-SYNC-START: [a-zA-Z0-9_-]+ -->' "${repo_root}" \
-    --include='*.md' 2>/dev/null \
+  { grep -RHnE '<!-- BOUNDARY-SYNC-START: [a-zA-Z0-9_-]+ -->' "${repo_root}" \
+      --include='*.md' 2>/dev/null || true; } \
     | sed -E 's|^([^:]+):[0-9]+:.*BOUNDARY-SYNC-START: ([a-zA-Z0-9_-]+).*|\2'$'\t''\1|' \
     | while IFS=$'\t' read -r marker_id file_path; do
         # rewrite absolute path → repo-relative

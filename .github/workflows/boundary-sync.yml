@@ -14,11 +14,15 @@ on:
   pull_request:
     paths:
       - '**/*.md'
+      - 'scripts/check-boundary-sync*.sh'
+      - '.github/workflows/boundary-sync.yml'
   push:
     branches:
       - main
     paths:
       - '**/*.md'
+      - 'scripts/check-boundary-sync*.sh'
+      - '.github/workflows/boundary-sync.yml'
   workflow_dispatch:
 
 jobs:
@@ -36,6 +40,10 @@ jobs:
           repository: RenseiAI/rensei-architecture
           path: rensei-architecture
           token: ${{ secrets.BOUNDARY_SYNC_TOKEN }}
+
+      - name: Self-test the checker
+        working-directory: donmai-architecture
+        run: ./scripts/check-boundary-sync-selftest.sh
 
       - name: Run BOUNDARY-SYNC check
         working-directory: donmai-architecture
