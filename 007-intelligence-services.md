@@ -1,7 +1,7 @@
 # 007 — Intelligence Services
 
 **Status:** Reference (initial draft)
-**Last updated:** 2026-04-27
+**Last updated:** 2026-06-08
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/007-intelligence-services-platform-extensions.md`)
 **Related:** `001-layered-execution-model.md`, `005-kit-manifest-spec.md`, `006-cross-provider-interactions.md`
 
@@ -17,6 +17,10 @@ This doc defines the three services, the contracts they expose to kits and agent
 
 ## Implementation status (2026-05-07)
 
+> **AMENDED 2026-06-07 by `ADR-2026-06-07-intelligence-implementation-is-platform.md`:** the OSS reference-impl commitment for **Memory** and **Architectural Intelligence** is **retracted**. There is no Go-reachable delivery path (the OSS binary is Go; these libraries are TS) and no OSS-standalone consumer (the fleet dashboard doesn't use them; the Node CLI is being retired). Intelligence *implementation* is platform-only; OSS keeps the **contracts + kit extension points** in this doc, plus execution and the fleet dashboard. Code Intelligence (which has a shipped reference impl + a Go reimpl in flight) is unaffected. Read the ADR for the boundary rationale and the migration.
+
+> **AMENDED 2026-06-08 by `ADR-2026-06-08-arch-intel-go-native-af-arch-deprecation.md`:** the decision **splits** along the two layers. **Layer 1** (the diff-reader + drift gate; pure regex/JSON, no LLM, no DB) is **execution-layer** and goes **Go-native** as the default for `donmai arch assess` — with a real `gh` diff-fetch so the gate runs on actual PR content. This is OSS-canonical and ships today. **Layer 2** (the SQLite observation graph + *learned baseline* + LLM deviation detection) is **not** ported to OSS: it stays **platform-owned** per `ADR-2026-06-07` (intelligence is platform-implemented; OSS ships contracts + kit extension points only — no OSS reference implementations; the platform moved arch-intel onto platform-native code: clustering, synthesis, and a drift API). An OSS-standalone Go-native Layer 2 is **deferred** to a future dedicated ADR (`ADR-2026-06-07` decision point 5) and is not undertaken here. The legacy TS delivery surface is **retired**: the standalone `af-arch` CLI (`@donmai/cli`) and the TS `@donmai/architectural-intelligence` package (incl. its `sqlite-impl` reference) are deprecated/legacy with no live consumer (EOL with `donmai-libraries`), and the Go exec-shim that subprocessed `af-arch` is demoted to an opt-in, deprecation-warned `DONMAI_ARCH_BIN` fallback. Net: the `ArchitecturalIntelligence` *contract* stays OSS-canonical; the OSS *implementation* is the Layer-1 gate only, and Layer-2 *intelligence* remains platform-owned.
+
 Per Wave 10 Phase 1 resolutions Q4: this doc is the **forward-looking canonical contract**. Three of the implementation surfaces below have OSS-shipped reference impls today; the others are scheduled.
 
 | Surface | OSS-shipped today | Scheduled |
@@ -24,7 +28,9 @@ Per Wave 10 Phase 1 resolutions Q4: this doc is the **forward-looking canonical 
 | Code Intelligence (`@donmai/code-intelligence`, six MCP tools) | yes | n/a |
 | Code Intelligence (Go reimpl, `donmai code` subcommands) | partial (in flight) | finish in next-N waves |
 | Memory query/write API + sqlite single-tenant reference impl | no | scheduled — see "Implementation status" annotation in § Memory below |
-| Architectural Intelligence (single-project synthesis) | no | scheduled |
+| Architectural Intelligence — `donmai arch assess` Layer 1 (Go diff-reader + drift gate, real `gh` diff-fetch) | yes (default native path) | n/a |
+| Architectural Intelligence — Layer 2 (SQLite observation graph + learned baseline + LLM deviation detection) | no — platform-owned (`ADR-2026-06-07`) | OSS-standalone Go-native port deferred to a future ADR (`ADR-2026-06-07` decision point 5) — not undertaken here |
+| Architectural Intelligence — `af-arch` CLI + `@donmai/architectural-intelligence` (TS) | retired/legacy (deprecated, no live consumer, EOL with `donmai-libraries`) | n/a |
 
 The contracts below are stable; they predate complete OSS implementations. This is the same forward-looking pattern the Wave 9 ADR used for `partialCoverage: true` on the daemon's provider endpoint. Forward-looking claims are retained because the contract shape is what plugins, kits, and integrations build against today; OSS shipping the reference impl is a wave-by-wave rollout, not a contract change.
 
@@ -39,9 +45,9 @@ The contracts below are stable; they predate complete OSS implementations. This 
 - **Context compaction** keeps long sessions productive.
 - **Memory governance + open-format API** are explicit positioning constraints — the open-format API survives the OSS↔platform split; lock-in around accumulated graphs is the *opposite* of differentiation.
 
-The OSS layer commits to ship **a working single-tenant memory store** (sqlite + minimal vector index) so OSS users get a meaningfully better experience than no memory at all. Multi-tenant variants (Postgres + RLS + Cedar) live on the platform side; see the platform extensions doc.
+The OSS layer owns the Memory **contract** (`MemoryQuery`/`MemoryWrite`) and the kit extension points; the **implementation** (storage, recall, multi-tenant tenant model) lives on the platform side. See the platform extensions doc.
 
-> **Implementation status (2026-05-07):** OSS-shipped sqlite reference impl is **scheduled** — interfaces below are forward-looking canonical contract. Forward-looking claim retained because the contract is stable and the OSS layer commits to ship the reference impl.
+> **Implementation status — AMENDED 2026-06-07 (`ADR-2026-06-07-intelligence-implementation-is-platform.md`):** the prior commitment to ship an OSS single-tenant sqlite memory store is **retracted**. The interface below stays the canonical contract kits/agents target; the implementation is platform-only. A standalone OSS memory store, if ever pursued, must be built Go-native (the TS libraries can't serve the Go binary) — out of scope until there is a consumer. (For Architectural Intelligence, `ADR-2026-06-08-arch-intel-go-native-af-arch-deprecation.md` took only its **execution-layer** Layer-1 drift gate Go-native; the Layer-2 *intelligence* store stays platform-owned, and an OSS-standalone Go-native Layer 2 is deferred to a future ADR. Memory is in the same position — its intelligence implementation stays platform-only until there is a real OSS-standalone consumer.)
 
 ### Contract: what kits and agents see
 
@@ -173,7 +179,9 @@ Detail in `006` (Seam 9). Summary:
 
 The third intelligence service. Pairs with Code Intelligence (file/symbol level) and Memory (event level) by operating at the **system level**: synthesized understanding of the user's architecture that compounds across PRs, refactors, and agent decisions.
 
-> **Implementation status (2026-05-07):** OSS-shipped reference impl is **scheduled** — single-project synthesis with sqlite + local LLM is on the OSS roadmap. The contract below is forward-looking canonical. Multi-project federated synthesis + the user-facing architecture browser live on the platform side (see platform extensions doc).
+> **Implementation status — AMENDED 2026-06-07 (`ADR-2026-06-07-intelligence-implementation-is-platform.md`):** the OSS single-project-synthesis reference impl is **retracted** (was "scheduled"). The `ArchitecturalIntelligence` contract below stays OSS-canonical for kits/agents; the implementation — single- and multi-project synthesis, storage, the architecture browser — is platform-only. The `@donmai/architectural-intelligence` package's platform-coupled `postgres-impl` + `current_org_id` RLS adapter is removed from OSS as the platform migrates onto its own graph store.
+>
+> **Implementation status — AMENDED 2026-06-08 (`ADR-2026-06-08-arch-intel-go-native-af-arch-deprecation.md`):** the decision **splits** by layer. **Layer 1** (the diff-reader + drift gate; pure regex/JSON, no LLM, no DB) is execution-layer and ships **Go-native** as the default path for `donmai arch assess`, with a real `gh` diff-fetch so the gate runs on actual PR content — no Node, no subprocess, no external CLI. **Layer 2** (the SQLite observation graph + *learned baseline* + LLM deviation detection — `assessChange`-against-baseline) is **not** ported to OSS: it remains **platform-owned** per `ADR-2026-06-07` (intelligence is platform-implemented; OSS ships contracts + kit extension points only; the platform moved arch-intel onto platform-native code: clustering, synthesis, and a drift API). An OSS-standalone, Go-native Layer 2 is **deferred** to a future dedicated ADR (`ADR-2026-06-07` decision point 5) — the prototyped substrate is parked unmerged and is not undertaken here. The legacy TS delivery is retired: the `af-arch` CLI and the `@donmai/architectural-intelligence` package (including its `sqlite-impl` reference) are deprecated/legacy with no live consumer (EOL with `donmai-libraries`), and the Go exec-shim that subprocessed `af-arch` is demoted to an opt-in, deprecation-warned `DONMAI_ARCH_BIN` fallback. Net: the `ArchitecturalIntelligence` contract stays OSS-canonical; the OSS implementation is the Layer-1 gate only.
 
 ### The user-facing premise
 
@@ -196,12 +204,19 @@ This is how the Day-1-vs-Day-40 gap closes. Memory captures observations; Code I
 - **Synthesis on request:** produces human-readable architectural docs (markdown, mermaid) when the user asks. The structured graph IS the source-of-truth; the markdown is a rendering.
 - **Drift detection:** flags PRs whose changes diverge from established patterns. Surfaces in QA workflows.
 
-The package layout will mirror Code Intelligence:
+Implementation layout (per `ADR-2026-06-08-arch-intel-go-native-af-arch-deprecation.md`):
 
 ```
-@renseiai/code-intelligence          # exists today (file/symbol level)
-@renseiai/architectural-intelligence # new (system level) — scheduled
+donmai arch assess                   # Go-native (system level): Layer 1 diff-reader +
+                                     #   drift gate (regex/JSON, real gh diff-fetch). The
+                                     #   OSS execution-layer impl. Layer 2 NOT shipped in OSS.
+@donmai/architectural-intelligence   # TS package — RETIRED/LEGACY (no live consumer; EOL)
+af-arch                              # standalone CLI — RETIRED/LEGACY (use `donmai arch`)
+                                     # Layer 2 (graph + learned baseline + LLM deviation):
+                                     #   platform-owned (ADR-2026-06-07)
 ```
+
+The earlier-anticipated TS `architectural-intelligence` package and its `af-arch` CLI are legacy. The OSS-standalone Architectural Intelligence is realized Go-native **for Layer 1 only** (the diff-reader + drift gate) in the `donmai` binary; **Layer 2** (the SQLite observation graph + learned baseline + LLM deviation detection) is platform-owned and is **not** shipped in OSS (`ADR-2026-06-07`). An OSS-standalone Go-native Layer 2 is deferred to a future ADR. Code Intelligence keeps its language-host federation (below): TS-shipped indexer for TS codebases, Go-shipped for Go, etc.
 
 ### Contract
 
@@ -265,7 +280,7 @@ interface ArchObservation {
 - **Memory** is the storage substrate. Architectural Intelligence's nodes are graph nodes with kind=`pattern|convention|decision|deviation`; queries against them flow through the same scope-resolution layer.
 - **Code Intelligence** provides the file/symbol-level grounding. An "Auth is centralized in `lib/auth/middleware.ts`" pattern node references the actual file via Code Intelligence's symbol map; refactoring that file invalidates the pattern node automatically.
 - **Workareas** (`003`) emit observation events; Architectural Intelligence subscribes alongside Memory.
-- **Workflow Engine** (`016`) — drift assessment becomes a verb (`architecture.assess_change`) usable in custom QA workflows. PRs that diverge from established patterns can be flagged or blocked per tenant policy.
+- **Workflow Engine** (`016`) — drift assessment becomes a verb (`architecture.assess_change`) usable in custom QA workflows, backed Go-native by `donmai arch assess` (the Layer-1 gate over real PR diffs). Layer-2 learned-baseline deviation detection is a platform-side capability (`ADR-2026-06-07`), not part of the OSS verb. PRs that diverge from established patterns can be flagged or blocked per tenant policy.
 - **The architecture corpus (this repo)** — *our team's* canonical architecture is human-authored; user-facing Architectural Intelligence is system-inferred. Same shape, different authorship pipelines. The corpus's structure (layered model, plugin families, capability flags) informs the Architectural Intelligence's *synthesis vocabulary* — when the system describes a tenant's architecture, it uses concepts from the corpus.
 
 ### Active context injection at session start
@@ -286,16 +301,17 @@ The injection is **bounded** — `maxTokens` ensures we don't blow the context w
 
 | Concern | OSS | SaaS |
 |---|---|---|
-| `ArchitecturalIntelligence` interface | ✅ owns | consumes |
-| Single-project synthesis | ✅ ships (sqlite + local LLM) — scheduled | inherits |
-| Single-tenant graph storage | ✅ ships — scheduled | inherits |
+| `ArchitecturalIntelligence` interface (contract + kit extension points) | ✅ owns | consumes |
+| Drift gate + diff observations (Layer 1, `donmai arch assess`) | ✅ ships (Go-native) | inherits |
+| Single-project graph storage / learned baseline (Layer 2) | ❌ — platform-owned (`ADR-2026-06-07`) | ✅ owns |
+| Single-project synthesis / LLM deviation detection (`assessChange`-against-baseline) | ❌ — platform-owned (`ADR-2026-06-07`) | ✅ owns |
 | Multi-project federated synthesis | ❌ | ✅ owns |
-| Drift detection rules | basic patterns | advanced + tenant policy |
+| Drift detection rules | basic patterns (Layer 1 gate only) | advanced + tenant policy |
 | User-facing architecture browser | ❌ TUI only | ✅ owns (dashboard) |
 | Cross-tenant pattern library | ❌ | ✅ owns (with privacy controls) |
-| Synthesis-on-request (`synthesize()`) | ✅ ships | inherits + extends |
+| Synthesis-on-request (`synthesize()`) | ❌ — platform-owned (`ADR-2026-06-07`) | ✅ owns |
 
-OSS users get a working single-project Architectural Intelligence — synthesizes their architecture, retrieves at session start, supports drift detection. SaaS adds cross-project federation, a user-facing architecture browser, and a tenant-scoped pattern library; see platform extensions doc for the SaaS column's runtime story.
+OSS users get the **Layer-1** drift gate Go-native: drift detection over real PR diffs (via `gh` diff-fetch) ships today — no Node, no subprocess, no external CLI. **Layer 2** (the observation graph, learned baseline, LLM deviation detection, and synthesis-on-request) is **platform-owned** per `ADR-2026-06-07`; OSS keeps the contract canonical but ships no Layer-2 implementation. An OSS-standalone Go-native Layer 2 is deferred to a future ADR (`ADR-2026-06-07` decision point 5). SaaS owns single- and multi-project synthesis, a user-facing architecture browser, and a tenant-scoped pattern library; see platform extensions doc for the SaaS column's runtime story.
 
 ### Strategic positioning
 
