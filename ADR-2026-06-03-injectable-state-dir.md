@@ -1,12 +1,12 @@
 ---
-status: Proposed
+status: Accepted
 boundary: shared
 split: sibling-extensions
 ---
 
 # ADR-2026-06-03-injectable-state-dir
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-06-03
 **Boundary:** shared (cross-cutting; canonical here, mirrored stub in `rensei-architecture`)
 **Authors:** Claude (Opus 4.8) + Mark Kropf

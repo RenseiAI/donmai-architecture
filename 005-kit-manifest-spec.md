@@ -480,11 +480,11 @@ The kit doesn't know which provider satisfied the toolchain. The provider doesn'
 | Manifest schema + parser | ✅ owns | consumes |
 | Detection runtime (declarative + executable) | ✅ ships | inherits |
 | Composition algorithm | ✅ ships | inherits |
-| Default TS/Next.js kit | ✅ ships | inherits |
+| Default language kits (TS, TS/Next.js, Go, Rust, Java, Python, Ruby) | ✅ ships (OSS catalog in `donmai-kits`) | consumes OSS catalog |
 | Local manifest discovery | ✅ ships | inherits |
 | Tessl / agentskills.io adapters | ✅ ships | inherits |
 | Registry adapters (Donmai + community) | ✅ ships | ✅ ships hosted registry |
-| Signing verification | ✅ ships permissive | ✅ ships allowlist + attested |
+| Signing verification | ✅ ships `signed-by-allowlist` (empty allowlist = fail-closed; use `--allow-unsigned` until vendor trust root lands) | ✅ ships populated allowlist + attested |
 | Per-tenant kit policies | ❌ | ✅ owns |
 | Kit publication / curation UI | ❌ | ✅ owns (paid) |
 

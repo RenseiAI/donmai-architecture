@@ -1,9 +1,19 @@
+---
+status: Accepted
+boundary: shared
+split: inline-addenda
+---
+
 # ADR-2026-05-03-locus-of-workflow-definition
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-05-03
 **Boundary:** shared (OSS-canonical; mirrored as a stub in `rensei-architecture` per `BOUNDARY.md` § "Cross-cutting ADR dual-publish")
 **Authors:** mark, claude
+
+## Resolution note (2026-06-14)
+
+Status promoted from Proposed to Accepted. The follow-on items enumerated in § "Follow-on items" below are tracked as platform-side Linear issues (per SDLC norms). The six-invariant canvas-locus rule is canonical and in effect; implementations since May 2026 have operated against it. No superseding ADR exists.
 
 ## Context
 
