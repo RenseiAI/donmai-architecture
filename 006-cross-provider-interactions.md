@@ -258,6 +258,43 @@ Contract details:
 
 **Future cross-process providers** (A2A bridges, remote AgentRuntime peers, hosted sandbox providers) plug into Layer 6 through the same pattern: define a wire payload that carries the canonical fields the relevant event kinds reference, own the platform-side ingest route that translates, and emit on `globalHookBus`. The contract above does not depend on the daemon being Go — it depends on the ingest route owning the translation.
 
+## Seam 11 — User-Interaction Normalisation (platform-only, 2026-06-15)
+
+**Problem:** The platform has multiple entry points for user-initiated interactions
+(turn injection, stream stop, session stop, interview abandonment). Without a
+normalisation layer, each entry point independently handles guardrail screening
+and stop routing — making it easy to accidentally skip guardrails, double-invoke
+them, or route stop events to the wrong implementation.
+
+**OSS-side contract:** This seam is platform-only. The execution layer (donmai
+binary, runner) does not own user-interaction entry points — those are HTTP
+routes on the SaaS control plane. The OSS seam is the abstract contract only:
+
+```
+UserInteractionEvent discriminated union:
+  answer  — user delivers a conversational turn (carries user text → must screen)
+  steer   — user injects a steering prompt     (carries user text → must screen)
+  stop    — user stops a stream or session     (no user text → pass-through)
+  abandon — user abandons an interview         (no user text → pass-through)
+  approve — user approves/declines a gate      (no user text → pass-through)
+
+ingestInteraction(event: UserInteractionEvent) → IngestResult:
+  - For text-bearing events (answer, steer): run guardrail screening ONCE.
+  - For non-text events: pass through without screening.
+  - Never throws.
+
+handleInteractionStop(event: StopEvent) → StopResult:
+  - target: 'interview' → stream cancel + status transition (platform-specific).
+  - target: 'session'   → session-level stop (queue eviction + tracker activity).
+```
+
+**Platform-side implementation:** Full implementation is documented in
+`rensei-architecture/ADR-2026-06-15-interaction-seam.md`.
+
+**Bug class prevented:** Guardrail call-site scatter (screening called zero or
+twice per interaction event); cross-class stop confusion (interview-stream cancel
+routed to session-level stop signal or vice versa).
+
 ## How to add a new seam to this doc
 
 When implementation experience reveals a cross-layer cooperation that isn't captured here:
