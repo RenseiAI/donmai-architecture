@@ -1,0 +1,40 @@
+# ADR status lint for the donmai-architecture corpus.
+#
+# Validates that every ADR-*.md file tracked by git carries a `status:`
+# frontmatter field whose value is one of the accepted set:
+#   Proposed | Accepted | Superseded | Deprecated | Mirrored | Active | Template
+#
+# Hard-fails on any invalid status so bad values are caught before merge.
+# Also emits non-fatal warnings for README index drift
+# (ghost entries and unlisted on-disk ADRs).
+#
+# See scripts/adr-status-lint.sh for the full rule set.
+
+name: ADR status lint
+
+on:
+  pull_request:
+    paths:
+      - 'ADR-*.md'
+      - 'README.md'
+      - 'scripts/adr-status-lint.sh'
+      - '.github/workflows/adr-lint.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'ADR-*.md'
+      - 'README.md'
+      - 'scripts/adr-status-lint.sh'
+      - '.github/workflows/adr-lint.yml'
+  workflow_dispatch:
+
+jobs:
+  adr-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Run ADR status lint (all files)
+        run: ./scripts/adr-status-lint.sh --all
