@@ -196,6 +196,34 @@ The orchestrator's session-end backstop (`packages/core/src/orchestrator/session
 
 Fields requiring agent judgment (`work_result`, `comment_posted`) cannot be backstopped — the orchestrator posts a diagnostic comment and blocks status promotion. This contract survives the architecture reframe; it's already provider-agnostic.
 
+### The turn-result manifest is the agent-owned half of the contract (ADR-2026-06-15)
+
+The judgment fields above (`work_result` and the summary) are **agent-owned** —
+the backstop cannot synthesise them. They reach the orchestration not by
+scraping a `WORK_RESULT:<verdict>` marker out of the agent's free-form final
+message, but by a structured file the agent writes:
+**`.agent/turn-result.json`** (the turn-result manifest). The runner reads +
+schema-validates it FIRST in the verdict resolution order
+(manifest → `WORK_RESULT` marker scrape → deterministic backstop); the manifest
+wins when present, and the marker is retained as the back-compat fallback.
+
+The manifest is minimal + versioned, carrying only the agent-owned half of the
+completion contract:
+
+```json
+{ "schemaVersion": 1, "verdict": "passed|failed|blocked",
+  "summary": "...", "blockedReason": "...",
+  "pullRequestUrl": "...", "commitSha": "..." }
+```
+
+Runner-owned signals (cost, provider session id, the failure-mode
+classification, the authoritative post-backstop head SHA) stay on the terminal
+result envelope, never in the manifest. The runner posts the validated manifest
+verbatim on the terminal status wire (additively — an old peer omits it and the
+consumer falls back to the marker scan). A `blocked` verdict is the structured
+form of the deliberate-decline signal and routes to needs-clarification, not a
+generic failure. See `ADR-2026-06-15-turn-result-manifest.md`.
+
 ### CI verification is orchestration-owned and durable (ADR-2026-06-10)
 
 The `development` row above ends at "PR created" **deliberately** — remote-CI
