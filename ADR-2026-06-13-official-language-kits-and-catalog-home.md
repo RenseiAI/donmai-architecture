@@ -22,11 +22,15 @@ closed platform.
 
 Two cross-cutting facts drive this decision:
 
-1. **The default trust mode is now `signed-by-allowlist`.** A security change flipped
-   the compiled-in default from `permissive`. Under the new default with an empty issuer
-   allowlist, the trust gate **fails closed** — no kit installs until an operator
-   populates the allowlist or opts back to `permissive`. No vendor trust root or signing
-   CI exists yet, so every official kit is unsigned.
+1. **The default trust mode is now `signed-by-allowlist`, and the vendor trust root is
+   compiled in.** A security change flipped the compiled-in default from `permissive`.
+   The daemon does NOT ship an empty allowlist — `applyDefaults` (and the equivalent
+   `kitRegistryOrEmpty` path) seed `trust.issuerSet` with `defaultVendorIssuerSet()`,
+   the official donmai-kits signing identity. The signing CI and the embedded
+   public-good Sigstore trust root have both landed, so every official kit ships a real
+   `kit.toml.sigstore` bundle and installs under `signed-by-allowlist` WITHOUT
+   `--allow-unsigned`. The gate only blocks unsigned / untrusted-signer kits (typically
+   third-party or locally-built ones).
 2. **Kits are execution-layer content.** A kit is a declarative detection + toolchain +
    commands + skills contract with no server side and no platform dependency. Per the
    OSS boundary rule, default kits are OSS-owned.
@@ -42,7 +46,7 @@ Summary:
    consumed by the Go execution layer via the daemon scan path or git install — not TS
    library code.
 
-2. **Six foundation/framework kits authored** (manifests-only, no machinery changes):
+2. **Seven foundation/framework kits authored** (manifests-only, no machinery changes):
 
    | Kit | Order | Toolchain |
    |---|---|---|
@@ -58,9 +62,14 @@ Summary:
    and `default/ts-nextjs` framework (Next.js-specific). The closed platform SHOULD
    consume this OSS catalog rather than embedding its own TS kit string.
 
-4. **Signing CI + vendor trust root (follow-up, step 3.6):** keyless Sigstore signing
-   per tagged release; adds the signer identity to the default `trust.issuerSet`. Not
-   implemented in this scaffold; official kits are unsigned until 3.6 lands.
+4. **Signing CI + vendor trust root — LANDED.** Keyless Sigstore signing runs in
+   `donmai-kits/.github/workflows/sign.yml` (GitHub Actions OIDC → Fulcio, logged in
+   the public-good Rekor transparency log), emitting a protobuf-format
+   `kit.toml.sigstore` bundle per kit (`--new-bundle-format`). The daemon's compiled-in
+   `defaultVendorIssuerSet()` pins that workflow's exact Fulcio SAN + OIDC issuer, and
+   the embedded public-good Sigstore trust root verifies the chain offline. Official
+   kits therefore install under the default `signed-by-allowlist` mode without
+   `--allow-unsigned`.
 
 5. **`demand.env` end-to-end wire (follow-up, cross-repo):** PATH-mutating installers
    (Rust/Python/Ruby) propagate env to downstream commands. Not implemented.
@@ -71,24 +80,27 @@ Summary:
 
 > | Signing verification | ✅ ships permissive | ✅ ships allowlist + attested |
 
-The compiled-in OSS default is now **`signed-by-allowlist`** (not `permissive`).
-The updated row:
+The compiled-in OSS default is now **`signed-by-allowlist`** (not `permissive`), and
+the daemon seeds the vendor signing identity into `trust.issuerSet` by default. The
+updated row:
 
-> | Signing verification | ✅ ships signed-by-allowlist (empty allowlist = fail-closed) | ✅ ships populated allowlist + attested |
+> | Signing verification | ✅ ships signed-by-allowlist (vendor-issuer trust root seeded by default; official kits verify out of the box) | ✅ ships populated allowlist + attested |
 
-Until the vendor trust root (step 3.6) lands, operators installing official kits must
-either add `--allow-unsigned` (audit-logged) or switch their daemon to `permissive`
-trust mode.
+Operators installing OFFICIAL kits need no override — the seeded vendor issuer set
+verifies the shipped `kit.toml.sigstore` bundles. `--allow-unsigned` (audit-logged) or
+`permissive` trust mode is only needed for unsigned third-party / locally-built kits.
 
 ## Consequences
 
 - OSS users get language coverage out of the box; the closed platform consumes the
   catalog rather than authoring kits.
-- A single CI can sign the whole catalog in one pass, and a single parity fixture can
+- The signing CI signs the whole catalog in one pass, and a single parity fixture can
   guard composer drift across the layer.
-- The trust gate becomes usable for official kits once the signer + trust root land.
-- Official kits are **unsigned until signing CI lands**; installing requires
-  `--allow-unsigned` (audit-logged) or `permissive` trust mode.
+- The trust gate is usable for official kits today: the vendor trust root is compiled
+  in and seeded by default.
+- Official kits are **signed** (each ships a `kit.toml.sigstore` bundle) and install
+  under the default `signed-by-allowlist` mode with no `--allow-unsigned` and no
+  `permissive` opt-out. Those overrides remain only for unsigned third-party kits.
 
 ## Affected documents
 
@@ -100,9 +112,11 @@ trust mode.
 
 ## Affected work items
 
-- `donmai-kits` PR / release: official language kit scaffold (6 kits, `donmai-kits`
-  repo, v1.0.0 tag).
-- Follow-up: signing CI + vendor trust root (step 3.6, `donmai-kits` CI pipeline).
+- `donmai-kits` PR / release: official language kit scaffold (7 kits, `donmai-kits`
+  repo).
+- Done: keyless Sigstore signing CI (`donmai-kits/.github/workflows/sign.yml`) +
+  compiled-in vendor trust root (`defaultVendorIssuerSet()` in the daemon) — official
+  kits ship signed.
 - Follow-up: `demand.env` end-to-end wire (cross-repo: `donmai` daemon + `donmai-kits`
   manifest schema).
 

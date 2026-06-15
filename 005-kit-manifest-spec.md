@@ -484,7 +484,7 @@ The kit doesn't know which provider satisfied the toolchain. The provider doesn'
 | Local manifest discovery | ✅ ships | inherits |
 | Tessl / agentskills.io adapters | ✅ ships | inherits |
 | Registry adapters (Donmai + community) | ✅ ships | ✅ ships hosted registry |
-| Signing verification | ✅ ships `signed-by-allowlist` (empty allowlist = fail-closed; use `--allow-unsigned` until vendor trust root lands) | ✅ ships populated allowlist + attested |
+| Signing verification | ✅ ships `signed-by-allowlist`; daemon seeds the compiled-in vendor-issuer trust root by default, so official kits verify out of the box (no `--allow-unsigned`); the allowlist is the mechanism, populated with the vendor signing identity at startup | ✅ ships populated allowlist + attested |
 | Per-tenant kit policies | ❌ | ✅ owns |
 | Kit publication / curation UI | ❌ | ✅ owns (paid) |
 
