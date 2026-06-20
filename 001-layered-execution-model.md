@@ -44,7 +44,7 @@ Above the typed capability layers below, three concepts govern what gets install
 ```mermaid
 graph TB
     P[Plugin<br/>artifact, single install]
-    F[Provider Family interfaces<br/>typed capability contracts<br/>Sandbox · Workarea · VCS · IssueTracker · Deployment ·<br/>AgentRegistry · AgentRuntime · Kit]
+    F[Provider Family interfaces<br/>typed capability contracts<br/>Sandbox · Workarea · VCS · IssueTracker · Deployment ·<br/>AgentRegistry · AgentRuntime · ModelEndpoint · Kit · RequesterProvider]
     V[Workflow Verbs<br/>actions · conditions · triggers · gates<br/>plugin.verb namespace]
     D[Workflow Definition<br/>YAML graph, apiVersion: workflow/v2]
     E[Workflow Engine<br/>compilation · validation · durable execution]
@@ -59,7 +59,7 @@ graph TB
 
 **Plugin** is the unit of distribution — one installable artifact, one OAuth grant, atomic lifecycle. A plugin declares zero, one, or many implementations of typed Provider Family interfaces, AND zero, one, or many named Workflow Verbs. Examples: a "Donmai Vercel Integration" plugin implements `DeploymentProvider` + `SandboxProvider` + `ObservabilityProvider`, and exposes verbs `vercel.deploy`, `vercel.list_deployments`, `vercel.get_logs`. Single OAuth flow grants the full scope set; multiple capabilities ride the same install.
 
-**Provider Family** is the typed contract the platform reasons about. A scheduler picks providers by capability flags, not by plugin identity. Eight families today; see "The eight plugin families" below.
+**Provider Family** is the typed contract the platform reasons about. A scheduler picks providers by capability flags, not by plugin identity. Ten families today; see "The ten plugin families" below.
 
 **Workflow Verb** is the operational vocabulary — named entry points the workflow engine can invoke. Namespacing is `<plugin>.<verb>` or `<plugin>.<resource>.<verb>`, enforced at registry validation to prevent collisions. Verbs declare typed input/output schemas so the engine validates wiring at compile time.
 
@@ -181,9 +181,9 @@ Defense in depth is the architectural principle that makes this layer load-beari
 
 Detail: **`010-security-architecture.md`** (deferred — depends on every other contract being stable). The OSS execution layer needs to land first; security providers compose against stable interfaces, not moving targets.
 
-## The eight plugin families
+## The ten plugin families
 
-Bringing the layers together, here are the eight typed Provider Family contracts. Each is a typed interface; plugins implement zero, one, or many. The Provider base contract from Layer 1 is the common shape every family extends.
+Bringing the layers together, here are the ten typed Provider Family contracts. Each is a typed interface; plugins implement zero, one, or many. The Provider base contract from Layer 1 is the common shape every family extends.
 
 | Family | Layer | OSS-shipped impl | Platform-shipped alternates |
 |---|---|---|---|
@@ -195,6 +195,8 @@ Bringing the layers together, here are the eight typed Provider Family contracts
 | **DeploymentProvider** | Integration | (none — opt-in) | Vercel · Cloudflare · custom |
 | **AgentRegistry** | Integration | Local YAML + git-ref | LangChain · OpenAI Assistant · A2A · third-party |
 | **KitProvider** | Composition | TS/Next.js Kit (default codebase shape) | Rust · Go · Ruby · iOS · Spring Java · marketing/non-code |
+| **ModelEndpoint** | Execution | Anthropic (Claude) | OpenAI · Google · Local (Ollama) — thin family per ADR-2026-06-06, sole verb `Resolve` |
+| **RequesterProvider** | Integration (inbound) | HTTP/MCP/A2A listener (request → workflow dispatch) | Platform-governed receipt generation · scoped-principal onboarding |
 
 The OSS layer ships a working implementation of every column-2 entry. The SaaS platform extends column 3. Tenants pick which providers they want; the orchestrator's scheduler reasons about capabilities, not provider identity.
 

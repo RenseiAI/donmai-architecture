@@ -295,6 +295,28 @@ handleInteractionStop(event: StopEvent) → StopResult:
 twice per interaction event); cross-class stop confusion (interview-stream cancel
 routed to session-level stop signal or vice versa).
 
+## Seam 12 — Inbound requester accept vs outbound A2A dispatch
+
+**Problem:** The `RequesterProvider` family (`ADR-2026-06-19`) accepts an inbound
+request over `protocol: 'a2a' | 'mcp' | 'http'`, and the A2A seam (Seam 3) dispatches
+work *outbound* over the same vocabulary. The two surfaces share the protocol words but
+run in opposite directions; conflating them lets an inbound accept path get wired to the
+outbound dispatch path (or vice versa) — the same trap Seam 3 warns about, one layer up.
+
+**Cooperation:** Direction is the discriminant, not the protocol. Outbound A2A (Seam 3)
+is a `SandboxProvider` declaring `isA2ARemote: true` — *the engine is the caller*. Inbound
+requester accept is a `RequesterProvider` declaring `acceptedProtocols` — *the engine is
+the callee*, mapping the request onto a `requester`-trigger workflow dispatch (`016`). The
+protocol vocabulary is shared so identity and capability declarations are reused, but a
+provider is one or the other, never both on the same handle: an `isA2ARemote` sandbox is a
+dispatch target; a `RequesterProvider` is an acceptance surface that returns a result (and,
+platform-side, a receipt).
+
+**Bug class prevented:** confusing the inbound requester accept surface with the outbound
+A2A dispatch surface — routing an accepted external request back out the dispatch path, or
+treating an outbound A2A peer as if it could accept inbound requests, because both speak
+`'a2a' | 'mcp' | 'http'`.
+
 ## How to add a new seam to this doc
 
 When implementation experience reveals a cross-layer cooperation that isn't captured here:

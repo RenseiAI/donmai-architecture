@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-The platform has nine plugin families: `Sandbox`, `Workarea`, `AgentRuntime`, `VersionControl`, `IssueTracker`, `Deployment`, `AgentRegistry`, `Kit`, `ModelEndpoint`. Without a unified base contract, each family invents its own discovery, capability vocabulary, scope resolution, and trust model.
+The platform has ten plugin families: `Sandbox`, `Workarea`, `AgentRuntime`, `VersionControl`, `IssueTracker`, `Deployment`, `AgentRegistry`, `Kit`, `ModelEndpoint`, `RequesterProvider`. Without a unified base contract, each family invents its own discovery, capability vocabulary, scope resolution, and trust model.
 
 `ModelEndpoint` (added per ADR-2026-06-06) names the model-serving company (Anthropic / OpenAI / Google / Local) and is consumed by the `AgentRuntime`/Harness providers (or called directly by the one-shot lane); it is a deliberately thin family — its sole verb is `Resolve` — and an accepted exception to the "families have user-facing verbs" norm.
 
@@ -60,6 +60,7 @@ type ProviderFamily =
   | 'agent-registry'
   | 'kit'
   | 'model-endpoint'  // 9th family per ADR-2026-06-06
+  | 'requester-provider'  // 10th family per ADR-2026-06-19
 
 type ProviderHealth =
   | { status: 'ready' }
@@ -72,6 +73,26 @@ The base contract is deliberately small. Anything family-specific (`provision`, 
 ### Go-native realization (2026-06-14)
 
 The TypeScript shape above is the canonical contract; it is now **landed Go-native** in the OSS execution layer (`donmai/agent/base.go`) so a third-party **Go** provider SDK has a base to build on. The mapping is 1:1: `ProviderManifest<F>` → the generic `agent.ProviderManifest[F]` embedding `agent.ProviderBase` (the family-agnostic discovery + trust header); `ProviderScope`/`ScopeSelector` with `ValidateScope` enforcing the non-global-needs-a-selector rule; `ProviderSignature`/`ProviderHealth` as Go structs (signature is shape-only today — manifests carry a `nil` signature under the OSS permissive default, signing deferred per ADR-2026-06-06); `activate`/`deactivate`/`health` → the `agent.BaseProvider` interface, with an embeddable `agent.NoopLifecycle` giving a new provider an idempotent stub lifecycle for free. The 9-value `ProviderFamily` enum is realized as `agent.ProviderFamily` (a type alias of `agent.Family`; `FamilyHarness == "agent-runtime"`, byte-identical) with `KnownProviderFamilies()`/`IsKnownProviderFamily()`. The two LLM-layer freezing axes — **harness** (`HarnessManifest`) and **model-endpoint** (`ModelEndpointManifest`) — formally extend the base via an additive `Base()` manifest projection (compile-time asserted to satisfy `agent.BaseManifest`) plus a lifecycle bridge (`BaseProviderFromHarness`/`BaseProviderFromEndpoint`), with **no wire or read-site change**. A load-bearing parity gate (`donmai/matrix/base_parity_test.go`, run `GOWORK=off`) asserts every shipped manifest embeds the base. Per Decision 3 below the realization stays on `apiVersion: 'rensei.dev/v1'`. Decision record: **ADR-2026-06-14-provider-base-contract-go-native** (OSS-only); axis-freeze sequencing (which axes are READY vs deferred): **ADR-2026-06-14-sdk-axis-readiness-and-freeze-sequencing** (shared).
+
+## RequesterProvider — inbound contract
+
+`RequesterProvider` (added per ADR-2026-06-19) is the one **inbound** family: every other family is outbound (the engine calls out) or engine-initiated. It accepts an authenticated, structured request from a *registered external requester*, maps it onto a workflow dispatch (a `requester` trigger, see `016-workflow-engine.md`), and returns a structured response. It is the inbound dual of A2A and reuses the AgentRegistry `remote` protocol vocabulary (`'a2a' | 'mcp' | 'http'`) and the base contract's identity model (`authorIdentity` + signature). Its capability struct and response envelope:
+
+```ts
+interface RequesterProviderCapabilities {
+  acceptedProtocols: ('a2a' | 'mcp' | 'http')[];
+  maxConcurrentRequests: number | null;  // null = unbounded; platform quotas per principal
+  supportsStreamingResponse: boolean;     // poll/stream for long-running work
+  requiresSignedRequests: boolean;        // per-requester signature enforcement
+}
+
+interface RequesterResponse {
+  result: unknown;
+  receipt?: unknown;  // platform-populated: model, cost, eval verdict, audit reference
+}
+```
+
+The `receipt` is defined here as an optional opaque field; its generation (signing, evaluation grading, cost/provenance binding) is **platform-only** and out of scope for the OSS contract — see the mirrored stub in `rensei-architecture`.
 
 ## Manifest
 
@@ -361,7 +382,7 @@ A provider may run **in-process** (TypeScript, instrumented via `InstrumentedPro
 
 For the Go daemon today (per `ADR-2026-05-12-cross-process-hook-bus-bridge`), the bridge surface is the `POST /api/sessions/<id>/activity` ingest route. The daemon's wire payload carries the canonical fields the new event kinds reference (`toolUseId`, `toolInput`, `toolOutput`, `isError`, `durationMs`, `providerName`); the platform side reconstructs the appropriate `pre-tool-use` / `post-tool-use` / `tool-use-error` event and emits it on `globalHookBus`. Cross-replica visibility is achieved by fan-out via the platform's existing Redis session-event channel (a new `provider_hook_event` `SessionEvent` type). See `006-cross-provider-interactions.md` Seam 10 for the cooperation contract.
 
-## How the seven families extend this contract
+## How provider families extend this contract
 
 Each family's reference doc (`003`–`008`) defines:
 
