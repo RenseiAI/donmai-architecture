@@ -180,6 +180,8 @@ A plugin can register zero providers in a family (purely workflow-verb-only plug
 
 **Two-axis LLM families (per ADR-2026-06-06).** The `providers` map now also hosts the two LLM axes as Go provider manifests: `harness` (the renamed `AgentRuntime` loop-driver — discriminant string stays `agent-runtime`) and `model-endpoint` (the company-named model-serving family). A `harness` registration declares the agent-loop caps plus the Drive surface (`drives`/`drivesHosts`); a `model-endpoint` registration declares the company, its serving hosts, auth modes, wire protocol(s), and cost model. Both are signed manifests registered exactly like any other family entry; the registry computes the valid `(harness × model-endpoint)` cells from the protocol intersection — the cells are never hand-authored. See ADR-2026-06-06 for the family contract.
 
+Plugins may also register a `requester-provider` family implementation (per ADR-2026-06-19) declaring an inbound request-acceptance surface — its `acceptedProtocols` (`a2a`/`mcp`/`http`) plus a scoped-credential issuer that registers external requesters as attributable principals; it is the one inbound family, the dual of the outbound A2A dispatch surface.
+
 **Third-party LLM-provider onboarding.** A company contributes a `model-endpoint` (and/or a `harness`) by shipping a signed manifest via a `ProviderEntry kind: static | npm | binary | remote` (the same trust model and two-tier listing below). The safest path is **zero-Go**: `kind: remote` + `protocol: openai-compat`, driven by the OSS OpenAI-compat client — the platform holds the key and calls *out* to the vendor's `baseUrl`, so the vendor never receives a key. As with every other family, listings are two-tier: `verified` (platform-probed, allowlisted, in the curated matrix) vs `community` (signed and installable, flagged unverified, excluded from the curated matrix). The valid cells against existing axes appear automatically once the manifest is merged — no platform code change and no lock-step release.
 
 ## Workflow Verb registry
@@ -222,7 +224,7 @@ ERROR: plugin 'slack' declares verb 'vercel.notify' — verb namespace must matc
 
 This is the discipline none of the surveyed ecosystems enforce, and they all suffer collision incidents because of that gap. We enforce.
 
-**Reserved generic prefixes.** The registry additionally rejects verb ids whose plugin segment matches a Provider Family name (`tracker`, `vcs`, `sandbox`, `workarea`, `agent-runtime`, `deployment`, `agent-registry`, `kit`). Verbs are *provider-shaped*, not *family-shaped* — `linear.comment.create` and `github_issues.comment.create` are correct; `tracker.comment.create` is not. This prevents accidental lowest-common-denominator drift across Provider Families and is the registry-side enforcement of `ADR-2026-05-10-native-rich-providers.md`.
+**Reserved generic prefixes.** The registry additionally rejects verb ids whose plugin segment matches a Provider Family name (`tracker`, `vcs`, `sandbox`, `workarea`, `agent-runtime`, `deployment`, `agent-registry`, `kit`, `requester-provider`). Verbs are *provider-shaped*, not *family-shaped* — `linear.comment.create` and `github_issues.comment.create` are correct; `tracker.comment.create` is not. This prevents accidental lowest-common-denominator drift across Provider Families and is the registry-side enforcement of `ADR-2026-05-10-native-rich-providers.md`.
 
 **Verb kinds and the workflow engine.** The `kind` field tells the workflow engine how to treat the verb in a graph:
 

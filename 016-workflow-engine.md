@@ -116,11 +116,12 @@ Entry points. Externally-fired. Cannot be invoked by the engine. Subscribed to v
 ```yaml
 triggers:
   - id: my_trigger
-    kind: webhook | cron | signal | manual
+    kind: webhook | cron | signal | manual | requester
     config:
       eventType: ...                   # webhook: external event match
       schedule: ...                    # cron: cron expression
       signalEventType: ...             # signal: typed event subscription
+      request: { project, goal, workType? }  # requester (ADR-2026-06-19): inbound request from a registered external principal
 ```
 
 Trigger-step nodes in `spec.steps[]` reference these by id. Multiple triggers per workflow are allowed; each fires an independent run.
