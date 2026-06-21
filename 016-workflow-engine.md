@@ -121,7 +121,7 @@ triggers:
       eventType: ...                   # webhook: external event match
       schedule: ...                    # cron: cron expression
       signalEventType: ...             # signal: typed event subscription
-      request: { project, goal, workType? }  # agent.request (ADR-2026-06-19; requester = deprecated alias): inbound request from a registered external principal
+      request: { project, goal, workType? }  # agent.request (ADR-2026-06-19; requester = deprecated alias): inbound request from a registered external principal. At dispatch, the engine resolves the requester_registration from the bearer's binding (ADR-2026-06-20): allowed-projects + allowed-workflow-template-slugs whitelist check runs against the registration; audit attribution stamps external:<org>:<handle>. No active registration → dispatch denied (fail-closed).
 ```
 
 Trigger-step nodes in `spec.steps[]` reference these by id. Multiple triggers per workflow are allowed; each fires an independent run.
