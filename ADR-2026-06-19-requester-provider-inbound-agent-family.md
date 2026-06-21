@@ -53,8 +53,11 @@ requester can prove the work ran, and ran well.
    or shared signing secret). The dispatch target reuses the existing workflow grammar
    (`016-workflow-engine.md`); no new execution path.
 
-3. **Add a `requester` trigger type** to the workflow grammar, parallel to `schedule`,
-   `webhook`, and `manual`. A workflow whose entry is a `requester` trigger declares the
+3. **Add an `agent.request` trigger type** to the workflow grammar, parallel to `schedule`,
+   `webhook`, and `manual`. (The kind was originally named `requester`; per the
+   2026-06-20 amendment below it is `agent.request`, with `requester` retained as a
+   deprecated back-compat read alias.) A workflow whose entry is an `agent.request`
+   trigger declares the
    lightweight input contract `{ project, goal, workType? }` and binds those into its
    first executable node (typically an `agent.invoke` composition). The request carries
    no tracker/issue context; project-inherited context resolves from the project
@@ -76,7 +79,7 @@ requester can prove the work ran, and ran well.
    is **platform-only** and out of scope for the OSS contract.
 
 6. **OSS owns the contract; the platform owns governance.** OSS-canonical: the family
-   contract, the `requester` trigger, the protocol adapters, the CLI verb, the
+   contract, the `agent.request` trigger (alias `requester`), the protocol adapters, the CLI verb, the
    `SKILL.md` archetype, and the handshake shape. Platform-only: governed execution,
    receipt generation, evaluation grading, policy enforcement and principal scoping,
    decision-provenance attribution, the onboarding flow, and policy posture. See the
@@ -135,7 +138,7 @@ Edits land in the commit that flips this ADR to Accepted:
 - `002-provider-base-contract.md` — family list + the inbound request/response contract and identity reuse.
 - `006-cross-provider-interactions.md` — A2A is the outbound dual; cross-reference the inbound family.
 - `015-plugin-spec.md` — plugin manifests may declare `requester`-family implementations.
-- `016-workflow-engine.md` — the new `requester` trigger type and its input contract.
+- `016-workflow-engine.md` — the new `agent.request` trigger type (alias `requester`) and its input contract.
 
 No edit here touches a `BOUNDARY-SYNC`-marked region, so no synchronized-section
 ceremony is required; on acceptance, paired commits (OSS-side first) per `BOUNDARY.md`.
@@ -146,8 +149,29 @@ To be filed on acceptance (platform corpus carries the platform-side tracker ref
 
 ## Implementation notes
 
-The dispatch target is an ordinary workflow whose entry is a `requester` trigger; the
+The dispatch target is an ordinary workflow whose entry is an `agent.request` trigger
+(alias `requester`); the
 first executable node is typically an `agent.invoke` composition that inherits the
 project's capacity/model/tracker/version-control bindings from the project reference
 alone. Long-running requests use poll or stream over the response; the synchronous
 response returns immediately with a tracking handle.
+
+## Amendment 2026-06-20 — trigger kind renamed to `agent.request`
+
+The inbound trigger **kind** is renamed `requester` → **`agent.request`** (canonical).
+`requester` is retained **only** as a deprecated back-compat **read alias** on the
+free-text `trigger_type` column — no migration, no rename of stored rows; the engine
+reads both spellings and treats them as the same kind.
+
+- **Rationale (design delta #1).** The kind names the generic *cross-org agentic
+  governance* category, so the verb belongs in the dotted `agent.*` namespace
+  alongside `agent.invoke` and `agent.session.await_complete`. The trigger **node id**
+  is correspondingly `agent.request` (dir `trigger/agent.request/`), matching the
+  dotted-id norm.
+- **Unchanged.** The Provider Family name **`RequesterProvider`** / `requester-provider`,
+  the principal/actor **`external_agent`** (actor_id `external:<org>:<agent>`), the
+  **`dispatch:invoke`** scope, and the **`requester.respond`** delivery-action node are
+  **not** renamed. Only the user-facing trigger **kind** / verb / contract changed.
+
+Implementation shipped ahead of this amendment (trigger node moved to
+`trigger/agent.request/`; `requester` kept as a deprecated read alias).

@@ -306,7 +306,7 @@ outbound dispatch path (or vice versa) — the same trap Seam 3 warns about, one
 **Cooperation:** Direction is the discriminant, not the protocol. Outbound A2A (Seam 3)
 is a `SandboxProvider` declaring `isA2ARemote: true` — *the engine is the caller*. Inbound
 requester accept is a `RequesterProvider` declaring `acceptedProtocols` — *the engine is
-the callee*, mapping the request onto a `requester`-trigger workflow dispatch (`016`). The
+the callee*, mapping the request onto an `agent.request`-trigger workflow dispatch (`016`). The
 protocol vocabulary is shared so identity and capability declarations are reused, but a
 provider is one or the other, never both on the same handle: an `isA2ARemote` sandbox is a
 dispatch target; a `RequesterProvider` is an acceptance surface that returns a result (and,
