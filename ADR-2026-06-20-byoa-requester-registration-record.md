@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 boundary: shared
 split: sibling-extensions
 date: 2026-06-20
@@ -7,7 +7,7 @@ date: 2026-06-20
 
 # ADR-2026-06-20 — Requester registration: the inbound principal record
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-06-20
 **Boundary:** shared (canonical here; mirrored stub in the platform corpus)
 **Authors:** agent:claude (design session)
