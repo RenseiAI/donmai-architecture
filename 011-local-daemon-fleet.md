@@ -224,6 +224,35 @@ If the daemon refuses to start, common causes:
 
 `donmai host doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, pool sane) and prints the failing condition.
 
+## Per-session cancel-wire
+
+Beyond drain (whole-daemon) and crash recovery, the daemon can stop **one**
+in-flight session via the per-session cancel-wire. `WorkerSpawner.StopSession`
+is the single in-process choke point; the localhost-only
+`POST /api/daemon/sessions/<id>/stop` edge and the idle/no-progress watchdog both
+drive it. A cancel rides the existing lock-refresh heartbeat (the refresh response
+gains a `stop` field) for a fast cooperative in-band stop, escalating to
+SIGTERM→SIGKILL only if the child does not exit; the session's workarea is released
+with `mode: archive` for post-mortem inspection.
+
+Two new terminal classifications carry distinct re-dispatch postures:
+
+- **`FailureOperatorCancelled`** — an operator/orchestrator asked to stop. The
+  orchestrator backstop MUST NOT re-dispatch it. The classification is set *before*
+  the child's exit is observed, so an intentional cancel is never laundered into a
+  crash (the bug this fixes: a killed child read as a crash and re-dispatched).
+- **`FailureNoProgress`** — the no-progress watchdog self-cancelled a session that
+  emitted no observable progress (tokens/turns/session-handle updates per
+  `ADR-2026-06-13-daemon-sessionhandle-enrichment.md`) for a configured idle
+  window. Its own mode (not folded into crash or operator-cancel) so the backstop
+  can apply a bounded-retry policy specific to hangs.
+
+The deferred-exit-trigger path is excluded from the multi-root case: a deferred
+exit is scoped to the single root that armed it and never cascades to sibling
+roots, and the no-progress watchdog does not count a sibling root's still-running
+work as the deferred root's "no progress." Full contract:
+`ADR-2026-06-22-daemon-per-session-cancel-wire.md`.
+
 ## Logs and observability
 
 Three observability surfaces:
@@ -271,10 +300,20 @@ GET    /api/daemon/pool/stats
 POST   /api/daemon/pool/evict
 GET    /api/daemon/sessions
 GET    /api/daemon/sessions/<id>
+POST   /api/daemon/sessions/<id>/stop
 GET    /api/daemon/heartbeat
 GET    /api/daemon/doctor
 GET    /healthz
 ```
+
+`POST /api/daemon/sessions/<id>/stop` is the **per-session** cancel edge (distinct
+from the daemon-wide `POST /api/daemon/stop`, which drains and stops the whole
+process). It stops one in-flight session and leaves the rest of the fleet running.
+It is localhost-only / no-bearer like the rest of the API, and drives the
+in-process `WorkerSpawner.StopSession` primitive. Full contract — the in-band stop
+signal, the `FailureOperatorCancelled` / `FailureNoProgress` terminal modes, and
+the no-progress watchdog — is in
+`ADR-2026-06-22-daemon-per-session-cancel-wire.md`.
 
 Provider/Kit/Workarea/Routing operator surfaces (Wave 9):
 
