@@ -30,12 +30,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out this repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: donmai-architecture
 
       - name: Check out sibling rensei-architecture
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: RenseiAI/rensei-architecture
           path: rensei-architecture
