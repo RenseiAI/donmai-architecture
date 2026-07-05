@@ -1,7 +1,7 @@
 # 007 — Intelligence Services
 
 **Status:** Reference (initial draft)
-**Last updated:** 2026-06-08
+**Last updated:** 2026-07-04
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/007-intelligence-services-platform-extensions.md`)
 **Related:** `001-layered-execution-model.md`, `005-kit-manifest-spec.md`, `006-cross-provider-interactions.md`
 
@@ -21,12 +21,14 @@ This doc defines the three services, the contracts they expose to kits and agent
 
 > **AMENDED 2026-06-08 by `ADR-2026-06-08-arch-intel-go-native-af-arch-deprecation.md`:** the decision **splits** along the two layers. **Layer 1** (the diff-reader + drift gate; pure regex/JSON, no LLM, no DB) is **execution-layer** and goes **Go-native** as the default for `donmai arch assess` — with a real `gh` diff-fetch so the gate runs on actual PR content. This is OSS-canonical and ships today. **Layer 2** (the SQLite observation graph + *learned baseline* + LLM deviation detection) is **not** ported to OSS: it stays **platform-owned** per `ADR-2026-06-07` (intelligence is platform-implemented; OSS ships contracts + kit extension points only — no OSS reference implementations; the platform moved arch-intel onto platform-native code: clustering, synthesis, and a drift API). An OSS-standalone Go-native Layer 2 is **deferred** to a future dedicated ADR (`ADR-2026-06-07` decision point 5) and is not undertaken here. The legacy TS delivery surface is **retired**: the standalone `af-arch` CLI (`@donmai/cli`) and the TS `@donmai/architectural-intelligence` package (incl. its `sqlite-impl` reference) are deprecated/legacy with no live consumer (EOL with `donmai-libraries`), and the Go exec-shim that subprocessed `af-arch` is demoted to an opt-in, deprecation-warned `DONMAI_ARCH_BIN` fallback. Net: the `ArchitecturalIntelligence` *contract* stays OSS-canonical; the OSS *implementation* is the Layer-1 gate only, and Layer-2 *intelligence* remains platform-owned.
 
+> **AMENDED 2026-07-04 by `ADR-2026-07-04-code-intel-index-schema-v2-go-authoritative.md`:** the Code Intelligence Go reimpl is **shipped/hardened** — all six `donmai code` subcommands are native Go with no external binary. The persisted index moved to a **Go-authoritative schema v2** (TS byte-compat deliberately dropped; version-gated clean rebuild), with real PageRank over the persisted import graph, real content-hash dedup, Go-native hybrid search (Voyage + Cohere, env-key opt-in, BM25 fallback), and real Merkle-diff incremental indexing. That ADR also **explicitly restates that Code Intelligence is exempt from the `ADR-2026-06-07` retraction and continued** (the carve-out previously lived only in this doc's 2026-06-07 annotation, while that ADR's Decision-1 text ambiguously listed Code Intelligence among the retracted surfaces). The TS exec-shim (`DONMAI_CODE_BIN`) now emits a deprecation warning and is removed when `donmai-libraries` is archived.
+
 Per Wave 10 Phase 1 resolutions Q4: this doc is the **forward-looking canonical contract**. Three of the implementation surfaces below have OSS-shipped reference impls today; the others are scheduled.
 
 | Surface | OSS-shipped today | Scheduled |
 |---|---|---|
 | Code Intelligence (`@donmai/code-intelligence`, six MCP tools) | yes | n/a |
-| Code Intelligence (Go reimpl, `donmai code` subcommands) | partial (in flight) | finish in next-N waves |
+| Code Intelligence (Go reimpl, `donmai code` subcommands) | **shipped/hardened** (2026-07-04 — all six subcommands native; schema v2, real PageRank, real content dedup, Go-native hybrid search, real incremental indexing; see `ADR-2026-07-04-code-intel-index-schema-v2-go-authoritative.md`) | n/a |
 | Memory query/write API + sqlite single-tenant reference impl | no | scheduled — see "Implementation status" annotation in § Memory below |
 | Architectural Intelligence — `donmai arch assess` Layer 1 (Go diff-reader + drift gate, real `gh` diff-fetch) | yes (default native path) | n/a |
 | Architectural Intelligence — Layer 2 (SQLite observation graph + learned baseline + LLM deviation detection) | no — platform-owned (`ADR-2026-06-07`) | OSS-standalone Go-native port deferred to a future ADR (`ADR-2026-06-07` decision point 5) — not undertaken here |
