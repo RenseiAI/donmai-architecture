@@ -76,11 +76,13 @@ Humans and fleet agents alike should consume in this order:
 - **`ADR-2026-06-08-arch-intel-go-native-af-arch-deprecation.md`** — Legacy arch-intel TS CLI/package retired; Layer-1 drift gate Go-native in OSS, Layer-2 stays platform-owned. Cross-cutting; mirrored as stub in `rensei-architecture`.
 - **`ADR-2026-06-10-durable-ci-wait.md`** — CI wait is orchestration-owned and durable (signal gate on `Result.CommitSHA`); agent sessions never wait for remote CI or park on in-process timers. Amends `013` § Completion contracts. Cross-cutting; mirrored as stub in `rensei-architecture`.
 - **`ADR-2026-06-22-linear-backlog-grooming-verbs.md`** — OSS `donmai linear` backlog-grooming verb set (parent-only enumeration with `parentID` payload, sub-issue listing, `blocks` relations, label apply, partial `update-issue`) plus env-default scope (`DONMAI_LINEAR_PROJECT`/`DONMAI_LINEAR_TEAM`) and the parent-in-target-status-then-cascade dimensionality contract. OSS-only.
+- **`ADR-2026-07-07-sibling-context-repos.md`** — Runner honors `DONMAI_SIBLING_REPOS` (work-item env) to shallow-clone read-only context repos (e.g. this corpus) as siblings of the session worktree; non-fatal, freshen best-effort. Amends `013`. OSS-only.
 - **`ADR-2026-06-22-daemon-per-session-cancel-wire.md`** — Daemon per-session cancel-wire (`WorkerSpawner.StopSession` + localhost-only `POST /api/daemon/sessions/:id/stop` + lock-refresh `stop` field + `FailureOperatorCancelled` never-re-dispatched mode + no-progress watchdog `FailureNoProgress` + deferred-exit-trigger multi-root exclusion). Amends `011`. OSS-only.
 - **`ADR-template.md`** — Template for new architectural decisions. Copy when proposing changes. Mirrored to `rensei-architecture` via stub.
 
-**Agents (archetypes):**
+**Agents (operating protocol + archetypes):**
 
+- **`agents/PROTOCOL.md`** — the shared Agent Operating Protocol. Every sibling repo's `AGENTS.md` routes here for the cross-repo procedures: plan-before-edit, reference sweeps, verification evidence, debugging escalation, worktree/sub-agent discipline, release rules. Platform deltas extend it in `rensei-architecture/agents/PROTOCOL-platform-extensions.md`.
 - **`agents/pm/backlog-writer.yaml`** — PM-archetype: refine/groom/author modes, no-sub-issue rule, haiku-executable scope discipline.
 - **`agents/pm/outcome-auditor.yaml`** — Outcome auditor archetype.
 - **`agents/pm/improvement-loop.yaml`** — Improvement-loop archetype.
@@ -112,6 +114,16 @@ Direct edits without an ADR are fine for clarifications, examples, typo fixes, a
 - "Kit" is a placeholder name pending brand decision; do not search/replace until the rename ADR lands.
 - ADR frontmatter declares `boundary:` upfront — one of `OSS-only | platform-only | shared | mirrored`. See `BOUNDARY.md` § "Frontmatter `boundary:` field" for the four-value enum and required-field discipline.
 - Synchronized sections (currently: `001` § "The donmai ↔ Rensei Platform contract") carry paired `BOUNDARY-SYNC-START: <id>` / `BOUNDARY-SYNC-END: <id>` markers; edits require paired PRs to both corpora and the regions stay byte-identical (verified by `scripts/check-boundary-sync.sh`). See `BOUNDARY.md` § "BOUNDARY-SYNC inline marker syntax", § "Simultaneous-PR rule for synchronized sections", and § "Synchronized-section CI hook".
+
+## Gates — run before pushing corpus changes
+
+```bash
+bash scripts/guard-b-lint.sh --all          # closed-source content guard (CI: secret-scan.yml)
+bash scripts/adr-status-lint.sh --all       # ADR status frontmatter + README index drift (CI: adr-lint.yml)
+bash scripts/check-boundary-sync.sh         # BOUNDARY-SYNC regions byte-identical with the sibling corpus (CI: boundary-sync.yml)
+```
+
+`check-boundary-sync.sh` assumes the sibling at `../rensei-architecture/`; override with `DONMAI_ARCH_PATH=/abs/path`. A red boundary-sync after landing one side of a paired edit is the reminder to land the other side — never bypass it.
 
 ## Status
 
