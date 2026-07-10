@@ -1,8 +1,8 @@
 # 005 — Kit Manifest Spec
 
-**Status:** Reference. `[provides]` / `[depends_on]` cross-family-consumption blocks **Accepted (2026-05-06)** in lockstep with `002` v2.
-**Last updated:** 2026-05-06
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`
+**Status:** Reference. `[provides]` / `[depends_on]` cross-family-consumption blocks **Accepted (2026-05-06)** in lockstep with `002` v2. Package integrity and deterministic command/catalog composition **Accepted (2026-07-10)** by `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`.
+**Last updated:** 2026-07-10
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`
 
 > **Naming note:** "Kit" is a placeholder. The brand team is selecting from a candidate list (Ofuda 🪧, Inro 📿, Haori 🧥) under the parent brand "donmai." A future ADR replaces the term throughout this corpus once chosen. Until then, every reference to "Kit" in this doc is a placeholder for the final family name.
 
@@ -104,7 +104,12 @@ The interface is intentionally rich. The buildpacks insight: the lifecycle is th
 
 ## The manifest
 
-Kit manifests are TOML files (familiar to Cargo/buildpacks/most ecosystems). They serve dual purpose: declaration (what does this kit do?) and signature target (what gets verified?).
+Kit manifests are TOML files (familiar to Cargo/buildpacks/most ecosystems).
+They declare what a kit does, but they are not the complete distribution or
+signature target. A conforming distributable kit is a directory-backed package
+whose signed canonical descriptor inventories `kit.toml` and every payload
+path, digest, size, and portable mode. See
+`ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`.
 
 ```toml
 api = "rensei.dev/v1"
@@ -258,6 +263,27 @@ capabilities = [
 
 The schema is open along well-defined extension points (additional `provide.*` arrays, custom `detect` checks via `exec`). Adding a new contribution type requires bumping `api`; consumers verify they understand it before activating.
 
+### Package envelope and path-bearing fields
+
+The manifest above is the logical contribution contract. Publication wraps it
+in a `donmai.dev/kit-package/v1` package descriptor. That descriptor is the
+signature subject and inventories every regular payload file; a detached
+manifest signature is a legacy, manifest-only trust artifact. The descriptor
+also names a stable publisher identity; the pinned catalog snapshot or explicit
+local trust policy must authorize that signer for the kit-id namespace.
+
+Every field whose value can name package-owned content must become explicitly
+typed as a package path in the next manifest revision. Inline shell text,
+system executable names, URLs, and package paths are distinct kinds. A
+publisher must not infer ownership from slashes or filename extensions. Package
+paths are normalized, contained beneath the package root, present in the signed
+inventory, and resolved without symlinks or special files. The full normative
+path, digest, size, mode, and reference-closure rules live in the accepted ADR.
+
+Legacy `rensei.dev/v1` manifests remain parseable during the compatibility
+window, but a verified signature over only `kit.toml` is reported as
+`legacy-manifest-verified`, never `package-verified`.
+
 ## Being consumed by providers (`002` v2 lockstep)
 
 Per `002-provider-base-contract.md` v2 (Decision 2 / Cross-family dependencies), a *provider* from any family may declare it consumes a kit's contributions. The example: the Claude AgentRuntime provider declares it needs the `node-sandbox` kit's toolchain to satisfy a Node-based skill it ships. The mechanism is symmetric to kit-to-kit dependencies above.
@@ -344,7 +370,7 @@ Composition is where most subtle bugs live; explicit rules prevent silent surpri
 
 | Contribution | Rule |
 |---|---|
-| `commands` (build/test/validate) | Last-applied-wins. Foundation kits set defaults; project kits override. Tenant config wins over all. |
+| `commands` (build/test/validate) | Retain every owner-qualified command. Each generic alias has one explicit owner; ambiguous claims fail before execution. Never last-applied-wins. |
 | `prompt_fragments` | Concatenated in apply order. Each carries `when` filter; only fragments matching `workType` are included. |
 | `tool_permissions` | Union. A command allowed by any active kit is allowed in the session. |
 | `mcp_servers` | Concatenated; duplicate `name` is an error. |
@@ -356,13 +382,46 @@ Composition is where most subtle bugs live; explicit rules prevent silent surpri
 | `workarea_config.preserve_dirs` | Union. |
 | `hooks` | All run; failure of any aborts. Foundation hooks run first. |
 
+### Command ownership and generic aliases
+
+Command identity is the structured tuple `(kit id, local command name, package
+digest)`. Generic names such as `build`, `test`, and `validate` are aliases, not
+identities. Distinct owner-qualified commands merge additively; their shell text
+is never concatenated, merged, or treated as authority.
+
+An OS-specific command override specializes a command owned by the same
+package. Cross-kit replacement requires either an operator-approved
+composition-lock binding or a signed delegation from the displaced command's
+authorized owner (or catalog policy authorized for that owner's namespace).
+The delegation names both exact active commands and its scope. A replacement
+kit's own declaration is only a request and cannot grant itself authority over
+another kit's alias. Every replacement edge must be authorized; chains must be
+complete, acyclic, and end at one owner. Multiple unresolved claimants are a
+composition error that lists every claimant and the required binding action.
+
+Order group, confidence, priority, registry source, and discovery/scan order do
+not select a generic-command owner. Disjoint monorepo path scopes compose into
+separate command plans; overlapping scopes resolve aliases together and fail on
+ambiguity. The active registry generation records every alias binding and a
+composition digest.
+
+The v1 `[provide.commands]` map is a legacy alias claim. Two v1 kits exporting
+the same key conflict unless an external composition lock selects the owner. A
+new manifest revision is required to encode structured aliases, replacement
+requests, and target-owner delegations; consumers that do not understand it
+must reject that revision rather than fall back to last-wins behavior. Full
+semantics are in
+`ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md` §4.
+
 ### Scope composition
 
 Per `002-provider-base-contract.md`, a kit's scope can be project, org, tenant, or global. Composition respects scope:
 
 - Project-scoped kits override org-scoped of the same `id`.
 - Multiple project-scoped kits with different `id`s compose normally.
-- Conflict: same `id` at the same scope level → error, tenant resolves.
+- Conflict: same `id` at the same scope level → error unless an explicit active
+  package/catalog lock selects one exact package digest. Source order never
+  resolves the conflict.
 
 ### Monorepo path scoping
 
@@ -375,7 +434,12 @@ scope: {
 }
 ```
 
-The `iOS Kit` only contributes when sessions touch `apps/family-ios/**`. The `TS Kit` only contributes when sessions touch `apps/social/**`. A coordinator session spanning both pulls both kits' contributions, and the hooks/commands cleanly compose because each is path-scoped.
+The `iOS Kit` only contributes when sessions touch `apps/family-ios/**`. The `TS
+Kit` only contributes when sessions touch `apps/social/**`. A coordinator
+session spanning both pulls both kits' contributions. Disjoint scopes produce
+separate command plans; if selectors overlap, generic aliases resolve together
+and ambiguous owners fail before execution. Hooks retain deterministic
+foundation-first order within each effective scope.
 
 ## Registry sources
 
@@ -388,7 +452,17 @@ Kits are discovered through multiple sources, identical to the base contract's d
 5. **Anthropic Skills registry** — `agentskills.io`. Same model as Tessl: import a skill, wrap it as a single-skill kit.
 6. **Other community / enterprise registries** — declared in tenant config; same manifest schema and signature requirements.
 
-Federation order is the discovery order. Conflicts resolved by scope precedence, then priority.
+Federation order is candidate-discovery order only. It is not package identity
+or conflict authority. An official publication is a signed immutable catalog
+snapshot that maps each `kit id + version` to one package digest. A consumer
+pins the snapshot digest and resolves only those exact rows. Duplicate
+id/version rows, an id/version under a different digest, missing material, or
+unsupported package/manifest schemas fail closed.
+
+Local/operator packages can coexist outside the official snapshot only when the
+active composition lock records their source, trust state, exact digest, scope,
+and override authority. Mutable branch names, `latest`, directory walk order,
+and “first valid manifest” are never resolution inputs.
 
 ### Why Tessl and agentskills.io are sources, not separate plugin families
 
@@ -398,26 +472,30 @@ The implication for tenants: "import a Tessl tile" is a valid action, and the ho
 
 ## Daemon kit registry
 
-The local `donmai` daemon ships a minimal in-process Kit registry that scans the
-filesystem for installed kit manifests and exposes them via the operator
-control API. This is the OSS-execution-layer's "Local manifests" registry
-source from the federation list above (item 1), surfaced as HTTP for the
-`donmai kit` / platform-binary `kit` command surface.
+The local `donmai` daemon ships an in-process Kit registry and exposes it via
+the operator control API. A package-aware registry selects one immutable active
+generation containing exact package digests, catalog snapshot digest, and
+generic-command bindings. Only complete packages referenced by that generation
+are discoverable by detection or execution.
 
-**Scan path.** Default `~/.donmai/kits/*.kit.toml` (TOML files with the
-`.kit.toml` suffix at the top level of the kits directory). Configurable via
-`daemon.yaml`:
+**Package store and legacy scan path.** Physical package-cache layout is an
+implementation choice. Activation is the atomic generation switch defined in
+`ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md` §3.
+
+During legacy compatibility, the daemon may also scan flat
+`~/.donmai/kits/*.kit.toml` files. Configurable legacy paths use `daemon.yaml`:
 
 ```yaml
 kit:
   scanPaths:
-    - ~/.rensei/kits
-    - /opt/rensei/kits           # operator-installed shared kits
+    - ~/.donmai/kits
+    - /opt/donmai/kits           # operator-installed shared kits
 ```
 
-Multiple paths are scanned in declaration order; later paths override
-earlier ones on `kit.id` collision (matching `Provider` scope-resolution
-semantics from `002`).
+Scan order is not authority. The same `kit.id` at the same effective scope is a
+conflict unless the active lock names one exact package digest. Legacy paths do
+not silently override one another, and a legacy manifest never impersonates an
+official package from the pinned snapshot.
 
 **Endpoints.** Per `ADR-2026-05-07-daemon-http-control-api.md` § D4:
 
@@ -436,19 +514,65 @@ POST   /api/daemon/kit-sources/<name>/disable
 The list endpoint returns a summary view (`Kit` struct in
 `afclient/kit_types.go`); the per-id endpoint returns the full
 `KitManifest` view including detect rules, contributions summary, and trust
-state. Kits MUST parse cleanly to be returned; malformed manifests log a
-warning and are excluded from the listing rather than failing the whole
-request.
+state. Package-aware responses also expose package digest, catalog snapshot
+digest, composition digest, and whether the kit came from an immutable package
+or the legacy compatibility path. Packages MUST verify and parse cleanly before
+activation; malformed or incomplete material never enters the active
+generation.
 
 **Trust verification.** The `verify-signature` endpoint runs the
-sigstore-equivalent verification described in `002` § Layer 1 and returns a
-`KitSignatureResult` indicating one of `signed-verified | signed-unverified
-| unsigned`. In the Wave 9 ship, the underlying signing model is partially
-implemented; the endpoint may return `unsigned` for kits whose authors
-haven't published a signing identity yet.
+sigstore-equivalent verification described in `002` § Layer 1. The response
+distinguishes `package-verified`, `package-signed-unverified`,
+`legacy-manifest-verified`, `legacy-manifest-unverified`, and `unsigned`.
+Package verification binds the signed descriptor plus every inventoried file;
+legacy verification binds only the manifest bytes.
+
+**Atomic install.** Install fetches an exact package digest from a signed
+catalog snapshot or explicit local source, verifies its complete closure in a
+private same-filesystem staging directory, preflights composition, moves it to
+immutable storage, and atomically switches the active generation. Descriptor,
+signature, manifest, and payload are one transaction. Any failure leaves the
+previous generation active; signature or payload persistence is never
+best-effort. Hooks and detection do not run from staging.
+
+The current manifest-only verifier/flat-file installer predates this contract.
+It remains a `legacy-manifest-*` compatibility implementation until the package
+publisher, transactional installer, command resolver, and conformance evidence
+land together. This reference text does not claim that delivery.
 
 **Empty registry.** If the scan path is empty or absent, the list endpoint
 returns `{ "kits": [] }` with HTTP 200. Empty is a valid first-run state.
+
+## Package publication, synchronization, and migration
+
+An official catalog release publishes complete signed kit packages and a
+signed canonical catalog lock from one source revision and monotonically
+increasing publisher sequence. Each unique kit id/version maps to one package
+digest and authorized package signer policy. A consumer pins the catalog-lock
+digest, verifies every required package, preflights the proposed active set,
+and then switches catalog/registry generation atomically. It never resolves
+through a mutable branch, `latest`, first-found manifest, or fallback source
+after a digest failure. A lower sequence is accepted only as an explicit,
+audited rollback to a previously verified snapshot.
+
+Online synchronization follows TUF 1.0 consistent-snapshot semantics (trusted
+root, targets with hashes/lengths, versioned snapshot, expiring timestamp, and
+monotonic trusted metadata versions) or a separately reviewed equivalent. A
+binary/offline release can instead pin one exact lock digest, but cannot claim
+that the pinned snapshot is current.
+
+Package-aware consumers record the catalog snapshot, package, and composition
+digests used by each session. A catalog rollback selects a previously verified
+generation; it does not reconstruct an older set from mutable sources.
+
+Legacy migration follows four explicit phases: classify existing flat
+manifests without upgrading their trust; dual-publish packages and legacy
+artifacts for one declared compatibility window; require packages for new
+official remote installs; and remove legacy scanning only through a separately
+announced breaking change. Official packages are rebuilt and signed by their
+publisher. A local wrapper around a vendor-signed manifest cannot inherit the
+vendor's package identity. See the accepted ADR §§5–6 for the complete
+contract.
 
 ## Relationship to MCP
 
@@ -458,7 +582,11 @@ This positioning aligns with where the wider ecosystem is headed. MCP Registry +
 
 ## Relationship to Anthropic Skills
 
-Identical pattern: a kit's `provide.skills` array references SKILL.md files conforming to `agentskills.io/specification`. The agent runtime loads them via the Skills mechanism it would have used anyway. Kits contribute Skills; Skills don't displace Kits.
+Identical pattern: a kit's `provide.skills` array references `SKILL.md` files
+conforming to `agentskills.io/specification`. The skill entrypoint and every
+bundled resource are payload files in the signed package inventory. The agent
+runtime loads them via the Skills mechanism it would have used anyway. Kits
+contribute Skills; Skills don't displace Kits.
 
 This means a kit can be 100% declarative for the simple case (no executable detect, no MCP servers, no agents — just a few SKILL.md files and some prompt fragments) and still be a valid kit. That keeps the barrier to entry low for vendors contributing simple language/framework support.
 
@@ -484,15 +612,20 @@ The kit doesn't know which provider satisfied the toolchain. The provider doesn'
 | Local manifest discovery | ✅ ships | inherits |
 | Tessl / agentskills.io adapters | ✅ ships | inherits |
 | Registry adapters (Donmai + community) | ✅ ships | ✅ ships hosted registry |
-| Signing verification | ✅ ships `signed-by-allowlist`; daemon seeds the compiled-in vendor-issuer trust root by default, so official kits verify out of the box (no `--allow-unsigned`); the allowlist is the mechanism, populated with the vendor signing identity at startup | ✅ ships populated allowlist + attested |
+| Package signing + verification contract | ✅ owns signed descriptor/inventory, immutable catalog lock, transactional install, legacy trust-state split; current runtime is manifest-only pending ADR conformance | inherits exact package identity; may add tenancy policy/attestation |
+| Official catalog publication | ✅ OSS catalog owns deterministic package + signed snapshot publication | may curate/distribute verified snapshots; cannot redefine identity or composition |
 | Per-tenant kit policies | ❌ | ✅ owns |
 | Kit publication / curation UI | ❌ | ✅ owns (paid) |
 
-Standard discipline: every interface and adapter ships in OSS. SaaS adds the central registry, multi-tenant policy, and publication UX.
+Standard discipline: every interface and adapter ships in OSS. SaaS adds the central registry, multi-tenant policy, and publication UX. The package-aware publisher/consumer rows above are accepted target responsibilities, not a claim that the current manifest-only installer has delivered them.
 
 ## Open questions
 
-1. **Conflict resolution UX.** When conflicting kits both apply, what's the tenant's interaction surface? Default: error with both kit IDs and a config snippet to set explicit preference. Better: SaaS dashboard widget showing kit detection results with a one-click pin.
+1. **Conflict resolution UX.** The contract is resolved: ambiguous package
+   identity or generic-command ownership fails with all claimants and requires
+   an explicit lock/binding. The remaining question is presentation — CLI/TUI
+   configuration guidance versus a hosted one-click pin — not resolver
+   semantics.
 2. **Detect parallelism.** Phase 1 declarative is trivially parallel. Phase 2 executable could spawn many sandboxes; do we cap at e.g. 4 concurrent detect-execs? Probably yes, configurable.
 3. **Kit versioning at composition time.** Two kits depending on incompatible versions of a third (transitive)? Default: error and require explicit lock. Long-term: a lockfile-shaped resolution akin to npm. Out of scope for v1.
 4. **Cross-kit handles.** A Spring kit's MCP server might want to query a generic-Java kit's data. Should kits expose typed handles to each other, or only via shared contributions (memory, MCP)? Default: only via shared contributions; explicit cross-kit APIs are out of scope until demanded.
