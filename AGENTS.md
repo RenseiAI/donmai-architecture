@@ -79,6 +79,7 @@ Humans and fleet agents alike should consume in this order:
 - **`ADR-2026-07-07-sibling-context-repos.md`** — Runner honors `DONMAI_SIBLING_REPOS` (work-item env) to shallow-clone read-only context repos (e.g. this corpus) as siblings of the session worktree; non-fatal, freshen best-effort. Amends `013`. OSS-only.
 - **`ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`** — Signed full-package inventory + atomic install/rollback, owner-qualified command composition with fail-closed generic alias conflicts, and immutable signed catalog synchronization. Amends `005`; current manifest-only runtime remains legacy/pending. OSS-only canonical.
 - **`ADR-2026-06-22-daemon-per-session-cancel-wire.md`** — Daemon per-session cancel-wire (`WorkerSpawner.StopSession` + localhost-only `POST /api/daemon/sessions/:id/stop` + lock-refresh `stop` field + `FailureOperatorCancelled` never-re-dispatched mode + no-progress watchdog `FailureNoProgress` + deferred-exit-trigger multi-root exclusion). Amends `011`. OSS-only.
+- **`ADR-2026-06-28-per-llm-call-observability-span-contract.md`** — Six-kind per-call span wire contract and current GenAI semantic-convention projection. The correlated poster is shipped but unreleased; platform compatibility ingest and durable storage remain a platform extension. Cross-cutting; mirrored as a stub in `rensei-architecture`.
 - **`ADR-template.md`** — Template for new architectural decisions. Copy when proposing changes. Mirrored to `rensei-architecture` via stub.
 
 **Agents (operating protocol + archetypes):**
