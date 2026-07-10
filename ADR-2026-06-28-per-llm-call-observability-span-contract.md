@@ -2,7 +2,7 @@
 status: Accepted
 date: 2026-06-28
 boundary: shared
-split: synchronized-mirror
+split: inline-addenda
 ---
 
 # ADR-2026-06-28 — Per-LLM-call observability span contract
@@ -35,8 +35,9 @@ governance:
    backend (and every downstream consumer we might integrate) speaks
    OpenTelemetry. A bespoke event shape forces a lossy translation at every
    boundary. Aligning the wire contract to the **OpenTelemetry GenAI semantic
-   conventions** (`gen_ai.*`) from the start means an OTLP-speaking consumer can
-   dispatch off our spans directly.
+   conventions** (`gen_ai.*`) from the start keeps the projection to canonical
+   OTLP mechanical and lossless. The JSON union is OTLP-*shaped* compatibility
+   input, not an OTLP `ExportTraceServiceRequest`.
 4. **Governance context the GenAI semconv does not cover.** Tenancy
    (`org_id`/`workspace_id`), the authorization decision that permitted the call
    (`cedar_decision_id`), the work classification, the pool, and the
@@ -46,9 +47,10 @@ governance:
 
 This work is **P2-WS1** — the *wire contract only*. It ships the Go types, the
 codec, and a golden fixture that pins the on-the-wire bytes. **Emission** (the
-harness poster that populates spans from live runs) and **ingest** (the columnar
-store / OTLP receiver that consumes them) are separate workstreams that target
-this contract; see Open Items. Fixing the wire shape first — with a golden
+harness poster that populates spans from live runs) and **ingest** (the
+compatibility receiver and columnar store) are separate workstreams that target
+this contract; see Open Items. A future standards-native OTLP receiver does not
+reuse this raw-array payload. Fixing the wire shape first — with a golden
 fixture as the cross-language parity anchor — lets emission and ingest be built
 independently against a frozen contract.
 
@@ -139,12 +141,16 @@ camelCase wire keys map to OTLP `gen_ai.*` attribute names at serialization:
 
 | Wire key (`genAi.*`) | OTLP attribute | Notes |
 | --- | --- | --- |
-| `system` | `gen_ai.system` | GenAI system id (e.g. `anthropic`). |
+| `system` | `gen_ai.provider.name` | Compatibility provider id (e.g. `anthropic`). The frozen wire key does not change. |
 | `requestModel` | `gen_ai.request.model` | Requested model id (e.g. `claude-opus-4`). |
 | `usageInputTokens` | `gen_ai.usage.input_tokens` | Prompt/input token count. |
 | `usageOutputTokens` | `gen_ai.usage.output_tokens` | Completion/output token count. |
-| `usageCacheReadInputTokens` | `gen_ai.usage.cache_read_input_tokens` | Cache-read input tokens; omitted when zero. |
-| `responseFinishReason` | `gen_ai.response.finish_reason` | Provider finish reason (e.g. `end_turn`, `max_tokens`); omitted when empty. |
+| `usageCacheReadInputTokens` | `gen_ai.usage.cache_read.input_tokens` | Cache-read input tokens; omitted when zero. |
+| `responseFinishReason` | `gen_ai.response.finish_reasons` | Compatibility scalar projected as a one-element string array; omitted when empty. |
+
+The ingest projection also stamps `gen_ai.operation.name = chat` for emitted
+LLM-call spans. That value is derived at the compatibility boundary and is not a
+new field in the frozen JSON union.
 
 **`donmai` — the `donmai.*` extension group (present on every kind).** Carries
 tenancy and governance context the GenAI semconv does not cover. The OSS
@@ -243,11 +249,11 @@ bytes are pinned in `agent/testdata/llm_call_span.golden.json`. The discipline:
 
 ### Positive
 
-- Per-LLM-call cost, latency, and cache-hit accounting become answerable from one
-  durable record per model call, with a real parent/child tree instead of a flat
-  event stream.
-- OTel GenAI-semconv alignment means an OTLP-speaking backend can consume the
-  spans with a mechanical attribute-name mapping and no bespoke translation.
+- Per-LLM-call cost, latency, and cache-hit accounting become answerable once the
+  platform-owned durable store lands, with a real parent/child tree instead of a
+  flat event stream.
+- OTel GenAI-semconv alignment means a receiver can project the compatibility
+  records into canonical OTLP with a mechanical attribute-name mapping.
 - The `donmai.*` extension group carries tenancy/governance context (including the
   authorization-decision link) as first-class span attributes, so cost and
   governance queries hang off the same records.
@@ -260,8 +266,8 @@ bytes are pinned in `agent/testdata/llm_call_span.golden.json`. The discipline:
 ### Negative
 
 - Two observability layers now coexist (the legacy session-event projection and
-  the span tree). Until emission is wired, the span layer is types-and-fixture
-  only — a contract with no live producer yet.
+  the span tree). Emission is shipped on unreleased `donmai` main, but the span
+  tree remains non-durable until the platform-owned ingest/store path lands.
 - The `donmai.*` namespace is OSS-specific; a deployment that wants its own
   attribute namespace needs a normalizer at the ingest boundary (deferred).
 - camelCase-JSON + string-encoded nanosecond timestamps require a serialization
@@ -320,30 +326,41 @@ bytes are pinned in `agent/testdata/llm_call_span.golden.json`. The discipline:
 - `README.md` § ADRs and `AGENTS.md` § Read order (ADRs) — add the index line for
   this ADR.
 
-No edit touches a `BOUNDARY-SYNC`-marked region. The span *wire types, codec, and
-golden fixture* are OSS-execution-layer substance and ship in the OSS `agent`
-package; the platform-side consumers (emission poster wiring, the columnar
-ingest/OTLP receiver, and the language mirror of these types) are platform
-extensions tracked in the platform corpus. This ADR is the canonical wire
-contract for both.
+No edit touches a `BOUNDARY-SYNC`-marked region. The span *wire types, codec,
+golden fixture, processor, and poster* are OSS-execution-layer substance and
+ship in the OSS runtime. The platform-side compatibility receiver, durable
+buffer/drain, columnar store, standards-native OTLP endpoint, and language
+mirror are platform extensions tracked in the platform corpus. This ADR is the
+canonical wire contract for both.
 
 ## Affected work items
 
 Shipped as **P2-WS1** in donmai v0.49.3 (`agent/span.go`, `agent/span_test.go`,
-`agent/testdata/llm_call_span.golden.json`). The emission poster (WS2) and the
-ingest store (the keystone columnar/OTLP workstream) target this contract and are
-deferred (see Open Items); they are tracked in the platform corpus.
+`agent/testdata/llm_call_span.golden.json`). **P2-WS2 is shipped but unreleased**:
+merged commit `c07354bb` adds the correlated per-call processor and bounded
+poster. As an evidence snapshot, fetched `donmai` main at `81fea4f` on
+2026-07-10 contains that commit; the branch-head SHA is not part of this
+contract. The poster sends a raw JSON array of the frozen span union with
+`Content-Type: application/json` to the configurable `/api/daemon/traces`
+compatibility endpoint. It does not send an OTLP protobuf or OTLP JSON
+`ExportTraceServiceRequest`.
+
+The platform-owned ingest/store remains the keystone dependency and is tracked
+in the platform corpus. No `donmai` release containing WS2 is cut until that
+corpus's durability and drain gates are satisfied.
 
 ## Open Items
 
-- **Emission poster (WS2) — deferred.** The harness poster that populates spans
-  from live runs (mapping the harness cost/usage data into `genAi.*`, stamping the
-  `donmai.*` governance group, and wiring the trace/span id spine) is a separate
-  workstream. WS1 ships the types and does **not** wire that mapping.
-- **Ingest (keystone) — deferred.** The columnar store / OTLP receiver that
-  consumes spans is the dependency that activates the whole trace cluster in
-  production. It is not built or provisioned; downstream read/query/analytics
-  surfaces sit behind in-memory seams awaiting it.
+- **Emission poster (WS2) — shipped, unreleased.** The runtime processor maps
+  harness events into correlated session/LLM/tool spans; the bounded poster
+  batches on a 100ms-or-20-span cadence and sends the compatibility JSON array
+  with the freshest worker bearer. It is non-blocking and may drop telemetry on
+  backpressure or exhausted delivery retries.
+- **Ingest/store (keystone) — deferred.** The authenticated compatibility
+  receiver, durable drain, and columnar store activate the trace cluster in
+  production. They are not built or provisioned; downstream read/query/analytics
+  surfaces sit behind in-memory seams awaiting them. A future standards-native
+  OTLP receiver is a separate endpoint and payload contract.
 - **`donmai.*` → deployment-namespace normalizer — deferred.** Remapping the OSS
   `donmai.*` extension attributes to a deployment's own attribute namespace at the
   ingest boundary is out of scope for WS1.
