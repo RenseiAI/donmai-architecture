@@ -3,7 +3,7 @@
 **Status:** Reference (initial draft)
 **Last updated:** 2026-05-06
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/011-local-daemon-fleet-platform-extensions.md`)
-**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`).
+**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`), `ADR-2026-07-09-host-project-enablement-and-repository-resources.md`.
 
 > **Command surface note (2026-05-06):** Per `ADR-2026-05-06-tui-noun-consolidation.md`, the daemon CLI lifecycle commands (install, status, doctor, drain, update) are now invoked as `<binary> host *` (e.g., `donmai host install` for the OSS binary; the platform binary's equivalent on the platform). Both binaries share the same noun model via `afcli.RegisterCommands`. The `<binary> daemon *` form shown in the example fences below remains as a hidden deprecated alias for one release.
 
@@ -19,14 +19,15 @@ The architectural answer is the daemon model from `004`. This doc makes it real 
 
 ## The user model
 
-> "I have a Mac. I want to install Donmai once, configure it once, and have any project's work execute on this Mac as long as the project is allowed and credentials are wired up. I never want to think about the worker fleet again."
+> "I have a Mac. I want to install Donmai once and explicitly enable any project this machine should serve. Repository resources and credentials can change independently. I never want to think about the worker fleet again."
 
 Concretely, the user's day:
 
-1. **Once at install:** `brew install donmai && donmai host install` (or equivalent on Linux). Daemon starts; registers as a system service.
-2. **Once per project:** `donmai project allow github.com/foo/bar`. Daemon now accepts work for that project. Credentials are picked up from system keychain or per-project config.
-3. **Day-to-day:** open VSCode for any allowed project, or don't. Linear webhooks → orchestrator → daemon. The daemon clones the repo on first session, warms a workarea pool, and runs sessions. No window-switching, no per-workspace fleet management.
-4. **On release:** daemon auto-updates on configured channel. Drains in-flight work, restarts cleanly. User sees a single notification or nothing at all.
+1. **Once at install:** `brew install donmai && donmai host install` (or equivalent on Linux). Daemon starts as a system service. Installation does not grant project admission.
+2. **Once per project:** `donmai host project enable <project-id>`. Daemon now accepts work for that project whether it has zero, one, or many repositories.
+3. **When repository resources change:** use `donmai project repo add|update|remove`. These commands do not enable or disable host admission.
+4. **Day-to-day:** open an editor for any enabled project, or don't. Tracker events → orchestrator → daemon. Repository-requiring work names the repository to clone; repository-free work needs none. No window-switching, no per-workspace fleet management.
+5. **On release:** daemon auto-updates on configured channel. Drains in-flight work, restarts cleanly. User sees a single notification or nothing at all.
 
 ## Installation paths
 
@@ -68,7 +69,7 @@ Logs to `journalctl --user -u af-daemon`. The OSS execution layer ships only the
 
 Initial OSS support is deferred — we don't have the user demand or the test coverage today, and the user has stated a preference against Windows-as-primary. But the architecture (`004` capability flags, `005` per-OS kit contributions) admits Windows as a first-class OS. When regulated banking customers eventually require it (and they will), the daemon port is a 4-week scoped piece of work, not an architectural rewrite.
 
-Concretely, the Windows port consists of: a Windows Service host (replacing launchd plist / systemd unit), Windows-flavored credential helpers (Windows Credential Manager), pool directory in `%LOCALAPPDATA%\rensei`, NDJSON logs to ETW or file. Kits already declare per-OS install scripts and command overrides per `005`; the Spring kit, the TS kit, and the Rust kit all work as long as their `[provide.toolchain_install.windows]` and `[provide.commands_override.windows]` sections are populated.
+Concretely, the Windows port consists of: a Windows Service host (replacing launchd plist / systemd unit), Windows-flavored credential helpers (Windows Credential Manager), pool directory in `%LOCALAPPDATA%\donmai`, NDJSON logs to ETW or file. Kits already declare per-OS install scripts and command overrides per `005`; the Spring kit, the TS kit, and the Rust kit all work as long as their `[provide.toolchain_install.windows]` and `[provide.commands_override.windows]` sections are populated.
 
 ### Linux ARM64
 
@@ -115,18 +116,13 @@ Welcome to Donmai. Let's get your machine working.
     3. Donmai Platform (SaaS)        — register with donmai.dev/dashboard (see platform extensions doc)
   Choice [1]:
 
-[4/5] Project allowlist
-  Allow which projects? (You can add more later with `donmai project allow`.)
-  > Detected: github.com/myorg/myrepo  [add? Y/n]
-  > Add another? [n]
+[4/5] Host projects
+  Enable which project IDs on this machine?
+  > project-alpha  [enable? Y/n]
+  > Add another project ID? [n]
 
-  For each project, where are git credentials?
-    github.com/myorg/myrepo:
-      > 1. macOS Keychain (osxkeychain helper)
-        2. SSH key  (~/.ssh/id_ed25519)
-        3. Personal access token  (paste / env var)
-        4. GitHub CLI (gh auth)
-      Choice [1]:
+  Repository resources are configured separately with
+  `donmai project repo add`; a project does not need one to be enabled.
 
 [5/5] Auto-update
   Channel: [stable] / beta / main
@@ -139,7 +135,7 @@ Welcome to Donmai. Let's get your machine working.
   Stop:   donmai host stop
 ```
 
-The wizard writes `~/.donmai/daemon.yaml` matching the schema in `004`. Idempotent: re-running re-prompts for changed values without resetting unchanged ones.
+The wizard writes `~/.donmai/daemon.yaml` matching the schema in `004`. Idempotent: re-running re-prompts for changed values without resetting unchanged ones. The wizard calls the same service-install and project-enable operations as the non-interactive commands; it does not preserve a private combined path.
 
 The Step 3 "Donmai Platform (SaaS)" choice walks through registration with `donmai.dev/dashboard`; that branch is documented in the platform-extensions doc.
 
@@ -157,7 +153,14 @@ If sessions are heavy (Cargo builds, large test suites), drop this. If sessions 
 
 Cores and memory the daemon will *not* touch. The user is still using their machine; sessions can't starve macOS or VSCode. Default is conservative (4 cores, 16 GB RAM); tune down if you want more session throughput.
 
-### `projects[].cloneStrategy`
+### `enabledProjectIds[]`
+
+The stable project IDs this host desires to serve. This collection is independent
+of repository configuration and is the sole project-admission authority. Change
+it through `donmai host project enable|disable`; do not hand-edit it while the
+daemon is running.
+
+### `repositories[].cloneStrategy`
 
 - `shallow` (default) — `git clone --depth 1`. Fast for short-lived sessions; loses history.
 - `full` — full clone. Slower first-time, supports `git log`-heavy operations.
@@ -165,9 +168,9 @@ Cores and memory the daemon will *not* touch. The user is still using their mach
 
 The workarea provider's local pool composes with this — first acquire pays the clone cost; subsequent acquires reuse the pool member.
 
-### `projects[].git.credentialHelper`
+### `repositories[].git.credentialHelper`
 
-Per-project credential source. Common options:
+Per-repository credential source. Common options:
 
 - `osxkeychain` — macOS Keychain. Set via `git credential-osxkeychain store`.
 - `manager` — Git Credential Manager (cross-platform).
@@ -192,9 +195,99 @@ For SSH-based remotes, set `sshKey` instead of `credentialHelper`.
 
 Where the daemon receives work assignments.
 
-- `file:///$HOME/.rensei/queue` — local file queue. Solo dev, no network. The OSS layer ships a minimal queue runner that delivers work from local Linear webhooks or CLI dispatch.
+- `file:///$HOME/.donmai/queue` — local file queue. Solo dev, no network. The OSS layer ships a minimal queue runner that delivers work from local tracker webhooks or CLI dispatch.
 - `https://your-deployed-orchestrator.example.com` — self-hosted orchestrator endpoint.
 - `donmai.dev/dashboard` — the SaaS control plane (platform-extension; see the platform-extensions doc for setup).
+
+## Project admission commands
+
+The canonical commands deliberately live under `host` because they answer
+"what may this machine serve?":
+
+```bash
+donmai host project enable project-alpha
+donmai host project disable project-alpha
+donmai host project list
+donmai host project list --json
+```
+
+`enable` and `disable` are idempotent. They mutate desired state atomically and
+ask the live daemon to reconcile its registration; they do not reinstall or
+restart the service. `disable` prevents new claims after reconciliation but lets
+in-flight sessions drain and retains all project repository resources.
+
+Repository-resource commands answer a different question — "what source may a
+work item in this project select?":
+
+```bash
+donmai project repo list project-alpha
+donmai project repo add project-alpha https://example.invalid/acme/api.git --primary
+donmai project repo update project-alpha repo-alpha-api --clone-strategy full
+donmai project repo remove project-alpha repo-alpha-api
+```
+
+Adding the first repository does not enable a project. Removing the last does not
+disable it. A repository-requiring work item is rejected until it selects a
+configured repository or the project has an explicitly marked primary.
+
+### Compatibility aliases and config migration
+
+For one release window, `host project add|remove` forwards to
+`enable|disable`. `host install --project <id>` installs and then enables with a
+deprecation warning. `project allow <repository>` is supported only when the
+project can be resolved unambiguously; it performs the two legacy side effects
+(add resource, enable project), warns, and prints the canonical commands. It
+fails without mutation when project identity is ambiguous.
+
+The first v2 mutation backs up and normalizes legacy
+`projects[].{id,repository,...}` config, then sets
+`projectAdmissionVersion: 2`. From that point `enabledProjectIds` is
+authoritative; legacy IDs are repository input only and cannot resurrect a
+disabled project. Normalization deduplicates project IDs, retains every distinct
+repository and its clone/credential settings, and is idempotent. A compatibility
+writer retains a legacy projection only for enabled, repository-bearing
+projects; an old daemon safely omits disabled and zero-repository projects rather
+than treating either as wildcard.
+
+## Truthful host status
+
+`donmai host status` reports service and capacity once, followed by one row per
+desired or applied project. The old aggregate `Projects: N allowed` is not a
+sufficient status surface.
+
+```text
+Host: workstation-01   ready   sessions 2/8
+
+PROJECT          DESIRED   APPLIED   CONNECTION   REPOSITORIES   PRIMARY
+project-alpha    enabled   ready     healthy      2              repo-alpha-api
+project-beta     enabled   pending   backoff      0              —
+```
+
+The JSON shape carries the same distinctions:
+
+```json
+{
+  "service": { "status": "ready" },
+  "capacity": { "sessionsActive": 2, "sessionsMax": 8 },
+  "projects": [
+    {
+      "projectId": "project-alpha",
+      "desired": "enabled",
+      "applied": "ready",
+      "connection": "healthy",
+      "repositoryCount": 2,
+      "primaryRepositoryId": "repo-alpha-api",
+      "warnings": []
+    }
+  ]
+}
+```
+
+`desired` comes from normalized configuration. `applied` comes from the live
+registration acknowledged by the orchestrator. `connection` is live state
+(`healthy | pending | backoff | draining | error`). Repository warnings do not
+rewrite either field. Desired/applied drift is always rendered and causes a
+non-ready project row even when the daemon process itself is healthy.
 
 ## Drain semantics
 
@@ -218,7 +311,7 @@ If the daemon process dies unexpectedly:
 
 If the daemon refuses to start, common causes:
 
-- **Bad credentials** for a configured project. Daemon logs the project ID and exits. Fix via `donmai project credentials github.com/foo/bar`.
+- **Bad credentials** for a configured repository. Daemon marks that repository unready and rejects work that selects it; unrelated projects and repository-free work continue. Fix through the repository resource's credential configuration.
 - **Port collision** for the local exec endpoint. Daemon picks a free port by default; explicit `localExecPort` in config can hit collisions. Run `donmai host doctor` to detect.
 - **Disk full** in the pool directory. Pool members are scratch FS; running out of disk halts acquires. Default cleanup: warn at 80%, refuse new pool members at 90%.
 
@@ -304,7 +397,23 @@ POST   /api/daemon/sessions/<id>/stop
 GET    /api/daemon/heartbeat
 GET    /api/daemon/doctor
 GET    /healthz
+
+GET    /api/daemon/projects
+POST   /api/daemon/projects/<id>/enable
+POST   /api/daemon/projects/<id>/disable
+
+GET    /api/daemon/repositories
+POST   /api/daemon/repositories
+PATCH  /api/daemon/repositories/<id>
+DELETE /api/daemon/repositories/<id>
 ```
+
+`GET /api/daemon/status` and `GET /api/daemon/projects` carry the desired/applied
+project rows defined above. Project mutations never require a repository field;
+repository mutations require `projectId` but never mutate project admission.
+Mutation responses include the reconciled project row when reconciliation is
+immediate, or `applied: "pending"` when registration continues asynchronously.
+All new fields and endpoints are additive during the mixed-version window.
 
 `POST /api/daemon/sessions/<id>/stop` is the **per-session** cancel edge (distinct
 from the daemon-wide `POST /api/daemon/stop`, which drains and stops the whole
@@ -378,10 +487,10 @@ donmai host resume
 ### "I want to add a project I haven't wired credentials for yet"
 
 ```bash
-donmai project allow github.com/newco/newrepo --no-credentials
-# Daemon will refuse work for this project until credentials configured.
-# Add credentials when ready:
-donmai project credentials github.com/newco/newrepo
+donmai host project enable project-newco
+# Repository-free work can run now. Add the repository resource later:
+donmai project repo add project-newco https://example.invalid/newco/repo.git
+# A repository credential warning affects only work selecting that repository.
 ```
 
 ### "Pool's getting big, disk is filling"

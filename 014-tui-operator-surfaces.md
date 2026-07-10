@@ -3,7 +3,7 @@
 **Status:** Reference (initial draft)
 **Last updated:** 2026-05-06
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/014-tui-operator-surfaces-platform-extensions.md`)
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `011-local-daemon-fleet.md`, `013-orchestrator-and-governor.md`, `ADR-2026-05-06-tui-noun-consolidation.md`.
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `011-local-daemon-fleet.md`, `013-orchestrator-and-governor.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-07-09-host-project-enablement-and-repository-resources.md`.
 
 ## Noun model
 
@@ -11,7 +11,7 @@ Per `ADR-2026-05-06-tui-noun-consolidation.md`, the TUI's top-level nouns map to
 
 | Top-level | Concept layer | Owns |
 |---|---|---|
-| `host` | This machine | Daemon lifecycle (install / status / doctor / drain / update), capacity envelope, local workarea pool, installed providers |
+| `host` | This machine | Daemon lifecycle (install / status / doctor / drain / update), host project enablement, capacity envelope, local workarea pool, installed providers |
 | `fleet` | Other machines + per-project routing | Remote daemon visibility, `fleet route set` for execution-route policy on a project |
 | `capacity` | Org-wide capacity config | Org execution providers and pool definitions the routing policy chooses from |
 
@@ -74,6 +74,7 @@ The `tui-components` library v0.2.0 ships these primitives. Each is generic over
 | `TransportModelIndicator` | dial-in / dial-out / either with tooltip |
 | `WorkareaPoolPanel` | Warm / cold / in-use slots per (repo, toolchain) key |
 | `ToolchainChip` | `java=17`, `node=20.x` — kit demand or workarea state |
+| `HostProjectRow` | Project desired/applied/connection state plus repository readiness; never an aggregate count alone |
 
 ### Worker + Fleet + AgentRuntime (`013`)
 
@@ -84,6 +85,35 @@ The `tui-components` library v0.2.0 ships these primitives. Each is generic over
 | `MachinePivot` | Multi-machine breakdown (relevant when SaaS aggregates daemons) |
 | `AgentRuntimeIndicator` | Which runtime (claude/codex/etc.) drove a session |
 | `SubAgentNode` | Compact sub-agent rendering for the operator-surface views |
+
+### Host project status primitive
+
+`HostProjectRow` renders the independent axes defined by
+`ADR-2026-07-09-host-project-enablement-and-repository-resources.md`:
+
+```go
+type HostProjectView struct {
+    ProjectID          string
+    ProjectLabel       string
+    Desired            string // enabled | disabled
+    Applied            string // ready | pending | absent | error
+    Connection         string // healthy | pending | backoff | draining | error
+    RepositoryCount    int
+    PrimaryRepository  string
+    Warnings           []string
+}
+```
+
+The row MUST render desired/applied drift and connection health independently.
+Repository count or readiness never substitutes for admission. A project with
+zero repositories is a normal row, not an error; a repository warning is shown
+only in the readiness/warnings column. The human table and `--json` form are
+projections of the same typed view.
+
+`host install` is represented only in the lifecycle panel.
+`host project enable|disable|list` operates on `HostProjectRow` desired state.
+Repository resource administration remains under `project repo *`; nesting it
+under `host` would recreate the conflation this primitive exists to prevent.
 
 ### Kit (`005`)
 

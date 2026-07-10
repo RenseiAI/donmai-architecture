@@ -31,7 +31,7 @@ The TUI consolidates to three top-level nouns, each owning exactly one concept l
 
 Old top-level commands (`worker`, `machine`, `execution`, `workarea`, the top-level `provider`) remain available as **hidden deprecated aliases** for one release. They print a one-line deprecation notice that names the new command, then forward. After one release they are removed.
 
-A first-run wizard chains the onboarding path — `auth add --user` → `host install` → `fleet route set` — so a freshly logged-in user reaches a routable, working state without prior knowledge of the noun map. The OSS binary's onboarding wizard targets self-hosted orchestration; the platform-binary form targets the SaaS auth path documented in the platform extensions.
+A first-run wizard chains the onboarding path — `auth add --user` → `host install` → `host project enable` → `fleet route set` — so a freshly logged-in user reaches a routable, working state without prior knowledge of the noun map. Per `ADR-2026-07-09-host-project-enablement-and-repository-resources.md`, install remains service-only and repository resources remain separate. The OSS binary's onboarding wizard targets self-hosted orchestration; the platform-binary form targets the SaaS auth path documented in the platform extensions.
 
 ## Consequences
 

@@ -62,7 +62,7 @@ The governor is the **scan-and-dispatch loop** that watches external systems for
 │  Governor cycle (every N seconds, default 30)            │
 ├──────────────────────────────────────────────────────────┤
 │  1. List issues from configured IssueTrackerProviders    │
-│     in scope (project allowlist, monorepo paths)         │
+│     in scope (enabled project IDs, monorepo paths)       │
 │  2. Filter by status (Backlog → development trigger,     │
 │     Started → inflight, Finished → qa, etc.)             │
 │  3. Filter against active fleet quota                    │
@@ -96,6 +96,8 @@ type RegisterRequest struct {
     Capabilities     []string // tags: "claude", "codex", ...
     ActiveAgentCount int      // current load
     Status           string   // "idle" | "busy" | "draining"
+    ProjectAdmissionVersion int      // 0 = legacy, 2 = explicit project set
+    ProjectIDs              []string // enabled project IDs; empty v2 set means none
 }
 
 type RegisterResponse struct {
@@ -110,9 +112,15 @@ The flow:
 
 1. Worker process starts. Reads a one-time registration token from env (`rsp_live_…`-style).
 2. POSTs `RegisterRequest` to the orchestrator's registration endpoint.
-3. Orchestrator validates the token (SHA-256 hashed in DB, short TTL), assigns a `WorkerID`, mints a `RuntimeJWT` scoped to that worker.
+3. Orchestrator validates the token (SHA-256 hashed in DB, short TTL), validates the advertised project IDs against the registration's authority, assigns a `WorkerID`, and mints a `RuntimeJWT` scoped to that worker and project set.
 4. Worker discards the registration token and uses the JWT for subsequent calls.
 5. Worker polls (`PollIntervalSeconds`) for available work claims and heartbeats (`HeartbeatIntervalSeconds`) to indicate liveness.
+
+Per `ADR-2026-07-09-host-project-enablement-and-repository-resources.md`,
+`ProjectAdmissionVersion: 2` makes `ProjectIDs` authoritative; an empty v2 set
+means the host serves no projects. Legacy omission is not a wildcard. During the
+compatibility window an orchestrator may infer exactly one project only from an
+authenticated legacy registration that is already scoped to that project.
 
 This is the **dial-out** transport flavor (per `004`). The orchestrator does not initiate connections to workers; workers come to it. This is the right model for K8s pods, Docker containers, and the user's local Mac Studio fleet (over LAN, loopback, or VPN).
 
@@ -139,7 +147,7 @@ The architecture splits these. AgentRuntime support belongs on `AgentRuntimeProv
 Two modes per `004` and `011`:
 
 - **Foreground mode** (legacy): worker spawned per VSCode session, lifetime tied to that editor. Anti-pattern at fleet scale; deprecated as default.
-- **Daemon mode** (recommended): one long-running daemon per machine, registers as a worker pool, multi-project allowlist, auto-update. Detail in `011`.
+- **Daemon mode** (recommended): one long-running daemon per machine, registers as a worker pool with explicit enabled project IDs, shares one capacity envelope across projects, and auto-updates. Detail in `011`.
 
 The daemon and the worker are not the same process. The daemon is a long-running supervisor that:
 - Registers the *machine's* capacity once at boot
@@ -148,6 +156,35 @@ The daemon and the worker are not the same process. The daemon is a long-running
 - Heartbeats on behalf of children
 
 A child worker is a short-lived process that runs one session. When the session ends, the child exits; the daemon reaps and reports completion.
+
+### Project and repository identity on `SessionSpec`
+
+The v2 session contract carries project identity independently from any source:
+
+```go
+type SessionSpec struct {
+    // existing workflow, runtime, and resource fields remain
+    ProjectID string          `json:"projectId"`
+    Source    *SessionSource  `json:"source,omitempty"`
+}
+
+type SessionSource struct {
+    RepositoryID string `json:"repositoryId"`
+    Repository   string `json:"repository"`
+    Ref          string `json:"ref,omitempty"`
+}
+```
+
+The orchestrator filters on `ProjectID` before enqueueing to a registered host.
+The daemon repeats the check before spawn, then verifies that `RepositoryID`
+belongs to `ProjectID`. Source is optional for repository-free work. For work
+that needs a repository, the dispatcher supplies an explicit resource or
+resolves an explicitly marked project primary; neither side selects the first
+repository returned by a provider.
+
+This is additive on the wire. A work item without `projectId` is accepted only
+on the narrow legacy path where the authenticated registration scopes it to one
+project. A v2 registration rejects it before capacity acquisition.
 
 ## AgentRuntime dispatch
 

@@ -347,7 +347,7 @@ This works for solo dev with one project open. It breaks down at the scale a rea
 
 ### Daemon mode (recommended for any user with >1 project)
 
-A single long-running daemon registers with the orchestrator as a worker pool. One per machine, not per project. Work for any allowed project routes to whichever daemon worker has capacity; the workarea provider handles the per-session clone/checkout/toolchain setup.
+A single long-running daemon registers with the orchestrator as a worker pool. One per machine, not per project. Work for any **enabled project ID** routes to whichever daemon worker has capacity; the workarea provider handles the selected repository's per-session clone/checkout/toolchain setup. Project enablement and repository resources are independent per `ADR-2026-07-09-host-project-enablement-and-repository-resources.md`: a project can be enabled with zero, one, or many repositories.
 
 Concretely:
 
@@ -356,9 +356,9 @@ Concretely:
 │                       Mac Studio (one machine)                   │
 │                                                                  │
 │  ┌────────────────────────────────────────────────────────┐    │
-│  │  rensei-daemon (system service)                        │    │
+│  │  donmai-daemon (system service)                        │    │
 │  │                                                        │    │
-│  │  - registers capacity: 16 vCPU, 64GB, projects: [*]   │    │
+│  │  - registers capacity + projects: [alpha, beta]       │    │
 │  │  - subscribes to work queue                           │    │
 │  │  - spawns N worker processes on demand                │    │
 │  │  - self-updates on release                            │    │
@@ -381,18 +381,19 @@ Concretely:
 
 The daemon implements the `SandboxProvider` interface but with extended lifecycle hooks beyond the per-session ones:
 
-- **`daemon.start()`** — invoked once at boot. Reads config (`~/.rensei/daemon.yaml`), validates git credentials per allowed project, registers with the orchestrator (dial-in or dial-out per `transportModel`), reports capacity.
+- **`daemon.start()`** — invoked once at boot. Reads config (`~/.donmai/daemon.yaml`), normalizes legacy config, registers the enabled project IDs with the orchestrator (dial-in or dial-out per `transportModel`), validates configured repository resources, and reports one machine-wide capacity envelope. A repository warning does not remove a repository-free project from the enabled set.
 - **`daemon.refreshCapacity()`** — periodic (default 60s). Re-reports current load, available memory, healthy worker count.
-- **`daemon.acceptWork(spec)`** — orchestrator dispatches work; daemon validates allowed-project, spawns a worker, returns a `SandboxHandle`.
+- **`daemon.acceptWork(spec)`** — orchestrator dispatches work; daemon validates `spec.projectId` against the enabled set, validates any selected repository belongs to that project, acquires the shared machine limiter, spawns a worker, and returns a `SandboxHandle`.
 - **`daemon.update()`** — checks for new OSS release; downloads, verifies signature, restarts cleanly with in-flight work draining first.
 - **`daemon.stop()`** — graceful shutdown; outstanding sessions get a configurable grace period to finish, then SIGTERM.
 
 ### Configuration shape
 
 ```yaml
-# ~/.rensei/daemon.yaml
-apiVersion: rensei.dev/v1
+# ~/.donmai/daemon.yaml
+apiVersion: donmai.dev/v1
 kind: LocalDaemon
+projectAdmissionVersion: 2
 
 machine:
   id: mac-studio-marks-office
@@ -406,22 +407,28 @@ capacity:
     vCpu: 4                    # don't starve macOS / VSCode
     memoryMb: 16384
 
-projects:
-  # Allowed projects, with credentials and clone strategy
-  - id: renseiai
-    repository: github.com/renseiai/renseiai
+enabledProjectIds:
+  # Admission is project-ID-only; repository resources are independent.
+  - project-alpha
+  - project-beta                 # valid even with no repository
+
+repositories:
+  - id: repo-alpha-api
+    projectId: project-alpha
+    source: https://example.invalid/acme/api.git
+    primary: true
     cloneStrategy: shallow     # or 'full' | 'reference-clone'
     git:
-      credentialHelper: osxkeychain
-      sshKey: ~/.ssh/id_ed25519_renseiai
-  - id: donmai
-    repository: github.com/RenseiAI/donmai-libraries
+      credentialHelper: manager
+  - id: repo-alpha-web
+    projectId: project-alpha
+    source: https://example.invalid/acme/web.git
     cloneStrategy: full
     git:
-      credentialHelper: osxkeychain
+      credentialHelper: manager
 
 orchestrator:
-  url: https://platform.rensei.dev      # SaaS — or ssh://localhost:NNNN for OSS-only
+  url: ssh://localhost:NNNN
   authToken: ${DONMAI_DAEMON_TOKEN}
 
 autoUpdate:
@@ -431,7 +438,7 @@ autoUpdate:
 
 observability:
   logFormat: ndjson
-  logPath: ~/.rensei/daemon.log
+  logPath: ~/.donmai/daemon.log
   metricsPort: 9101            # Prometheus scrape, optional
 ```
 
@@ -458,17 +465,36 @@ Local daemon mode shifts a few declared capabilities relative to foreground mode
 }
 ```
 
+With `projectAdmissionVersion: 2`, `enabledProjectIds` is the sole desired-state
+authority. The legacy `projects[].{id,repository,...}` shape remains readable for
+one compatibility window and normalizes into the two collections above; see the
+ADR for bootstrap, deduplication, backup, and enabled-only dual-write rules.
+
+### Admission and shared-capacity scheduling
+
+Admission is evaluated before capacity acquisition. Every v2 work item carries a
+`projectId`; repository-requiring work additionally carries an explicit
+repository resource (or resolves an explicitly marked primary). The daemon
+rejects a project/repository mismatch and never chooses the first provider row.
+
+All registrations and enabled projects feed one work-conserving host scheduler.
+The scheduler enforces `capacity.maxConcurrentSessions` once per machine, not
+once per project or registration context. Ready project queues receive bounded
+fair service; repository warmth can break ties inside that fairness window but
+cannot reserve capacity or bypass admission. A failed registration context backs
+off independently while healthy contexts continue using the shared limiter.
+
 ### Why this matters for OSS
 
-The "one CLI, one bootstrap, voila you can work" promise from `001` is *almost* true today, but the per-VSCode worker fleet bleeds it. A user with 20 open workspaces is updating 20 fleets every time an OSS release ships. Daemon mode collapses that to one daemon, one update, all projects served.
+The "one CLI, one bootstrap, voila you can work" promise from `001` is *almost* true today, but the per-editor worker fleet bleeds it. A user with 20 open workspaces is updating 20 fleets every time an OSS release ships. Daemon mode collapses that to one daemon, one update, all enabled projects served.
 
-The discipline this preserves: daemon mode is shipped in the OSS execution layer; it does not require the SaaS plane. An OSS-only user with no SaaS subscription can still run `rensei daemon start`, register their machine with their *own* orchestrator instance (or local file-queue-backed orchestrator for solo work), and get the central-fleet experience. SaaS adds multi-machine fleet aggregation, dashboards, and remote dispatch.
+The discipline this preserves: daemon mode is shipped in the OSS execution layer; it does not require the SaaS plane. An OSS-only user with no SaaS subscription can still run `donmai host start`, register their machine with their *own* orchestrator instance (or local file-queue-backed orchestrator for solo work), and get the central-fleet experience. SaaS adds multi-machine fleet aggregation, dashboards, and remote dispatch.
 
 ### Linear realignment hook
 
 This pattern is currently absent from the platform's icebox parse — there's no issue covering "local daemon" as an explicit mode. Net-new issue to author (see [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md)):
 
-> **`Local daemon mode for the OSS execution layer`** — One per-machine daemon registers as a multi-project worker pool, replaces per-VSCode-workspace fleet model, supports auto-update, project allowlist, and workarea-on-demand bootstrapping. Closes the friction described by users running 8–20+ workspaces.
+> **`Local daemon mode for the OSS execution layer`** — One per-machine daemon registers as a multi-project worker pool, replaces per-editor-workspace fleet mode, supports auto-update, an enabled-project-ID registry independent of repository resources, and workarea-on-demand bootstrapping. Closes the friction described by users running 8–20+ workspaces.
 
 ## OSS vs SaaS responsibilities
 
