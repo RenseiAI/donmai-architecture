@@ -8,8 +8,8 @@ boundary: OSS-only
 derived-from: asciinema ALiS live-stream protocol (shape only; NOT byte-compatible)
 normative-for: donmai (PTY session host + framing library + generic attach client), the relay, web viewers, iOS viewers
 sign-off:
-  W4-owner: pending
-  W5-owner: pending
+  W4-owner: SIGNED 2026-07-12 (v1.0-draft3) — re-review verdict SIGN-OFF-WITH-AMENDMENTS; all five binding conditions (R1 host-leg lane, R2 §13 disjunct, R3 §2 out-of-namespace rule, R4 §15 identity-based jti re-presentation, R5 §12 local-attach scope) verified landed in draft3; R6 modes-bitmap also landed
+  W5-owner: SIGNED 2026-07-12 (v1.0-draft3) — re-review verdict SIGN-OFF-WITH-AMENDMENTS; binding conditions (R1 scope ruling = host legs carried, R2 §13 wording, R3 SSE resume carriage) verified landed in draft3; all four nits applied
 ---
 
 # interactive-attach-v1 — interactive PTY session attach wire protocol
