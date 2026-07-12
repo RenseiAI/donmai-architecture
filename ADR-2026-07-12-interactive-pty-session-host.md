@@ -72,10 +72,16 @@ the `agy` PTY precedent and generalizing it to `claude`/`codex`/shell:
   relay); see the protocol spec § 8.
 - **Stdin sink.** Write inbound keystroke bytes to the PTY master. This is the
   live stdin rail that does not exist today.
-- **Headless VT as snapshot authority.** Consume the PTY output into a host-side
-  headless terminal emulator that can serialize the current screen; the host is
-  the **single snapshot authority** (decision D3). A relay requests a snapshot via
-  a Control frame on the host's outbound stream — never via a host-side listener.
+- **Headless VT as snapshot authority — and terminal-query responder.** Consume
+  the PTY output into a host-side headless terminal emulator that can serialize
+  the current screen; the host is the **single snapshot authority** (decision
+  D3). A relay requests a snapshot via a Control frame on the host's outbound
+  stream — never via a host-side listener. The same VT is the **terminal-query
+  responder**: queries the PTY child emits that a real terminal would answer on
+  stdin (CPR `CSI 6n`, DA `CSI c`, DECRQSS, color/title queries) are answered by
+  the host VT directly to the PTY master and never reach the wire — otherwise
+  any TUI that probes its terminal hangs (protocol spec § 12; W4 scope with a
+  CPR conformance fixture).
 - **`sessionClass` on the host `SessionState`.** The host `SessionState` struct
   carries a `sessionClass` discriminator (e.g. `"interactive"`). This is a
   **named cross-repo dependency**: the reaper / idle-watchdog exemptions key off
@@ -158,8 +164,12 @@ Outbound-stream mandate (amends the 2026-06-22 pull-model decision):
    OUT to the relay; the relay is the only component reachable by both.
 4. The stream carries only framed session bytes and the control frames the
    interactive-attach protocol defines. It is authenticated by a short-lived,
-   per-session, single-use token verified by the relay against a dedicated
-   asymmetric key, and is torn down when the session ends.
+   per-session token carrying a dedicated **host role** and a monotonic
+   **host-process epoch** claim, verified by the relay against a dedicated
+   asymmetric key. The token's nonce is single-use for initial room admission;
+   a reconnect-with-resume within the token's lifetime may re-present it, so
+   the data path touches the control plane only at fresh admission or token
+   expiry. The stream is torn down when the session ends.
 5. Removing the relay leaves the host with no inbound surface and no live attach —
    the single-machine product is unchanged and the outbound-only posture is
    preserved. Inbound listeners remain forbidden.
@@ -193,7 +203,12 @@ Outbound-stream mandate (amends the 2026-06-22 pull-model decision):
 - Raw terminal bytes now transit a relay — a new data-egress path the original
   outbound-only mandate never contemplated. The residency posture is a platform
   ruling (D13); the OSS layer keeps the relay client portable (no control-plane
-  dependency in the data path) so a self-hosted relay stays possible.
+  dependency in the data path) so a self-hosted relay stays possible. That
+  claim holds under the v1.0-draft2 auth design: the attach token's nonce is
+  single-use for **initial admission** only, and a reconnect-with-resume within
+  the token's lifetime re-presents the cached token (protocol spec § 15) — so a
+  transient network blip never forces a control-plane round-trip; only fresh
+  joins and token expiry do, and minting is a control-plane concern by design.
 
 ### Risks
 
@@ -236,8 +251,14 @@ Outbound-stream mandate (amends the 2026-06-22 pull-model decision):
   watchdog gains a `sessionClass:"interactive"` exemption so human think-time is
   not read as a stall.
 - `protocol/interactive-attach-v1.md` — the normative wire protocol (new; this
-  ADR is its owning decision).
+  ADR is its owning decision). Revision v1.0-draft2 (2026-07-12) folds the W4/W5
+  implementer-review findings; the spec's changelog section is the ledger.
 - Platform extensions: `rensei-architecture/ADR-2026-07-12-interactive-sessions-platform.md`.
+  Multi-writer arbitration **semantics** (pen policy, grab eligibility,
+  cooldown, auto-release, presence derivation) are platform-defined in
+  `rensei-architecture/protocol/interactive-attach-v1-arbitration.md`; the OSS
+  spec carries only the wire encoding, the wire-visible security invariants,
+  and the standalone single-local-driver minimum (decision D7).
 
 ## Affected work items
 
