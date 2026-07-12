@@ -2,7 +2,7 @@
 title: interactive-attach-v1 — interactive PTY session attach wire protocol
 status: Proposed
 date: 2026-07-12
-revision: v1.0-draft2 (2026-07-12) — post W4/W5 implementer review
+revision: v1.0-draft3 (2026-07-12) — post W4/W5 re-review (both SIGN-OFF-WITH-AMENDMENTS)
 protocol-version: interactive-attach-v1
 boundary: OSS-only
 derived-from: asciinema ALiS live-stream protocol (shape only; NOT byte-compatible)
@@ -16,7 +16,7 @@ sign-off:
 
 **Status:** Proposed
 **Date:** 2026-07-12
-**Revision:** v1.0-draft2 (2026-07-12) — post W4/W5 implementer review
+**Revision:** v1.0-draft3 (2026-07-12) — post W4/W5 re-review (both SIGN-OFF-WITH-AMENDMENTS)
 **Protocol version:** `interactive-attach-v1`
 **Normative for:** the OSS PTY session host and framing library in `donmai`, the
 relay, and every viewer (web, iOS).
@@ -41,7 +41,32 @@ A `v1-frozen` section is not "done" until both owners have signed. A `v1-draft`
 section may be amended by its owning wave via PR to this file **with the sign-off
 cell updated in the same PR** — never silently.
 
-## Changelog — v1.0-draft2 (2026-07-12)
+## Changelog
+
+### v1.0-draft3 (2026-07-12) — W4/W5 re-review amendments
+
+Both re-reviews of v1.0-draft2 returned **SIGN-OFF-WITH-AMENDMENTS**. The
+residual findings land here (attribution: W5 re-review R1–R3 + 4 nits; W4
+re-review R1–R6 + 2 nits; W4-R1/R2 and W5-R1/R2 were the same items — the
+coordinator ruled option (b) on scope for R1, and the two R2 wordings are
+merged into one rule):
+
+| Item(s) | Disposition |
+|---|---|
+| W5-R1 = W4-R1 | host legs ARE carried by the degraded lane: host POST-up batch (host-seq-keyed, contiguity + rejected-whole + `batchId` idempotency, ack = highest contiguous host seq), host SSE-down (relay-originated frames, at-least-once + idempotent handling with named keys), pinned `/host/sse` + `/host/output` endpoints, header-only auth, same jti/epoch rules; `room_state:"degraded"` DEFINED = host on the degraded carrier (§ 14, § 7) |
+| W5-R2 + W4-R2 (merged) | § 13 contiguity rule disambiguated with three disjuncts: in-ring, current-with-stream-head (tail empty for now), and post-Exit ended (tail empty permanently) |
+| W5-R3 | SSE GET carries resume position: `?resume_from=<seq>&epoch=<epoch>` (§ 14) |
+| W4-R3 | § 2 generalized: any frame outside a § 4 namespace (all Control frames in every direction; non-host-produced Resize) carries seq=0/rel_time=0, receivers ignore both |
+| W4-R4 | § 15 jti re-presentation eligibility is identity-based (subscribe with ANY `resumeFrom` incl. null; same (userId, sessionId) / host (sessionId, epoch)) — applied-nothing reconnects and re-dialing hosts qualify |
+| W4-R5 | § 12 outbound mandate scoped to the relay attach path; OSS standalone local-attach (in-process / loopback-only) is outside it |
+| W4-R6 | snapFormat 0x01 gains terminal-modes bitmap + `mouseProto` + saved primary cursor; conformance fixture recomputed (26 bytes) (§ 12.1) |
+| W5-nit1 + W4-n1 | § 9 dangling-introducer hold cap named `sanitizerHoldMaxBytes`; at-cap disposition = STRIPPED at the cap |
+| W5-nit2 | UI-rendered protocol strings (Marker labels, `error.message`, presence names) pinned to length-capped, control-char-stripped treatment (§ 9) |
+| W5-nit3 | § 15: relay MUST reject `aud` ≠ `"relay"` |
+| W5-nit4 | § 6.2: same-process reconnect latency after a silent drop is bounded by the relay keepalive cadence (relay-owned, tuned tight in the relay runbook) |
+| W4-n2 | § 14 downstream reworded: host-produced frames in host seq order; relay-originated Control interleaves |
+
+### v1.0-draft2 (2026-07-12) — post implementer review
 
 Both implementer reviews (W4 host-side, W5 relay-side) returned REJECT on
 v1.0-draft1. Because the protocol has not yet been ratified (sign-off pending),
@@ -162,13 +187,18 @@ binary WebSocket frame with this layout:
 - **`payload`** — type-specific bytes (§ 3). Length is the remainder of the
   WebSocket frame; the framing does not repeat a total length because WebSocket
   already delimits the message.
-- **Relay-originated frames toward the host** (`snapshot_request` / `kill`
-  Control frames, authoritative `Resize`) belong to **no sequence namespace**:
-  the relay MUST set `seq = 0` and `rel_time = 0` on them, and the host MUST
-  ignore both header fields on any relay-originated frame. A host that validates
-  monotonicity on inbound relay frames is non-conformant. Likewise the host
+- **Out-of-namespace frames carry zeroed headers.** Any frame not assigned to a
+  § 4 sequence namespace — **all `Control` frames in every direction**
+  (host-produced `subscribe`/`error`; viewer-produced `grab`/`release`/
+  `resume_from`; relay-produced `presence`/`input_ack`/`pen_granted`/
+  `pen_revoked`/`pen_state`/`room_state`/`snapshot_request`/`kill`) **and
+  non-host-produced `Resize`** (viewer viewport advertisements, relay
+  authoritative geometry) — carries `seq = 0` and `rel_time = 0`, and receivers
+  MUST ignore both header fields on such frames. A receiver that validates
+  monotonicity on out-of-namespace frames is non-conformant. Likewise the host
   MUST ignore the header `seq` on relay-forwarded `Input` (attribution is
-  `(userId, inputSeq)`, § 4/§ 5).
+  `(userId, inputSeq)`, § 4/§ 5). The § 12.2 post-Exit `Snapshot` reuses this
+  same convention.
 
 ### 2.1 Varint encoding — `v1-frozen`
 
@@ -400,7 +430,10 @@ connection, updated by compare-and-swap. When a new connection presents a
     MUST reject it (close with `error.code = epoch-stale`). A host whose prior
     leg is half-open re-dials into this rejection until the relay's keepalive
     collapses the dead leg; the host's reconnect discipline retries with
-    backoff. Keepalive/ping cadence is relay policy (`v1-draft`).
+    backoff. Keepalive/ping cadence is relay policy (`v1-draft`) — note the
+    consequence: after a silent drop, the same-process host's reconnect latency
+    is bounded by that cadence, so the relay runbook tunes it tight
+    (relay-owned).
 - The epoch the connection presents is the JWT `epoch` claim; the `subscribe`
   echo must match it (§ 4.1). Because the claim is control-plane-minted, a
   client cannot assert an arbitrary epoch.
@@ -480,11 +513,14 @@ Notes that are themselves `v1-frozen`:
   `signal` field is a request, not a mandate.
 - `room_state` MUST be emitted to every viewer leg on **every host-leg state
   transition**, and to each viewer on join. `sinceSeq` is the last host `seq`
-  the relay holds. Room behavior around the edges is relay policy (`v1-draft`)
-  with this pinned observable shape: a viewer subscribing before any host leg
-  exists is **held** in `room_state: "host-reconnecting"`, not rejected; after
-  `Exit` the room persists in `room_state: "ended"` for a bounded window for
-  final-screen reads, then tears down.
+  the relay holds. `state: "degraded"` is **defined**: the host leg is
+  currently attached via the degraded SSE+POST carrier (§ 14) — the room is
+  live, but viewers should expect higher input-echo latency. Room behavior
+  around the edges is relay policy (`v1-draft`) with this pinned observable
+  shape: a viewer subscribing before any host leg exists is **held** in
+  `room_state: "host-reconnecting"`, not rejected; after `Exit` the room
+  persists in `room_state: "ended"` for a bounded window for final-screen
+  reads, then tears down.
 - `pen_state` MUST be pushed to every leg on join and on reconnect, so no client
   ever has to infer the holder from message history. The pen may change at any
   time; `pen_granted` / `pen_revoked` / `pen_state` are the only signals, and a
@@ -557,8 +593,11 @@ a leg. An escape sequence split across frames MUST be classified exactly as if
 it had arrived contiguously (`ESC ] 5 2 ;` at the tail of frame N plus payload
 and terminator at the head of frame N+1 is OSC 52 and is stripped). A dangling
 incomplete OSC/DCS/APC/PM introducer at a frame boundary MUST be **held
-pending** — never passed through — until its terminator (or a sanity cap)
-arrives. Per-frame stateless filtering is **non-conformant**: it passes exactly
+pending** — never passed through — until its terminator arrives or the hold
+reaches the named sanity cap **`sanitizerHoldMaxBytes`** (value `v1-draft`;
+existence frozen), at which point the entire held sequence is **stripped at
+the cap** — an over-cap dangling sequence is never flushed through.
+Per-frame stateless filtering is **non-conformant**: it passes exactly
 the split-sequence bypass this rule exists to close. The conformance corpus
 includes, for every strip-row fixture below, **split variants at every interior
 byte offset**; an implementation passes only if every split placement yields
@@ -601,6 +640,12 @@ a sequence that could cause the terminal to *emit input* or *touch host resource
 outside the grid* is stripped. W4/W5/iOS ship the **same** table; a conformance
 corpus of hostile sequences (one per row, plus the split-at-every-interior-byte
 variants of every strip row) is the shared test fixture.
+
+**UI-rendered protocol strings (frozen).** The "length-capped,
+control-char-stripped" treatment on the title-chip row applies to **every
+protocol string a viewer renders as UI text** — `Marker` labels,
+`error.message`, and presence display names included. A protocol string is
+never rendered raw into viewer UI chrome.
 
 ---
 
@@ -748,7 +793,10 @@ the attach (§ 5).
   requested via `Control` frames the relay writes onto the connection **the host
   dialed out**, and answered on that same outbound connection. The relay never
   dials into the host. A design that adds a host-side listener to serve
-  snapshots violates this protocol.
+  snapshots violates this protocol. This mandate governs the **relay attach
+  path**; the OSS standalone local-attach surface is in-process or
+  loopback-only (the existing localhost daemon control API) and is outside
+  this mandate's scope.
 
 ### 12.1 `snapFormat = 0x01` byte layout — `v1-draft` (owned by the host VT)
 
@@ -766,6 +814,9 @@ snap := [epoch:varint]              ; host stream epoch this snapshot belongs to
         [cursorRow:varint][cursorCol:varint]   ; 0-based, in the active buffer
         [cursorVisible:u8]          ; 0x00 hidden, 0x01 visible
         [cursorShape:u8]            ; 0x00 default, 0x01 block, 0x02 underline, 0x03 bar
+        [modes:u8]                  ; terminal-modes bitmap (below)
+        [mouseProto:u8]             ; mouse tracking protocol + encoding (below)
+        [savedCursorRow:varint][savedCursorCol:varint]  ; primary-buffer cursor restored on ?1049 exit
         [primary: rows × cols cells, row-major]
         [altPresent:u8]             ; 0x00 = no alt buffer follows, 0x01 = alt buffer follows
         [alt: rows × cols cells, row-major]     ; only if altPresent = 0x01
@@ -784,6 +835,22 @@ cell := [runeLen:varint][runeBytes: UTF-8]     ; runeLen = 0 permitted only on c
   protocol's pervasive length-prefixed idiom; and a cell MAY carry a
   multi-codepoint grapheme cluster (ZWJ emoji, combining marks) in `runeBytes`,
   which fixed-width encoding cannot. `runeLen` counts bytes.
+- **`modes` bit flags** (the terminal modes a viewer must know to render and
+  to route driver input correctly): `0x01` bracketed paste (`?2004`) ·
+  `0x02` application cursor keys (DECCKM) · `0x04` pending wrap (the
+  autowrap "wrap on next glyph" state — required for exact cursor fidelity at
+  the right margin) · `0x08` mouse tracking enabled · `0x10` focus-event
+  reporting (`?1004`) · `0x20`–`0x80` reserved (MUST be 0).
+- **`mouseProto`** — meaningful only when `modes & 0x08` is set; MUST be
+  `0x00` otherwise. Low nibble = tracking mode: `0x1` = `?1000` (normal) ·
+  `0x2` = `?1001` (highlight) · `0x3` = `?1002` (button-event) · `0x4` =
+  `?1003` (any-event). High nibble = coordinate encoding: `0x0` = legacy
+  X10 · `0x1` = `?1005` (UTF-8) · `0x2` = `?1006` (SGR). Example: SGR
+  any-event tracking = `0x24`.
+- **`savedCursor`** — the primary-buffer cursor position that will be restored
+  when the alt screen exits (`?1049` restore semantics). When the primary
+  buffer is active it equals the active cursor. Always present (fixed field —
+  decoders never branch on buffer state to parse).
 - **`style` bit flags:** `0x01` bold · `0x02` italic · `0x04` underline ·
   `0x08` reverse · `0x10` dim · `0x20` strikethrough · `0x40` wide-glyph
   continuation · `0x80` reserved (MUST be 0).
@@ -806,12 +873,16 @@ cell := [runeLen:varint][runeBytes: UTF-8]     ; runeLen = 0 permitted only on c
 
 **Conformance fixture (authoritative for this layout revision).** A 2×1
 primary-active screen in epoch 1, echo-on; cursor at row 0, col 1, visible,
-block; cell 1 = `"A"` bold with indexed-256 foreground color 1 and default
-background; cell 2 = `" "` all-default; no alt buffer; no scrollback:
+block; no terminal modes set, no mouse tracking; saved primary cursor equal to
+the active cursor (primary is active); cell 1 = `"A"` bold with indexed-256
+foreground color 1 and default background; cell 2 = `" "` all-default; no alt
+buffer; no scrollback:
 
 ```
-snap bytes (22):
+snap bytes (26):
 01 01 02 01 00 00 01 01 01    ; epoch=1 echoMode=on cols=2 rows=1 primary cursor(0,1,visible,block)
+00 00                         ; modes=none  mouseProto=none
+00 01                         ; savedCursor(row=0, col=1) — equals the active cursor
 01 41 01 01 01 00             ; cell "A": runeLen=1 'A' style=bold fg=indexed(1) bg=default
 01 20 00 00 00                ; cell " ": runeLen=1 ' ' style=0 fg=default bg=default
 00                            ; altPresent=0
@@ -819,7 +890,7 @@ snap bytes (22):
 ```
 
 Wrapped in the frozen envelope at `atSeq = 42`:
-`2A 01 16` + the 22 bytes above (atSeq=42, snapFormat=0x01, snapLen=22).
+`2A 01 1A` + the 26 bytes above (atSeq=42, snapFormat=0x01, snapLen=26).
 
 ### 12.2 Exit & teardown ordering — `v1-frozen`
 
@@ -868,12 +939,18 @@ Wrapped in the frozen envelope at `atSeq = 42`:
 - **`resumeFrom` null ≡ 0 ≡ "no applied history"** → always snapshot + tail.
   `seq = 0` never addresses a buffered frame (the host sequence starts at 1).
 - **Snapshot + tail contiguity invariant (frozen).** When serving a join or a
-  ring miss, the relay MUST NOT deliver a `Snapshot` unless the frame
-  `snapshot.atSeq + 1` is still in the ring **or** is the next live frame; the
-  tail then starts **exactly at `atSeq + 1`**. If `atSeq + 1` has been evicted
-  by the time the snapshot would be served, the relay requests a newer
-  `Snapshot` and retries, looping until snapshot and tail are contiguous. A
-  non-contiguous handoff — a stale cached snapshot with a gap to the tail — is
+  ring miss, the relay MUST NOT deliver a `Snapshot` unless at least one of:
+  1. the frame `snapshot.atSeq + 1` is still in the ring, **or**
+  2. no frame later than `atSeq` exists yet — the snapshot is current with the
+     stream head, and the tail is (for now) empty, **or**
+  3. `atSeq` equals the final `Exit` frame's `seq` — the stream has ended and
+     no tail will ever follow (the permanent, post-Exit `ended` case of 2).
+
+  The tail then starts **exactly at `atSeq + 1`** (empty in cases 2–3 until —
+  in case 2 — later frames exist). If `atSeq + 1` has been evicted by the time
+  the snapshot would be served, the relay requests a newer `Snapshot` and
+  retries, looping until snapshot and tail are contiguous. A non-contiguous
+  handoff — a stale cached snapshot with a gap to the tail — is
   **non-conformant**: it silently corrupts the viewer screen with no error
   signal.
 - Resume cost is therefore **O(1) in session age** — a viewer joining a 2-hour
@@ -894,8 +971,11 @@ When WSS is unavailable (handshake blocked, Upgrade stripped by a proxy, or the
 live stream declared dead after N failed reconnects within a window), the client
 **auto-falls-back** to a degraded lane. This lane is a **first-class** transport,
 built against the same framing (§ 2) and the same event/control semantics — only
-the carrier changes. Batching sizes and timers are `v1-draft`; the contract
-rules below marked **frozen** are `v1-frozen`.
+the carrier changes. **It carries both viewer legs and the host leg**: the
+WSS-hostile network the lane exists for is at least as likely to sit in front
+of the daemon (the BFSI case) as in front of a viewer. Batching sizes and
+timers are `v1-draft`; the contract rules below marked **frozen** are
+`v1-frozen`.
 
 **Endpoint derivation (frozen).** Given the attach URL
 `ATTACH_URL = wss://<host>/<path>` (whose `<path>` contains the `/v1/` version
@@ -903,15 +983,22 @@ segment, § 1), the degraded endpoints are derived mechanically — never
 separately configured:
 
 - scheme map: `wss → https` (and `ws → http` for local development);
-- **SSE-down:** `https://<host>/<path>/sse`
-- **POST-up:** `https://<host>/<path>/input`
+- viewer **SSE-down:** `https://<host>/<path>/sse`
+- viewer **POST-up:** `https://<host>/<path>/input`
+- host **SSE-down:** `https://<host>/<path>/host/sse`
+- host **POST-up:** `https://<host>/<path>/host/output`
 
-The `/v1/` path segment is the degraded lane's version carrier (§ 1).
+The `/v1/` path segment is the degraded lane's version carrier (§ 1) — with a
+room path of `/v1/rooms/<roomId>`, the host endpoints are
+`/v1/rooms/<roomId>/host/sse` and `/v1/rooms/<roomId>/host/output`.
 
 **Auth carriage (frozen).**
 
 - **Native clients** set `Authorization: Bearer <jwt>` on both legs (the SSE
   GET and every POST).
+- **Host legs are always native** (hosts are never browsers): `Authorization`
+  header on both host legs, no query-parameter carriage. The same `jti` and
+  `epoch` rules as the WSS lane apply unchanged (§ 6.2, § 15).
 - **Browsers:** `EventSource` can set neither headers nor subprotocols, so the
   browser SSE-down leg authenticates with a **short-lived, single-use
   `?access_token=<jwt>` query parameter**, verified identically to header
@@ -926,7 +1013,15 @@ The `/v1/` path segment is the degraded lane's version carrier (§ 1).
 
 **Downstream (relay → viewer): Server-Sent Events.**
 - The relay serves an SSE stream; each event is one base64-encoded binary frame:
-  `event: frame` / `data: <base64(frame)>`. Frames arrive in host `seq` order.
+  `event: frame` / `data: <base64(frame)>`. Host-produced frames arrive in host
+  `seq` order; relay-originated Control (`presence`, `pen_*`, `room_state`,
+  `input_ack`, `error`) interleaves among them.
+- **Resume-position carriage:** the SSE GET carries the viewer's resume
+  position as `?resume_from=<seq>&epoch=<epoch>` query parameters (alongside
+  `access_token` for browsers); native clients MAY carry the equivalent in
+  request headers. `EventSource` cannot send a `subscribe` Control before the
+  stream opens, so the resume position must ride the GET; § 13 semantics
+  (including null ≡ 0) apply unchanged.
 - A `: heartbeat` comment every 15 s defeats idle-proxy timeouts.
 - Snapshot/resume work identically — the first SSE event after (re)connect is the
   `Snapshot` (or the replayed tail) the relay chose per § 13.
@@ -970,6 +1065,52 @@ The `/v1/` path segment is the degraded lane's version carrier (§ 1).
   unchanged: the POST is authenticated and the relay stamps `userId`; input
   failing the dual-condition admission rule is dropped exactly as on the WSS
   lane.
+
+**Host leg on the degraded lane — `v1-draft`.** The host's shape mirrors the
+viewer's with the directions inverted (the host *produces* the seq-bearing
+stream and *consumes* relay-originated frames):
+
+- **Host POST-up (`…/host/output`):** the host POSTs batch envelopes of its
+  seq-bearing frames — `Output`, applied `Resize`, `Marker`, `Exit`,
+  `Snapshot` — keyed by **host `seq`**:
+  ```json
+  { "batchId": "<unique-id, stable across retries>",
+    "firstSeq": <int>, "lastSeq": <int>,
+    "frames":   [ "<base64(host frame)>", ... ],
+    "outOfSeq": [ "<base64(Control or post-Exit Snapshot)>", ... ] }
+  ```
+  The rules mirror the viewer batch exactly: `frames` are in contiguous host
+  `seq` order and `firstSeq` MUST equal `lastAck + 1`; a gap-opening batch is
+  **rejected whole** (nothing applied, `batchId` unconsumed); `batchId`
+  idempotency and same-`batchId` retry apply unchanged; the ack is the
+  **highest contiguous host `seq`** the relay has applied
+  (`200 { "batchId", "ackSeq" }` / `409 { "batchId", "ackSeq" }` / `401` /
+  `429` — the § "POST response taxonomy" with `ackSeq` in place of
+  `ackInputSeq`). Out-of-namespace frames (host Control such as `subscribe`
+  and `error`, post-Exit `Snapshot` replies) ride `outOfSeq`, outside the
+  contiguity rule and uncovered by the ack. One host `seq` space across
+  carriers, exactly as § 4/§ 4.1 — switching carriers never resets it.
+- **Host SSE-down (`…/host/sse`):** delivers the relay-originated frames the
+  host would receive on WSS — stamped `Input`, authoritative `Resize`,
+  `snapshot_request`, `kill` — all under the § 2 zeroed-header rules,
+  unchanged. Delivery is **at-least-once** (an SSE reconnect may replay);
+  the host MUST handle each idempotently with these keys:
+  - `Input` — de-duplicate by `(userId, jti, inputSeq)`; a repeat is dropped,
+    never written to the PTY twice.
+  - `snapshot_request` / `kill` — safe to repeat by construction (a second
+    snapshot answer is harmless; a second kill of a dead process group is a
+    no-op).
+  - `Resize` — last-writer-wins; applying the same geometry twice is
+    idempotent at the `TIOCSWINSZ` level.
+- **Room state signaling:** while the host leg rides this carrier the relay
+  emits `room_state: "degraded"` to viewers (§ 7) — the room is live at
+  higher latency. The host's auto-fallback and upgrade-back triggers are the
+  same as the viewer's (below); on upgrade-back the relay de-duplicates
+  upstream frames by `batchId` and host `seq` during the overlap.
+- **W4 scope note:** the OSS generic attach client implements this host lane
+  **behind the same attach interface** as the WSS lane — carrier fallback is
+  invisible to the PTY host core (this is already a W4 plan requirement; the
+  degraded lane is what makes "no VPN" true on WSS-hostile networks).
 
 **Auto-fallback triggers & upgrade-back:**
 - **Trigger down:** the WSS handshake fails, or the live WSS stream produces no
@@ -1031,20 +1172,24 @@ The `/v1/` path segment is the degraded lane's version carrier (§ 1).
   rejection, not a fallback (RFC 8725: one key, one algorithm, no negotiation).
 - **Clock skew.** The relay applies at most **5 seconds** of leeway when
   evaluating `exp`. No other claim gets leeway.
+- **Audience.** The relay MUST reject any token whose `aud` claim is not
+  exactly `"relay"`.
 - **`jti`: single-use at initial admission; re-presentable for
   reconnect-with-resume.** Precisely:
   - On a connection's **initial room admission** the relay records the `jti` as
     consumed (keyed `(jti, "admitted")`) until the token's `exp`, and refuses
     any other initial admission with the same `jti`. A token replayed to join
     fresh — by another party, or after revocation — fails.
-  - A **reconnect-with-resume** within the same token's `exp` MAY re-present
-    the same token: the relay permits a consumed `jti` **only** for a
-    reconnect carrying `resume_from`/`subscribe`-with-resume for the **same**
-    `(userId, sessionId)` — for host legs, the same `(sessionId, epoch)` — as
-    the original admission. At most one live logical connection per `jti`: on
-    the degraded lane the SSE-down leg plus its POST-up requests are that one
-    logical connection (§ 14); a second concurrent live leg presenting the same
-    `jti` is rejected.
+  - A **reconnect** within the same token's `exp` MAY re-present the same
+    token: the relay permits a consumed `jti` **only** for a reconnect
+    (`subscribe`, with **any** `resumeFrom` value **including null**) for the
+    **same** `(userId, sessionId)` — for host legs, the same
+    `(sessionId, epoch)` — as the original admission. Eligibility is
+    **identity-based, not resume-based**: an applied-nothing viewer reconnect
+    (`resumeFrom: null`) and a re-dialing host both qualify. At most one live
+    logical connection per `jti`: on the degraded lane the SSE-down leg plus
+    its POST-up requests are that one logical connection (§ 14); a second
+    concurrent live leg presenting the same `jti` is rejected.
   - **Residual replay bound (documented, accepted):** within `exp`, an attacker
     who exfiltrates a token could race the legitimate client's reconnect; this
     is bounded by TLS everywhere, the short `exp`, the one-live-connection
@@ -1112,8 +1257,9 @@ the D13 relay-data-residency ruling).
       truncation both map to `error.code = framing`.
 - [ ] Event-type byte values (§ 3) pinned; unknown type → framing error.
 - [ ] Two sequence namespaces kept distinct (§ 4); input attributed by
-      `(userId, inputSeq)` per connection; host ignores header `seq` on
-      relay-originated and relay-forwarded frames (seq=0/rel_time=0 rule).
+      `(userId, inputSeq)` per connection; every out-of-namespace frame (all
+      Control in every direction, non-host-produced Resize) carries
+      seq=0/rel_time=0 and receivers ignore both header fields.
 - [ ] Host stream epoch (§ 4.1): seq/rel_time continuous within an epoch across
       WSS reconnects; new epoch → new room generation, seq restarts at 1, ring
       discarded, forced Snapshot; prior-epoch/absent-epoch resume = ring miss.
@@ -1134,9 +1280,13 @@ the D13 relay-data-residency ruling).
 - [ ] Sanitization allowlist (§ 9) enforced identically relay/web/iOS against
       the hostile-sequence corpus **including the split-at-every-interior-byte
       variants**; sanitizer state carries across frame boundaries; dangling
-      introducers held pending; scope covers Snapshot-reconstructed bytes.
-- [ ] snapFormat 0x01 (§ 12.1) reproduces the conformance fixture byte-for-byte;
-      serializer emits no C0/ESC bytes in `runeBytes`; `echoMode` populated.
+      introducers held pending and STRIPPED at `sanitizerHoldMaxBytes`; scope
+      covers Snapshot-reconstructed bytes; UI-rendered protocol strings
+      (Marker labels, error.message, presence names) length-capped and
+      control-char-stripped.
+- [ ] snapFormat 0x01 (§ 12.1) reproduces the 26-byte conformance fixture
+      byte-for-byte incl. modes/mouseProto/savedCursor; serializer emits no
+      C0/ESC bytes in `runeBytes`; `echoMode` populated.
 - [ ] Host VT answers CPR/DA/DECRQSS locally to the PTY master (§ 12); fixture:
       child probing `CSI 6n` receives a correct CPR; no query reply on the wire.
 - [ ] Predictive-echo state machine (§ 10) suppresses on alt-screen / IME /
@@ -1152,15 +1302,24 @@ the D13 relay-data-residency ruling).
       with the frozen `atSeq+1` contiguity invariant (loop until contiguous);
       `resumeFrom` null ≡ 0.
 - [ ] Degraded lane (§ 14): endpoints derived from ATTACH_URL (scheme map +
-      `/sse` `/input` suffixes, `/v1/` version segment); auth carriage per
-      client class; same jti on both legs; batch envelope with out-of-band
-      controls; acks cover inputs only; POST taxonomy 200/409/401/429;
-      one `inputSeq` space across carriers; upgrade-back dedups downstream by
-      host `seq`.
+      `/sse` `/input` and `/host/sse` `/host/output` suffixes, `/v1/` version
+      segment); auth carriage per client class (host legs header-only); same
+      jti on both legs; SSE GET carries `?resume_from=&epoch=`; batch envelope
+      with out-of-band controls; acks cover inputs only; POST taxonomy
+      200/409/401/429; one `inputSeq` space across carriers; upgrade-back
+      dedups downstream by host `seq`.
+- [ ] Host leg on the degraded lane (§ 14): host-seq-keyed POST batches
+      (contiguity, rejected-whole on gap, batchId idempotency, ackSeq);
+      `outOfSeq` array for Control + post-Exit Snapshot; SSE-down
+      at-least-once with idempotent handling — Input by (userId, jti,
+      inputSeq), kill/snapshot_request repeat-safe, Resize last-writer-wins;
+      `room_state:"degraded"` emitted to viewers while the host is on this
+      carrier; same host `seq` space across carriers.
 - [ ] JWT (§ 15): frozen claim set incl. `iat` + host `epoch`; role enum
       host/driver/viewer with host-token posture (no userId); dedicated
-      asymmetric relay key; `alg` exactly `EdDSA`; ≤5 s exp leeway;
-      jti single-use-at-admission + reconnect-with-resume re-presentation;
+      asymmetric relay key; `alg` exactly `EdDSA`; ≤5 s exp leeway; `aud` ≠
+      "relay" rejected; jti single-use-at-admission + identity-based
+      re-presentation (any resumeFrom incl. null);
       room key (orgId, sessionId) with orgId-mismatch rejection;
       `sessionId == roomId == joined room`; header vs subprotocol carriage;
       no in-band reauth.

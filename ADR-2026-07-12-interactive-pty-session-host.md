@@ -120,6 +120,11 @@ speaks the framing library:
   it; it **never** opens an inbound listener. Reconnect follows the shipped
   reset-on-success backoff discipline (the rotate-stream template): re-resolve the
   bearer per attempt, reset backoff after any successful frame, cancel-aware.
+- **Both carriers behind one interface.** The client implements the WSS lane
+  **and** the degraded SSE-down + POST-up host lane (protocol spec § 14,
+  host-leg shape) behind the same attach interface — carrier fallback and
+  upgrade-back are invisible to the PTY host core. The degraded host lane is
+  what keeps the outbound attach working on WSS-hostile networks.
 - The client is standalone-usable (donmai without the platform can attach a local
   viewer to a local host over this client) — satisfying the OSS boundary rule that
   the layer never ships a half-working, platform-dependent client.
