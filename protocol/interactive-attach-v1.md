@@ -2,21 +2,21 @@
 title: interactive-attach-v1 — interactive PTY session attach wire protocol
 status: Proposed
 date: 2026-07-12
-revision: v1.0-draft3 (2026-07-12) — post W4/W5 re-review (both SIGN-OFF-WITH-AMENDMENTS)
+revision: v1.0-draft4 (2026-07-12) — W5-applied § 14 host-lane amendments (W4-surfaced)
 protocol-version: interactive-attach-v1
 boundary: OSS-only
 derived-from: asciinema ALiS live-stream protocol (shape only; NOT byte-compatible)
 normative-for: donmai (PTY session host + framing library + generic attach client), the relay, web viewers, iOS viewers
 sign-off:
   W4-owner: SIGNED 2026-07-12 (v1.0-draft3) — re-review verdict SIGN-OFF-WITH-AMENDMENTS; all five binding conditions (R1 host-leg lane, R2 §13 disjunct, R3 §2 out-of-namespace rule, R4 §15 identity-based jti re-presentation, R5 §12 local-attach scope) verified landed in draft3; R6 modes-bitmap also landed
-  W5-owner: SIGNED 2026-07-12 (v1.0-draft3) — re-review verdict SIGN-OFF-WITH-AMENDMENTS; binding conditions (R1 scope ruling = host legs carried, R2 §13 wording, R3 SSE resume carriage) verified landed in draft3; all four nits applied
+  W5-owner: SIGNED 2026-07-12 (v1.0-draft4) — re-review verdict SIGN-OFF-WITH-AMENDMENTS; binding conditions (R1 scope ruling = host legs carried, R2 §13 wording, R3 SSE resume carriage) verified landed in draft3; all four nits applied. draft4: W5 (relay-side owner of § 14) accepts and lands the two W4-surfaced host-lane amendment candidates — (a) host SSE-down Input dedup key = (userId, penGeneration, inputSeq); (b) host POST-up `gapFrom` gap declaration for degraded-lane self-heal — both v1-draft scope, W4 implementation-verified for (a)
 ---
 
 # interactive-attach-v1 — interactive PTY session attach wire protocol
 
 **Status:** Proposed
 **Date:** 2026-07-12
-**Revision:** v1.0-draft3 (2026-07-12) — post W4/W5 re-review (both SIGN-OFF-WITH-AMENDMENTS)
+**Revision:** v1.0-draft4 (2026-07-12) — W5-applied § 14 host-lane amendments (W4-surfaced)
 **Protocol version:** `interactive-attach-v1`
 **Normative for:** the OSS PTY session host and framing library in `donmai`, the
 relay, and every viewer (web, iOS).
@@ -42,6 +42,17 @@ section may be amended by its owning wave via PR to this file **with the sign-of
 cell updated in the same PR** — never silently.
 
 ## Changelog
+
+### v1.0-draft4 (2026-07-12) — § 14 host-lane amendments (W4-surfaced, W5-accepted)
+
+Both items were surfaced by W4's host-lane implementation as spec-amendment
+candidates and are accepted by W5, the relay-side owner of § 14 (`v1-draft`
+scope; sign-off cell updated in this same commit per the amendment rule):
+
+| Item | Disposition |
+|---|---|
+| Host SSE-down `Input` dedup key | The § 5 `Input` payload is frozen and carries no connection nonce, so the previously-specified `(userId, jti, inputSeq)` key is unimplementable from frame content alone. Re-specified as **`(userId, penGeneration, inputSeq)`** — collision-free because `penGeneration` increments on every pen change and the pen belongs to exactly one connection, so `(userId, penGeneration)` identifies a single holder tenure on a single connection, within which `inputSeq` is strictly monotonic; an at-least-once SSE replay repeats an identical triple and is dropped, and no distinct keystroke can reuse a triple (§ 14) |
+| Host POST-up gap declaration (`gapFrom`) | Degraded-lane self-heal mirroring the WSS § 4.1 mid-epoch-gap semantics: the host batch envelope gains optional `"gapFrom"`; a host that cannot rewind to `ackSeq + 1` (frames evicted host-side, or a restarted relay acking below the host's retained window) retries once with `gapFrom` set; the relay treats it as a § 4.1 delivery gap — truncate the ring before `gapFrom`, accept, ack from the batch's `lastSeq`, request a resync `Snapshot` on SSE-down. A relay that does not honor `gapFrom` rejects per the pre-existing rule and the client's terminal ring-miss error remains the fallback (§ 14) |
 
 ### v1.0-draft3 (2026-07-12) — W4/W5 re-review amendments
 
@@ -1090,13 +1101,32 @@ stream and *consumes* relay-originated frames):
   and `error`, post-Exit `Snapshot` replies) ride `outOfSeq`, outside the
   contiguity rule and uncovered by the ack. One host `seq` space across
   carriers, exactly as § 4/§ 4.1 — switching carriers never resets it.
+  - **Gap declaration (`gapFrom`) — degraded-lane self-heal.** The envelope
+    MAY carry `"gapFrom": <int>` (= the batch's `firstSeq`). A host that
+    cannot rewind to `ackSeq + 1` — its retained frames were evicted, or a
+    restarted relay acks below the host's retained window — retries the
+    rejected batch **once** with `gapFrom` set. The relay MUST treat an
+    otherwise-valid `gapFrom` batch as a § 4.1 mid-epoch delivery gap: it
+    truncates its ring before `gapFrom` (so no resume can silently replay
+    across the gap), accepts the batch, acks from its `lastSeq`, and SHOULD
+    request a fresh `Snapshot` (`reason: "resync"`) on the host SSE-down
+    leg. `gapFrom` never moves the ack backward and is ignored when it
+    equals `lastAck + 1` (no gap). A relay that does not honor `gapFrom`
+    rejects the batch per the contiguity rule above; the host's terminal
+    ring-miss error is the client-side fallback for that case.
 - **Host SSE-down (`…/host/sse`):** delivers the relay-originated frames the
   host would receive on WSS — stamped `Input`, authoritative `Resize`,
   `snapshot_request`, `kill` — all under the § 2 zeroed-header rules,
   unchanged. Delivery is **at-least-once** (an SSE reconnect may replay);
   the host MUST handle each idempotently with these keys:
-  - `Input` — de-duplicate by `(userId, jti, inputSeq)`; a repeat is dropped,
-    never written to the PTY twice.
+  - `Input` — de-duplicate by **`(userId, penGeneration, inputSeq)`**, all
+    three read from the frame payload (§ 5). The § 5 payload carries no
+    connection nonce, so a jti-based key is unimplementable from frame
+    content; this key is collision-free because `penGeneration` increments
+    on every pen change and the pen belongs to exactly one connection —
+    `(userId, penGeneration)` therefore identifies a single holder tenure on
+    a single connection, within which `inputSeq` is strictly monotonic. A
+    repeat is dropped, never written to the PTY twice.
   - `snapshot_request` / `kill` — safe to repeat by construction (a second
     snapshot answer is harmless; a second kill of a dead process group is a
     no-op).
@@ -1310,11 +1340,12 @@ the D13 relay-data-residency ruling).
       dedups downstream by host `seq`.
 - [ ] Host leg on the degraded lane (§ 14): host-seq-keyed POST batches
       (contiguity, rejected-whole on gap, batchId idempotency, ackSeq);
-      `outOfSeq` array for Control + post-Exit Snapshot; SSE-down
-      at-least-once with idempotent handling — Input by (userId, jti,
-      inputSeq), kill/snapshot_request repeat-safe, Resize last-writer-wins;
-      `room_state:"degraded"` emitted to viewers while the host is on this
-      carrier; same host `seq` space across carriers.
+      `gapFrom` gap declaration honored (ring truncation + accept + resync
+      Snapshot request); `outOfSeq` array for Control + post-Exit Snapshot;
+      SSE-down at-least-once with idempotent handling — Input by (userId,
+      penGeneration, inputSeq), kill/snapshot_request repeat-safe, Resize
+      last-writer-wins; `room_state:"degraded"` emitted to viewers while
+      the host is on this carrier; same host `seq` space across carriers.
 - [ ] JWT (§ 15): frozen claim set incl. `iat` + host `epoch`; role enum
       host/driver/viewer with host-token posture (no userId); dedicated
       asymmetric relay key; `alg` exactly `EdDSA`; ≤5 s exp leeway; `aud` ≠
