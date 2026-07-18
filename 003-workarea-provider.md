@@ -1,8 +1,8 @@
 # 003 — WorkareaProvider
 
 **Status:** Reference (initial draft)
-**Last updated:** 2026-05-06
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `ADR-2026-05-06-tui-noun-consolidation.md`
+**Last updated:** 2026-07-18
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`
 
 ## Why this exists
 
@@ -154,6 +154,44 @@ interface WorkareaProviderCapabilities {
 ```
 
 The scheduler uses this struct to pick a provider for a given `WorkareaSpec`. Example: a session declaring `toolchain.java = "17"` and `mode: 'exclusive'` is routed to a provider where `supportedToolchains.includes('java')` and `supportsSharedMode` is irrelevant. If two providers qualify, the one with lower `expectedAcquireMs.p95` wins.
+
+## Terminal settlement lease
+
+Per `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, a terminal status
+exchange that requires workarea-backed verification acquires a bounded,
+crash-recoverable lease on the exact `Workarea.id`. The lease is an overlay on
+`acquired`; it is not a second pool-member state and it does not transfer
+ownership to another session.
+
+The workarea lifecycle owner enforces these invariants:
+
+1. **Exclusive ownership spans verification.** The originating session remains
+   the exclusive owner until terminal verification is durably settled. A leased
+   workarea cannot be joined in shared mode or selected for another acquire.
+2. **Exact identity is preserved.** Verification addresses the existing
+   `Workarea.id` and `Workarea.path`. A different workarea is not an acceptable
+   substitute even when its source metadata matches.
+3. **Acknowledgement precedes release.** The lifecycle owner invokes
+   `release(workarea, mode)` only after it observes the explicit terminal result
+   acknowledgement. Worker exit, send success, or connection close does not
+   satisfy this ordering.
+4. **Recovery fails closed.** Active leases are persisted with session,
+   terminal-result, workarea, and expiry identities. They are loaded before any
+   workarea can be classified as available after restart.
+5. **Expiry dominates settlement.** Lease lifetime is strictly greater than the
+   full settlement budget: verification, terminal-result retry and backoff,
+   acknowledgement delivery, and safety margin. Renewal cannot exceed the
+   absolute maximum fixed at initial acquisition.
+6. **Reclamation is bounded.** An expired-lease reaper uses a finite interval,
+   batch size, and provider-attempt timeout. With capacity `C`, batch size `B`,
+   interval `I`, and attempt timeout `R`, a responsive provider completes
+   reclamation within `ceil(C / B) * I + R`. Provider release failure keeps the
+   workarea unavailable and operator-visible.
+
+A duplicate terminal submission reuses the lease keyed by its stable terminal
+result identity. Expiry permits capacity reclamation but is never interpreted
+as a successful terminal acknowledgement or as a change to the terminal
+verdict.
 
 ## The local-pool implementation (OSS-shipped reference)
 

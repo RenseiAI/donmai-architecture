@@ -1,9 +1,9 @@
 # 011 — Local Daemon Fleet (Operations & UX)
 
 **Status:** Reference (initial draft)
-**Last updated:** 2026-05-06
+**Last updated:** 2026-07-18
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/011-local-daemon-fleet-platform-extensions.md`)
-**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`).
+**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`), `ADR-2026-07-18-bounded-terminal-workarea-leases.md`.
 
 > **Command surface note (2026-05-06):** Per `ADR-2026-05-06-tui-noun-consolidation.md`, the daemon CLI lifecycle commands (install, status, doctor, drain, update) are now invoked as `<binary> host *` (e.g., `donmai host install` for the OSS binary; the platform binary's equivalent on the platform). Both binaries share the same noun model via `afcli.RegisterCommands`. The `<binary> daemon *` form shown in the example fences below remains as a hidden deprecated alias for one release.
 
@@ -201,8 +201,8 @@ Where the daemon receives work assignments.
 When the daemon needs to restart (auto-update, manual stop, system reboot scheduled), it drains:
 
 1. **Stop accepting new work.** Daemon updates its registered status to `draining`; the orchestrator routes new sessions elsewhere.
-2. **Wait for in-flight sessions.** Up to `drainTimeoutSeconds` (default 600). Sessions get a SIGTERM at the timeout; their workareas are released with `mode: archive` so they can be inspected post-mortem.
-3. **Release pool members cleanly.** Pool members in `ready` or `warming` state are torn down; `acquired` members are forced-released as above.
+2. **Wait for in-flight sessions.** Up to `drainTimeoutSeconds` (default 600). Sessions get a SIGTERM at the timeout. Unleased workareas follow the configured post-mortem release policy; an actively terminal-leased workarea remains unavailable until terminal result acknowledgement or lease expiry.
+3. **Release eligible pool members.** Pool members in `ready` or `warming` state are torn down; `acquired` members follow the policy above. Drain never overrides an active terminal workarea lease.
 4. **Restart.** New process boots, re-registers, status returns to `ready`.
 
 For graceful planned restarts (e.g., a reboot), `donmai host drain` returns when drain completes. CI scripts or shutdown hooks can wait on it.
@@ -212,8 +212,8 @@ For graceful planned restarts (e.g., a reboot), `donmai host drain` returns when
 If the daemon process dies unexpectedly:
 
 1. **System service auto-restart.** launchd / systemd brings it back. Default backoff: immediate, then 30s, 5m for repeated crashes.
-2. **In-flight sessions become orphans.** Their workareas remain on disk. The new daemon process scans on boot, marks orphan workareas as `archive`, and notifies the orchestrator. The orchestrator may re-dispatch the corresponding session work (idempotency depends on the work type — backstop logic in `packages/core/src/orchestrator/session-backstop.ts` handles much of this).
-3. **Pool state survives.** Pool members are filesystem state; they're rediscovered on daemon boot via a lightweight pool-scan that re-validates each member's `cleanStateChecksum`.
+2. **In-flight sessions become orphans.** Their workareas remain on disk. On boot, the new daemon loads durable terminal leases before classifying orphan workareas. An actively leased exact workarea remains unavailable under its originating session identity; an unleased orphan follows the ordinary post-mortem policy and may be reported for re-dispatch according to its work type.
+3. **Pool state survives.** Pool members are filesystem state; they're rediscovered on daemon boot only after lease recovery. A member with an active or release-pending lease cannot be admitted to an available state.
 4. **Logs preserve crash context.** macOS: `~/Library/Logs/donmai/daemon.log`; Linux: `journalctl --user -u donmai-daemon`. The daemon emits a final crash dump to the same path before exiting (when possible).
 
 If the daemon refuses to start, common causes:
@@ -224,6 +224,30 @@ If the daemon refuses to start, common causes:
 
 `donmai host doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, pool sane) and prints the failing condition.
 
+## Terminal workarea lease recovery and reaping
+
+Per `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, the daemon persists a
+terminal lease before a result exchange that needs workarea-backed verification.
+The lease keeps the exact workarea under the originating session's exclusive
+ownership through verification and until the daemon observes the explicit
+terminal result acknowledgement. Worker exit, drain, and daemon restart do not
+make an actively leased workarea reusable.
+
+Lease recovery runs before pool admission. Duplicate terminal submissions reuse
+the durable record keyed by terminal-result identity. The lease expiry is
+strictly later than the full settlement budget, including verification,
+terminal-result retry and backoff, acknowledgement delivery, and safety margin;
+renewal cannot cross the absolute maximum fixed at acquisition.
+
+The expired-lease reaper runs with a finite interval, batch size, and provider-
+attempt timeout. If capacity is `C`, batch size is `B`, interval is `I`, and the
+attempt timeout is `R`, a responsive provider completes reclamation within
+`ceil(C / B) * I + R`. Reclamation first records `release-pending`; only a
+successful provider release makes the workarea available. Failure keeps it
+unavailable, retries with capped backoff and the same per-attempt timeout, and
+emits an operator-visible error. Expiry permits reclamation but never counts as
+a successful terminal acknowledgement.
+
 ## Per-session cancel-wire
 
 Beyond drain (whole-daemon) and crash recovery, the daemon can stop **one**
@@ -232,8 +256,9 @@ is the single in-process choke point; the localhost-only
 `POST /api/daemon/sessions/<id>/stop` edge and the idle/no-progress watchdog both
 drive it. A cancel rides the existing lock-refresh heartbeat (the refresh response
 gains a `stop` field) for a fast cooperative in-band stop, escalating to
-SIGTERM→SIGKILL only if the child does not exit; the session's workarea is released
-with `mode: archive` for post-mortem inspection.
+SIGTERM→SIGKILL only if the child does not exit. An unleased workarea follows the
+post-mortem release policy; an active terminal lease retains the exact workarea
+until acknowledgement or expiry.
 
 Two new terminal classifications carry distinct re-dispatch postures:
 
