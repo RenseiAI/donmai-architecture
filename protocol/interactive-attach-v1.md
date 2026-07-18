@@ -2,21 +2,21 @@
 title: interactive-attach-v1 — interactive PTY session attach wire protocol
 status: Proposed
 date: 2026-07-12
-revision: v1.0-draft4 (2026-07-12) — W5-applied § 14 host-lane amendments (W4-surfaced)
+revision: v1.0-draft5 (2026-07-18) — W5-added § 14/§ 15 degraded-SSE ticket auth addendum (relay-side, W14 F1)
 protocol-version: interactive-attach-v1
 boundary: OSS-only
 derived-from: asciinema ALiS live-stream protocol (shape only; NOT byte-compatible)
 normative-for: donmai (PTY session host + framing library + generic attach client), the relay, web viewers, iOS viewers
 sign-off:
   W4-owner: SIGNED 2026-07-12 (v1.0-draft3) — re-review verdict SIGN-OFF-WITH-AMENDMENTS; all five binding conditions (R1 host-leg lane, R2 §13 disjunct, R3 §2 out-of-namespace rule, R4 §15 identity-based jti re-presentation, R5 §12 local-attach scope) verified landed in draft3; R6 modes-bitmap also landed
-  W5-owner: SIGNED 2026-07-12 (v1.0-draft4) — re-review verdict SIGN-OFF-WITH-AMENDMENTS; binding conditions (R1 scope ruling = host legs carried, R2 §13 wording, R3 SSE resume carriage) verified landed in draft3; all four nits applied. draft4: W5 (relay-side owner of § 14) accepts and lands the two W4-surfaced host-lane amendment candidates — (a) host SSE-down Input dedup key = (userId, penGeneration, inputSeq); (b) host POST-up `gapFrom` gap declaration for degraded-lane self-heal — both v1-draft scope, W4 implementation-verified for (a)
+  W5-owner: SIGNED 2026-07-12 (v1.0-draft4) — re-review verdict SIGN-OFF-WITH-AMENDMENTS; binding conditions (R1 scope ruling = host legs carried, R2 §13 wording, R3 SSE resume carriage) verified landed in draft3; all four nits applied. draft4: W5 (relay-side owner of § 14) accepts and lands the two W4-surfaced host-lane amendment candidates — (a) host SSE-down Input dedup key = (userId, penGeneration, inputSeq); (b) host POST-up `gapFrom` gap declaration for degraded-lane self-heal — both v1-draft scope, W4 implementation-verified for (a). draft5 (2026-07-18): W5 documents the shipped W14 security F1 degraded-SSE ticket addendum (relay PR #6, platform PR #622) — the browser SSE-down leg's query-secret is now a single-use, mutually-unusable-with-the-attach-token ticket (`aud "relay-sse-ticket"`, fresh `tid`, shared `jti`); the prior `?access_token=<jwt>` carriage is a time-boxed compat path pending removal, retained here only as a residual note
 ---
 
 # interactive-attach-v1 — interactive PTY session attach wire protocol
 
 **Status:** Proposed
 **Date:** 2026-07-12
-**Revision:** v1.0-draft4 (2026-07-12) — W5-applied § 14 host-lane amendments (W4-surfaced)
+**Revision:** v1.0-draft5 (2026-07-18) — W5-added § 14/§ 15 degraded-SSE ticket auth addendum (relay-side, W14 F1)
 **Protocol version:** `interactive-attach-v1`
 **Normative for:** the OSS PTY session host and framing library in `donmai`, the
 relay, and every viewer (web, iOS).
@@ -42,6 +42,26 @@ section may be amended by its owning wave via PR to this file **with the sign-of
 cell updated in the same PR** — never silently.
 
 ## Changelog
+
+### v1.0-draft5 (2026-07-18) — § 14/§ 15 degraded-SSE ticket auth addendum (W14 security F1, relay-shipped)
+
+W14 security review F1 found that the browser degraded-SSE-down leg's
+`?access_token=<jwt>` carriage put a **full attach token** — reusable on WSS
+and POST-up — into a URL, with a longer blast radius than the "short-lived,
+single-use" framing implied. The fix, already shipped (`rensei-relay` PR #6,
+`platform` PR #622), replaces the browser query-secret with a **purpose-built,
+single-use ticket** that cannot be replayed as an attach token in either
+direction. This entry documents the shipped shape; it does not change any
+other frozen rule.
+
+| Item | Disposition |
+|---|---|
+| New token class: the degraded-SSE ticket | § 14's browser `Browsers:` bullet and § 15 gain a **second, distinct** JWS shape alongside the attach token: `aud "relay-sse-ticket"` (never `"relay"`), carrying a fresh single-use `tid` (the relay's consume-once key) and the **same `jti`** as its paired attach token (the existing § 14 leg-correlation key, unchanged). `aud` divergence makes the two shapes mutually unusable — a ticket presented where an attach token is expected fails `ErrBadAudience` and vice versa (§ 15) |
+| Ticket TTL hard cap | `exp - iat` MUST NOT exceed **60s**, enforced by the verifier regardless of what the minting side configures (relay-owned floor under a platform-tunable default; ships at 30s) (§ 15) |
+| Consume-once accounting is `tid`-keyed, not `jti`-keyed | The ticket's `tid` is spent on first successful presentation (relay: `SSETicketStore`, separate from the § 15 `jti` store); `jti` keeps its existing § 15 identity-correlation job across the ticket and its paired attach token — the two stores serve different rules and neither substitutes for the other |
+| `?ticket=` supersedes `?access_token=` as the sanctioned browser SSE-down query carriage | § 14's browser bullet is amended: the ticket is the primary path; `?access_token=<jwt>` becomes a **time-boxed compat carriage**, removed in the follow-up release once every client emits tickets. Native clients and the POST-up leg are unaffected — both stay header-only `Authorization: Bearer` |
+| Ticket role/claim posture | Ticket-only claims: `role` restricted to `driver \| viewer` (no host ticket path — hosts are header-only always, § 14), `userId` always present, `epoch` always absent — mirroring the non-host attach-token posture (§ 15) |
+| `JTIStore` reap correctness (implementation-level, noted for completeness) | The relay's live-jti accounting was found to reap a LIVE entry once its *admitting credential's* `exp` passed, which a ≤60s ticket backing a session-length SSE leg hits routinely; fixed to key reap eligibility on the entry's live/released state, never on the admitting credential's `exp`. This is an implementation correctness fix under the existing § 15 "at most one live logical connection per jti" rule, not a new wire rule |
 
 ### v1.0-draft4 (2026-07-12) — § 14 host-lane amendments (W4-surfaced, W5-accepted)
 
@@ -1012,11 +1032,26 @@ room path of `/v1/rooms/<roomId>`, the host endpoints are
   `epoch` rules as the WSS lane apply unchanged (§ 6.2, § 15).
 - **Browsers:** `EventSource` can set neither headers nor subprotocols, so the
   browser SSE-down leg authenticates with a **short-lived, single-use
-  `?access_token=<jwt>` query parameter**, verified identically to header
-  carriage with the same `jti` accounting. Token-in-URL caveat: URLs leak into
-  logs — the relay MUST NOT log (or MUST redact) the query string of `/sse`
-  requests, and the token's `exp` MUST be short. The browser POST-up leg uses
-  the `Authorization` header (`fetch` can set headers).
+  `?ticket=<jws>` query parameter** — a purpose-built **degraded-SSE ticket**
+  (§ 15 "Degraded-SSE ticket"), **not** the attach token itself. The ticket is
+  a distinct JWS shape (`aud "relay-sse-ticket"`, its own `tid` consume-once
+  key, sharing the paired attach token's `jti`) verified by a dedicated path
+  (`VerifySSETicket`) and consumed exactly once on presentation, before any
+  room-state effect (a ticket burned by a later failure — room mismatch,
+  admission error — stays burned; fail closed). It can never be replayed as a
+  WSS or POST-up attach token, closing the wider blast radius a bare attach
+  token in a URL would carry (W14 security F1). Token/ticket-in-URL caveat
+  applies regardless: URLs leak into logs — the relay MUST NOT log (or MUST
+  redact) the query string of `/sse` requests, and the ticket's `exp` MUST be
+  short (§ 15 hard-caps it at 60s). The browser POST-up leg uses the
+  `Authorization` header with the paired **attach token** (`fetch` can set
+  headers) — the ticket is SSE-down-only and is never presented on POST-up.
+  **Compat carriage (time-boxed, removed in a follow-up release):** a relay
+  MAY additionally accept a full attach token via `?access_token=<jwt>` on
+  this same endpoint, verified identically to header carriage with the same
+  `jti` accounting, for clients that have not yet migrated to minting
+  tickets. New implementations MUST NOT rely on this path; it exists only to
+  let the ticket rollout land without a hard client/relay lockstep deploy.
 - **Leg correlation (frozen):** the SSE-down leg and the POST-up requests MUST
   present the **same token (same `jti`)** — together they form **one logical
   connection** `(userId, jti)` (§ 6.1). Presenting different tokens on the two
@@ -1029,8 +1064,8 @@ room path of `/v1/rooms/<roomId>`, the host endpoints are
   `input_ack`, `error`) interleaves among them.
 - **Resume-position carriage:** the SSE GET carries the viewer's resume
   position as `?resume_from=<seq>&epoch=<epoch>` query parameters (alongside
-  `access_token` for browsers); native clients MAY carry the equivalent in
-  request headers. `EventSource` cannot send a `subscribe` Control before the
+  `ticket` — or, compat-only, `access_token` — for browsers); native clients
+  MAY carry the equivalent in request headers. `EventSource` cannot send a `subscribe` Control before the
   stream opens, so the resume position must ride the GET; § 13 semantics
   (including null ≡ 0) apply unchanged.
 - A `: heartbeat` comment every 15 s defeats idle-proxy timeouts.
@@ -1193,6 +1228,58 @@ stream and *consumes* relay-originated frames):
   process preserves the epoch, a mint for a new host process assigns a strictly
   higher one (§ 4.1). The relay admits at most one live `role: "host"` leg per
   room (§ 6.2).
+- **Degraded-SSE ticket (added v1.0-draft5, W14 security F1).** A **second,
+  distinct** JWS shape — never confusable with the attach token above — that
+  exists solely as the browser degraded SSE-down leg's query-carried secret
+  (§ 14 "Browsers"). Signed under the **same** dedicated relay key and the
+  same pinned `EdDSA` alg as the attach token, but otherwise a different
+  frozen claim set:
+  ```json
+  {
+    "sessionId": "<same as the paired attach token>",
+    "roomId":    "<same as the paired attach token; MUST equal sessionId>",
+    "userId":    "<verified end-user id — tickets are user-lane only, always present>",
+    "role":      "driver" | "viewer",
+    "orgId":     "<same as the paired attach token>",
+    "iat":       "<unix-seconds mint time>",
+    "exp":       "<unix-seconds — exp - iat MUST NOT exceed 60s, verifier-enforced>",
+    "aud":       "relay-sse-ticket",
+    "jti":       "<SHARED with the paired attach token — the § 14 leg-correlation key, unchanged>",
+    "tid":       "<fresh per-ticket nonce — the relay's consume-once key>"
+  }
+  ```
+  - **Mutually unusable with the attach token, by construction.** `aud` is
+    `"relay-sse-ticket"`, never `"relay"`; a verifier that checks `aud` (both
+    do) rejects a ticket presented as an attach token and an attach token
+    presented as a ticket in either direction. The relay verifies the two
+    shapes through **separate entry points** (conventionally `Verify` for the
+    attach token, `VerifySSETicket` for the ticket) so the frozen claim-shape
+    checks below can never be applied to the wrong shape. `epoch` is always
+    absent (host tokens never use tickets — hosts are header-only always,
+    § 14) and `tid` is always present; a payload with both `aud: "relay"` and
+    a non-empty `tid`, or `aud: "relay-sse-ticket"` and a missing `tid`, is a
+    claim-set violation.
+  - **`tid` is single-use, tracked separately from `jti`.** The ticket's
+    `jti` is the SAME value as its paired attach token's `jti` (§ 14 leg
+    correlation: SSE-down and POST-up are one logical connection) and
+    therefore is **not** the ticket's single-use key — reusing the paired
+    `jti`'s existing single-use accounting for the ticket would either
+    double-consume the attach token's own admission slot or make the ticket
+    replayable. Instead the ticket carries its own fresh `tid`, spent exactly
+    once (consume-on-first-presentation, before any room-state effect — a
+    ticket burned by a later failure stays burned) in accounting kept
+    separate from the `jti` store. A relay MUST NOT accept a `tid` twice.
+  - **Hard TTL cap.** The relay MUST reject any ticket whose `exp - iat`
+    exceeds **60 seconds**, regardless of what the minting side's own
+    configuration would otherwise allow — the cap is a verifier-side floor,
+    not a minting convention, so a misconfigured or compromised minter can
+    never hand out a long-lived query-borne secret.
+  - **Compat window (removed in a follow-up release, § 14).** Until every
+    client emits tickets, a relay MAY additionally accept a full attach
+    token via the browser SSE-down leg's `?access_token=` query parameter
+    (pre-existing carriage, unchanged verification path). This is a
+    transitional exception to "tickets are the sanctioned browser SSE-down
+    secret," not a permanent second path.
 - **Dedicated relay signing key (asymmetric).** The token is signed with a key
   **dedicated to the relay** — never the platform's shared session/service secret.
   Asymmetric is mandated: the platform holds the private key, the relay holds
@@ -1337,7 +1424,9 @@ the D13 relay-data-residency ruling).
       jti on both legs; SSE GET carries `?resume_from=&epoch=`; batch envelope
       with out-of-band controls; acks cover inputs only; POST taxonomy
       200/409/401/429; one `inputSeq` space across carriers; upgrade-back
-      dedups downstream by host `seq`.
+      dedups downstream by host `seq`; browser SSE-down leg authenticates
+      with `?ticket=` (single-use degraded-SSE ticket, § 15), never the bare
+      attach token, except the time-boxed `?access_token=` compat path.
 - [ ] Host leg on the degraded lane (§ 14): host-seq-keyed POST batches
       (contiguity, rejected-whole on gap, batchId idempotency, ackSeq);
       `gapFrom` gap declaration honored (ring truncation + accept + resync
@@ -1354,3 +1443,11 @@ the D13 relay-data-residency ruling).
       room key (orgId, sessionId) with orgId-mismatch rejection;
       `sessionId == roomId == joined room`; header vs subprotocol carriage;
       no in-band reauth.
+- [ ] Degraded-SSE ticket (§ 15, added v1.0-draft5): `aud "relay-sse-ticket"`
+      distinct from attach-token `aud "relay"`, mutually rejected each as the
+      other; `tid` required and single-use, tracked separately from `jti`;
+      `jti` shared with the paired attach token (§ 14 leg correlation
+      unaffected); `exp - iat` ≤ 60s enforced by the verifier regardless of
+      minter config; `epoch` always absent, `role` restricted to
+      driver\|viewer, `userId` always present; ticket verified through a path
+      distinct from the attach-token verifier.
