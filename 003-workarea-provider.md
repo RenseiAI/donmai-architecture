@@ -29,9 +29,11 @@ interface WorkareaProvider extends Provider<'workarea'> {
    * the provider chooses what to do with it (destroy, return to pool,
    * pause and retain, archive to cold storage).
    *
-   * MUST be idempotent when invoked more than once for the same
-   * Workarea.id and equivalent ReleaseMode. A crash-recovered caller MAY
-   * repeat the callback; a different disposition is a conflict.
+   * The following obligation is Proposed and is not currently effective:
+   * if ADR-2026-07-18-bounded-terminal-workarea-leases.md is Accepted and
+   * implemented, release() MUST be idempotent when invoked more than once
+   * for the same Workarea.id and equivalent ReleaseMode. A crash-recovered
+   * caller MAY repeat the callback; a different disposition is a conflict.
    */
   release(workarea: Workarea, mode: ReleaseMode): Promise<void>
 

@@ -799,9 +799,12 @@ This proposal is implementation-pending and unreleased. Before it may become
    `PreserveWorktreeAlways`; guard-before-lease failure; unavailable quarantine
    persistence; quarantine cleanup; actionable-index rebuild; and repeated
    provider release.
-4. The downstream mirrored stub and platform-extension ADR must exist, be
-   accepted, and supply their own cross-language consumer fixtures and sandbox
-   proof.
+4. The downstream mirrored stub must exist with `status: Mirrored` and
+   `canonical: donmai-architecture/ADR-2026-07-18-bounded-terminal-workarea-leases.md`.
+   Only the downstream
+   `ADR-2026-07-18-bounded-terminal-workarea-leases-platform-extensions.md`
+   must become `Accepted` and supply cross-language consumer fixtures and
+   sandbox proof.
 5. Released-artifact tests—not branch-local or snapshot-only evidence—must prove
    the combined contract before any privileged capability is advertised or any
    activation control is enabled.
