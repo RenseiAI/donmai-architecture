@@ -1,7 +1,7 @@
 # 013 — Orchestrator, Governor, Worker, AgentRuntime
 
 **Status:** Reference (initial draft)
-**Last updated:** 2026-07-18
+**Last updated:** 2026-07-19
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/013-orchestrator-and-governor-platform-extensions.md`)
 **Related:** `001-layered-execution-model.md`, `004-sandbox-capability-matrix.md`, `015-plugin-spec.md`, `016-workflow-engine.md`, `011-local-daemon-fleet.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`.
 
@@ -228,33 +228,65 @@ consumer falls back to the marker scan). A `blocked` verdict is the structured
 form of the deliberate-decline signal and routes to needs-clarification, not a
 generic failure. See `ADR-2026-06-15-turn-result-manifest.md`.
 
-### Terminal workarea ownership spans acknowledgement (ADR-2026-07-18)
+### Terminal workarea ownership spans durable release (ADR-2026-07-18, Proposed)
 
-When terminal settlement includes workarea-backed verification, the terminal
-status exchange acquires a bounded, crash-recoverable lease on the session's
-exact workarea before ordinary teardown can make it reusable. The lease is keyed
-by stable session, terminal-result, and workarea identities, so a retry after
-connection loss resolves to the same settlement attempt.
+`ADR-2026-07-18-bounded-terminal-workarea-leases.md` proposes an
+implementation-pending, unreleased target contract for terminal settlement that
+includes workarea-backed verification. Before ordinary teardown, the workarea
+owner first fsyncs a guard
+in a separate acquisition-quarantine authority and then persists a bounded lease
+on the session's exact workarea. A retry after connection loss resolves to the
+same terminal-result identity only when its bytes and invariants are equivalent.
+No consumer capability may be advertised from this proposal alone.
 
-The completion ordering is normative:
+The common completion prefix would be normative:
 
-1. persist the terminal workarea lease;
-2. submit the terminal result;
-3. run declared verification against that exact workarea under the originating
-   session's exclusive ownership;
-4. durably settle the terminal result;
-5. return and observe the explicit terminal result acknowledgement; and
-6. release the workarea under its normal provider policy.
+1. persist the quarantine guard;
+2. persist and re-read the terminal workarea lease, then clear only the redundant
+   guard;
+3. submit the terminal result through the receiver-affine durable outbox; and
+4. before verification access, persist one local execution claim binding the
+   invocation and claim to the exact lease, session, terminal result, and
+   workarea.
 
-Worker-process exit does not end exclusive workarea ownership while the lease is
-active. Restart recovery loads leases before admitting workareas for reuse. The
-finite expiry is strictly later than the complete settlement budget, including
-verification, retry and backoff, acknowledgement delivery, and safety margin;
-an absolute maximum prevents indefinite renewal. An expired-lease reaper
-provides bounded reclamation, while provider release failures keep the workarea
-unavailable and visible to operators. Expiry is capacity recovery, never an
-implicit successful acknowledgement. Full contract:
-`ADR-2026-07-18-bounded-terminal-workarea-leases.md` and
+Release then follows one of two separate paths:
+
+- **Acknowledgement path:** the consumer returns the exact semantic
+  acknowledgement; Donmai compares every field with the durable descriptor and
+  local claim; it atomically stores the local acknowledgement outcome and moves
+  `active -> release-pending`; the provider release worker applies the normal
+  disposition and finally persists `released`.
+- **Expiry/reaping path:** reaching `expiresAt` only makes `active` eligible; the
+  reaper records expiry as the reason, moves `active -> release-pending`, invokes
+  the same provider release path, and finally persists `released`. Expiry is not
+  acknowledgement and does not change the terminal verdict.
+
+Worker-process exit, transport delivery, acknowledgement, expiry, and daemon
+restart do not end exclusive ownership. Ownership ends only at durable
+`released`; provider failure retains `release-pending` and keeps the exact
+workarea unavailable. Recovery loads quarantine records, every `active` and
+`release-pending` lease, local claims, and outbox state before pool admission.
+
+The proposed `settlementBudgetMs` is exactly `977000 ms`. Its `60000 ms` lease
+safety margin is separate, so a claim requires strictly more than `1037000 ms`
+remaining. The optional `60000 ms` pre-claim queue window is also separate, so
+enqueue requires strictly more than `1097000 ms`. The initial lease is
+`1800000 ms` with a `7200000 ms` maximum.
+
+For actionable count `N`, batch size `B`, provider concurrency `K`, maximum
+initial/inter-batch delay `I`, and provider-attempt timeout `R`, the serial-batch
+reaper gives each snapshot record one attempt before failed retries move to a
+later scan. It considers every scan-snapshot record—and completes every
+successful responsive attempt—within:
+
+```text
+ceil(N / B) * (I + ceil(B / K) * R)
+```
+
+Every durable `release-pending` record MUST cause at least one provider release
+attempt. Provider release MUST be idempotent for the same workarea and equivalent
+release mode and MAY be invoked more than once after crash recovery. Full target
+contract: `ADR-2026-07-18-bounded-terminal-workarea-leases.md` and
 `003-workarea-provider.md` § "Terminal settlement lease".
 
 ### CI verification is orchestration-owned and durable (ADR-2026-06-10)
@@ -270,8 +302,10 @@ verification is not part of the agent session's completion contract:
   tools, background polls) expecting to be woken after its final message.
   The runner treats the terminal event as the end of agent activity and tears
   the runtime process down; in-process wake-up state dies with it. This does not
-  authorize early workarea release: an active terminal lease retains the exact
-  workarea through verification and acknowledgement.
+  authorize early workarea release: under the proposed lease contract, every
+  non-released terminal lease retains the exact workarea through verification,
+  acknowledgement or expiry eligibility, provider disposition, and durable
+  `released`.
 - The CI wait happens at the orchestration layer as a **durable
   suspend/resume gate** correlated on the session's head commit SHA. The
   runner captures the SHA at envelope-build time (after the backstop, which
