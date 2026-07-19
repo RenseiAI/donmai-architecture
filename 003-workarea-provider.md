@@ -192,17 +192,31 @@ The workarea lifecycle owner would enforce these invariants:
    `release-pending` lease is loaded before pool admission. A separate durable
    quarantine guard is written before lease acquisition; guard or lease failure
    excludes the exact workarea at boot and during bounded cleanup.
-6. **Safety is outside settlement.** `settlementBudgetMs` is `977000 ms`; the
-   `60000 ms` lease safety margin is separate. A claim requires strictly more
-   than `1037000 ms` remaining. The optional `60000 ms` pre-claim queue window is
-   also separate and requires strictly more than `1097000 ms` at enqueue.
-7. **Reclamation uses an actionable bound.** At a bounded-scan start let `N` be
-   actionable records, `B` batch size, `K` provider concurrency, `I` maximum
-   initial/inter-batch delay, and `R` provider-attempt timeout. With serial
-   batches, at most `K` concurrent attempts, and one attempt per snapshot record
-   before failed retries move to a later scan, every snapshot record is
-   considered—and every successful responsive attempt completes—within
-   `ceil(N / B) * (I + ceil(B / K) * R)`.
+6. **Lease time is exact and replay-coherent.** `acquiredAtMs` is the
+   acquisition transaction's single persisted nondecreasing UTC millisecond
+   sample; `expiresAtMs = acquiredAtMs + leaseDurationMs`; and the immutable
+   maximum is `acquiredAtMs + maxLeaseDurationMs`. Enqueue and claim each sample
+   once and compute signed `remainingMs = expiresAtMs - nowMs`, with no second
+   rounding step. `settlementBudgetMs` is `977000 ms`; the `60000 ms` safety
+   margin is separate, so claim requires `remainingMs > 1037000`. The optional
+   separate `60000 ms` queue window requires `remainingMs > 1097000`. Clock
+   rollback is clamped by the persisted high-water mark; a forward jump may make
+   the lease immediately reapable. Renewal may extend the same active lease only
+   up to the acquisition-fixed maximum and only before the first durable
+   terminal-status body; before that save it updates the authoritative descriptor,
+   and after that save it is forbidden.
+7. **Reclamation uses a proved actionable bound.** A scan snapshot of `N`
+   records is partitioned into serial batches: every non-final batch contains
+   exactly `B` records and the final batch contains the remainder. Each admitted
+   batch executes work-conservingly up to `K` concurrent attempts, filling a free
+   slot immediately while an unstarted record remains. With maximum
+   initial/inter-batch delay `I`, hard attempt timeout `R`,
+   `M = ceil(N/B)`, and `Q = ceil(B/K)`, every snapshot attempt responds or times
+   out within `M * (I + Q * R)`. The theorem assumes continuous host, scheduler,
+   durable-authority, attempt-slot, and provider-call-path availability. An outage
+   has no bounded wall-clock duration; after reconciliation the runtime captures a
+   new recovery snapshot whose first batch is admitted within a new `I`, then
+   applies the same exact partition, work-conserving rule, and bound.
 8. **Provider release is idempotent and at least once.** Every durable
    `release-pending` record MUST cause at least one `release(workarea, mode)`
    attempt. The caller MAY repeat it after a crash, and the provider MUST make an

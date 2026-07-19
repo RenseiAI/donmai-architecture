@@ -64,16 +64,62 @@ Donmai owns these immutable, case-sensitive schema identifiers:
 - acquisition quarantine record:
   `donmai.terminal-workarea-quarantine.v1`.
 
-Every exact v1 JSON schema in this ADR has a closed field set. Decoders reject
-unknown fields, alternate casing, alternate schema strings, trailing JSON
-values, duplicate object keys, and unpaired surrogate escapes. Duplicate-key
-and surrogate checks occur on retained raw JSON before a decoder can normalize
-the value. String identities are compared byte-for-byte after JSON decoding;
-there is no Unicode normalization or case folding. Identity-bearing fields are
-ASCII-only. Timestamps use exactly UTC RFC 3339 with millisecond precision
-(`YYYY-MM-DDTHH:MM:SS.mmmZ`). SHA-256 values are 64 lowercase hexadecimal
-digits. Base64 uses canonical padded RFC 4648 encoding. Fields shown as `null`
-are required fields with an explicit null value, not optional omissions.
+Every exact v1 JSON schema in this ADR, plus the Donmai-owned embedded lease
+projection, has a closed field set and one canonical semantic-to-byte encoding.
+The indented JSON examples below show the required member order for readability;
+canonical wire bytes use that same order but are compact. The encoding is
+normative:
+
+1. The root value is exactly one JSON object encoded as UTF-8, with no BOM, no
+   insignificant whitespace, no trailing line feed, and no trailing JSON value.
+   Object members appear in exactly the order shown for that schema or projection.
+2. Field names and string enum values use the exact spelling shown. Schema
+   identifiers, generated identity prefixes, hexadecimal digits, and all
+   identifier text are lowercase where specified; alternate casing is invalid.
+   JSON literals are exactly `true`, `false`, and `null`.
+3. Integers use base-10 JSON integer spelling with no leading plus, no leading
+   zero except the value `0`, and no decimal point or exponent. A negative sign is
+   emitted only for a schema field that permits a negative value; none of the v1
+   duration, deadline, or counter fields in this ADR do.
+4. Timestamps are projections of integer Unix-epoch milliseconds and use exactly
+   UTC RFC 3339 with millisecond precision (`YYYY-MM-DDTHH:MM:SS.mmmZ`). Offsets,
+   omitted or extra fractional digits, leap-second spelling, and sub-millisecond
+   rounding are invalid. SHA-256 values are 64 lowercase hexadecimal digits.
+   Base64 uses canonical padded RFC 4648 encoding.
+5. JSON strings use double quotes. The quotation mark and reverse solidus are
+   escaped as `\"` and `\\`; backspace, tab, newline, form feed, and carriage
+   return use `\b`, `\t`, `\n`, `\f`, and `\r`; every other U+0000 through
+   U+001F code point uses lowercase `\u00xx`. Solidus is not escaped. The HTML
+   characters `<`, `>`, and `&` are never escaped and are emitted literally.
+   U+2028 and U+2029 are always emitted as lowercase `\u2028` and `\u2029`.
+   Every other Unicode scalar value is emitted as its shortest literal UTF-8
+   sequence, never as a surrogate pair or `\u` escape. For valid scalar input,
+   these string bytes are compatible with Go `encoding/json` using
+   `SetEscapeHTML(false)`; canonical object bytes omit the encoder's trailing
+   newline. There is no Unicode normalization or case folding.
+6. Input MUST be valid UTF-8 and every decoded string MUST be a sequence of
+   Unicode scalar values. A correctly ordered escaped UTF-16 high/low surrogate
+   pair is accepted as its one scalar value and canonicalizes under rule 5; an
+   isolated, reversed, or otherwise malformed surrogate escape is rejected.
+   Literal UTF-8 encodings of surrogate code points and replacement of malformed
+   UTF-8 with U+FFFD are forbidden. Fields shown as `null` are required fields
+   with an explicit null value, not optional omissions. Identity-bearing fields
+   are ASCII-only.
+
+Decoders reject unknown fields, alternate schema strings, trailing values, and
+duplicate object members. Duplicate detection compares the decoded member-name
+scalar sequence before any map/object overwrite, so differently escaped spellings
+of the same name are duplicates. UTF-8 and surrogate validation likewise occurs
+before a generic decoder can replace or normalize invalid input. After those
+checks and schema validation, the decoder MUST immediately re-encode the semantic
+value with the canonical rules above before any duplicate-message, idempotency,
+digest, or conflict comparison. The canonical bytes, not ingress spelling, are
+authoritative for Donmai-owned schema values and the embedded projection; raw
+ingress bytes MAY be retained only as non-authoritative audit evidence.
+Consequently, alternate member order, whitespace, or valid escape spelling that
+decodes to the same value compares as the same Donmai value, while every Donmai
+producer MUST emit the canonical bytes directly. D6 separately defines the
+authoritative retained bytes of the complete terminal-status body.
 
 The lease request has exactly these five fields and, for this proposed profile,
 these exact values:
@@ -168,8 +214,8 @@ exactly one of `claim-missing`, `identity-mismatch`, or `state-conflict`.
 `providerReleaseComplete` is true if and only if `leaseState` is `released`.
 `applied` means the exact acknowledgement and the transition to
 `release-pending` committed in one durable transaction. `already-applied` is
-returned only for a byte-equivalent acknowledgement that was previously
-applied. A conflicting replay is `rejected`.
+returned only for an acknowledgement whose D1 canonical bytes equal the
+previously applied acknowledgement. A conflicting replay is `rejected`.
 
 `sessionId`, `invocationId`, and `claimId` use canonical lowercase hyphenated
 UUID text (`8-4-4-4-12` hexadecimal digits). Donmai-generated identities use
@@ -177,22 +223,29 @@ exactly `twl_`, `wa_`, `tr_`, `rcv_`, or `twq_` followed by 32 lowercase
 hexadecimal digits. Malformed or differently spelled identities fail before
 filesystem access or command execution.
 
-Donmai MUST publish byte fixtures for every schema above, including invalid raw
-JSON fixtures for duplicate keys, unpaired surrogates, unknown fields, trailing
-values, noncanonical identifiers, timestamps, digests, and base64. Any other
-language implementation of a Donmai-owned schema MUST consume the same fixtures.
-A consumer-owned verifier request, verifier result, or response envelope is not
-a Donmai schema and is deliberately not named or partially defined here; D9
-assigns that exact-wire work to the downstream extension.
+Donmai MUST publish semantic vectors and canonical byte fixtures for every
+schema and embedded projection above. The OSS producer and every supported
+consumer language MUST prove that semantic value -> canonical bytes and accepted
+raw JSON -> canonical re-encoding produce byte-identical fixture output. Fixtures
+MUST cover member order, zero and multi-digit integers, every required string
+escape, literal `<`, `>`, and `&`, escaped U+2028/U+2029, accepted surrogate-pair
+decoding and canonical re-emission, non-ASCII UTF-8, and exact timestamp
+formatting. Invalid raw JSON fixtures MUST cover escape-equivalent duplicate keys,
+isolated and reversed surrogates, malformed UTF-8, unknown fields, trailing
+values, noncanonical identifiers, timestamps, digests, and base64. A consumer-owned verifier request, verifier
+result, or response envelope is not a Donmai schema and is deliberately not named
+or partially defined here; D9 assigns that exact-wire work to the downstream
+extension.
 
 ### D2 — Durable ownership, acquisition, and preserve policy
 
 The workarea-owning side durably binds the terminal result, exact host-local
 absolute workarea path, full descriptor, requested release disposition, finite
-lease policy, local claim if present, acknowledgement outcome if present,
-release reason, provider-attempt history, and last error. The physical storage
-layout is implementation-private; this ADR creates no additional public JSON
-record beyond the exact schemas in D1, D3, and D6.
+lease policy and fixed maximum expiry, persisted clock high-water mark, local
+claim if present, acknowledgement outcome if present, release reason,
+provider-attempt history, and last error. The physical storage layout is
+implementation-private; this ADR creates no additional public JSON record beyond
+the exact schemas in D1, D3, and D6.
 
 The durable lease state machine is only:
 
@@ -204,8 +257,9 @@ Acknowledgement and expiry are reasons and timestamps, not lease states. A
 restart reconstructs every `active` and `release-pending` lease before
 classifying any workarea as available. The originating session remains the
 exclusive owner until `released` is durably committed. Replaying the same
-terminal result identity and byte-equivalent payload is idempotent; the same
-identity with different payload or lease invariants is a conflict.
+terminal result identity and canonical-byte-equivalent Donmai payload is
+idempotent; the same identity with different payload or lease invariants is a
+conflict.
 
 A requested terminal-workarea lease is acquired even when ordinary disposition
 is `PreserveWorktreeAlways`. Preservation policy controls ordinary teardown; it
@@ -308,8 +362,8 @@ The Donmai lease alone never proves sandbox readiness.
 
 Before a consumer accesses the workarea or runs a command, Donmai MUST durably
 store the exact D1 execution claim, binding one `invocationId` and `claimId` to
-the lease, session, terminal result, and workarea. Repeating the byte-equivalent
-claim is idempotent. Any different invocation, claim, identity, or payload
+the lease, session, terminal result, and workarea. Repeating a claim with the
+same D1 canonical bytes is idempotent. Any different invocation, claim, identity, or payload
 conflicts and cannot execute. The descriptor alone grants no execution or
 release authority.
 
@@ -378,7 +432,19 @@ The terminal-status outbox record has exactly these twelve fields:
 `attemptCount` is a non-negative integer. `lastAttemptAt` is null until the first
 attempt and otherwise an exact timestamp. `lastError` is null or a UTF-8
 diagnostic that is not used for identity. `bodySha256` covers the decoded
-`bodyBase64` bytes. Those bytes are immutable after the first durable save.
+`bodyBase64` bytes. Those retained complete terminal-status body bytes—not a
+later reconstruction—are authoritative and immutable after the first durable
+save. Every Donmai-owned object embedded in the body is canonicalized under D1
+before body construction.
+
+Saving the body MUST use a compare-and-set against the authoritative lease
+record so the embedded projection's `expiresAt` equals the current durable
+`expiresAt`. Before that first body save, a permitted renewal atomically updates
+the authoritative lease and full descriptor; body construction must use the
+updated descriptor. After the first durable body save, renewal is forbidden, so
+byte-identical replay cannot carry a stale expiry relative to a later lease
+record. A racing body-save or renewal transaction loses its compare-and-set and
+must re-read state rather than publishing divergent bytes.
 
 `deliveryState` tracks transport only. `attempting` is durably recorded before a
 send and is recovered to `pending` after an interrupted process. `delivered`
@@ -410,67 +476,156 @@ The proposed settlement budget is exactly:
 977000 ms  settlementBudgetMs
 ```
 
-The `60000 ms` lease safety margin is separate from the `977000 ms` settlement
-budget. A local execution claim therefore requires **strictly more than
-`1037000 ms`** remaining: `1037000 ms` is rejected and `1037001 ms` is the first
-acceptable value.
+All Donmai lease arithmetic uses signed integer Unix-epoch milliseconds in UTC;
+D1 timestamps are only the canonical text projection of those integers. Each
+acquisition, renewal, enqueue, claim, body-save, and reaping transaction takes
+one clock sample and reuses that single `nowMs` for every check and field in the
+transaction:
 
-An optional pre-claim queue window is another separate `60000 ms`. Enqueue
-requires **strictly more than `1097000 ms`** remaining: `1097000 ms` is rejected
-and `1097001 ms` is the first acceptable value. Queue time and the lease safety
-margin are not folded into `settlementBudgetMs`.
+```text
+rawNowMs = floor(realtimeNanoseconds / 1000000)
+nowMs    = max(rawNowMs, persistedClockHighWatermarkMs)
+```
 
-The initial lease is `1800000 ms` and its absolute maximum is `7200000 ms`.
-Lease duration MUST be strictly greater than settlement budget plus safety
-margin. Renewal is allowed only for the same session, terminal result, workarea,
-and lease identities and never beyond the finite maximum fixed at acquisition.
+Before a time-based decision or response becomes visible, Donmai MUST durably
+advance the provider root's clock high-water mark to `nowMs`, atomically with the
+lease mutation when there is one. A wall-clock rollback therefore cannot increase
+`remainingMs` or resurrect an expired lease: logical time stays at the durable
+high-water mark until realtime catches up. That pause can delay expiry in physical
+elapsed time by the rollback magnitude, so this ADR claims no elapsed-time bound
+across a clock discontinuity. A forward jump advances the high-water mark and may
+make a lease immediately eligible for reaping; later rollback does not reverse
+that decision. If the clock authority or its high-water mark cannot be read or
+persisted, the affected provider root fails closed under the same readiness
+posture as D3.
+
+For acquisition sample `acquireNowMs`, the equations are:
+
+```text
+acquiredAtMs   = acquireNowMs
+expiresAtMs    = acquiredAtMs + leaseDurationMs
+maxExpiresAtMs = acquiredAtMs + maxLeaseDurationMs
+acquiredAt     = canonicalUtcMillis(acquiredAtMs)
+expiresAt      = canonicalUtcMillis(expiresAtMs)
+```
+
+`canonicalUtcMillis` is exactly D1's `YYYY-MM-DDTHH:MM:SS.mmmZ` projection.
+Addition overflow is rejected. `leaseDurationMs` MUST be strictly greater than
+`settlementBudgetMs + safetyMarginMs`, and MUST NOT exceed
+`maxLeaseDurationMs`. For this profile the initial duration is exactly
+`1800000 ms`, the fixed maximum duration is exactly `7200000 ms`, and
+`maxExpiresAtMs` never changes after acquisition.
+
+A renewal is permitted only while the lease is `active`, before the first
+terminal-status body carrying the projection's `expiresAt` is durably persisted,
+and for the same session, terminal result, workarea, and lease identities. With positive `extensionMs` and one
+renewal sample `renewNowMs`, it additionally requires
+`renewNowMs < expiresAtMs` and computes:
+
+```text
+renewedExpiresAtMs = min(expiresAtMs + extensionMs, maxExpiresAtMs)
+```
+
+Overflow is rejected and the result MUST be greater than the prior
+`expiresAtMs`; a clipped no-op is rejected. The renewal transaction atomically
+updates the authoritative lease and full descriptor. D6's body-save
+compare-and-set then either observes that updated expiry or retries. Once the
+body is durably saved, all renewal attempts are rejected; immutable replay and
+the authoritative descriptor therefore remain coherent.
+
+At enqueue or claim, Donmai samples once and computes the signed integer value:
+
+```text
+remainingMs = expiresAtMs - nowMs
+```
+
+There is no absolute-value operation, clamping, fractional duration, or second
+rounding step. The `60000 ms` lease safety margin is separate from the
+`977000 ms` settlement budget. A local execution claim is accepted only when
+`remainingMs > 1037000`: `1037000 ms` is rejected and `1037001 ms` is the first
+acceptable value. An optional pre-claim queue window is another separate
+`60000 ms`; enqueue is accepted only when `remainingMs > 1097000`:
+`1097000 ms` is rejected and `1097001 ms` is the first acceptable value. Queue
+time and the safety margin are not folded into `settlementBudgetMs`. Reaping
+eligibility begins when the reaper's single sample satisfies
+`nowMs >= expiresAtMs`.
 
 Consumer evidence time is measured at command exit or deadline cancellation,
 excludes kill, pipe, and process-wait cleanup grace, and is capped at `900000 ms`
-both per command and in aggregate. Exact rounding and timestamp projection must
-be fixed in the consumer-owned schema fixtures required by D9. Expiry is not a
-successful acknowledgement and does not change the terminal verdict.
+both per command and in aggregate. The downstream consumer fixtures required by
+D9 must use integer milliseconds and the same strict claim/enqueue boundaries.
+Expiry is not a successful acknowledgement and does not change the terminal
+verdict.
 
 ### D8 — Provable bounded reaping and at-least-once provider release
 
 The release/quarantine scheduler is a declared fixed-delay batch scheduler with:
 
-- `N`: actionable records captured at the start of one bounded scan;
-- `B`: maximum records admitted to one batch, with `B >= 1`;
-- `K`: maximum concurrent provider attempts within a batch, with
-  `1 <= K <= B`;
-- `I`: maximum delay before the first batch and between completion of one batch
-  and admission of the next, with `I > 0`; and
-- `R`: hard timeout for one provider attempt, with `R > 0`.
+- `N`: actionable records captured in one immutable scan snapshot;
+- `B`: exact configured batch capacity, with `B >= 1`;
+- `K`: provider-attempt concurrency, with `1 <= K <= B`;
+- `I`: maximum delay before admission of the first batch and between completion
+  of one batch and admission of the next, with `I > 0`; and
+- `R`: hard timeout from the start of one provider attempt until response or
+  enforced cancellation completes, with `R > 0`.
 
-Batches do not overlap. Within a batch the scheduler runs at most `K` provider
-attempts concurrently, starts the next attempt round immediately when the prior
-round completes or times out, and admits the next batch no later than `I` after
-the prior batch completes. Each snapshot record receives at most one provider
-attempt in that bounded scan; a failed attempt is scheduled in a later scan only
-after its capped backoff. Records becoming actionable after the scan snapshot
-belong to the next scan and do not increase `N` retroactively.
+For `N > 0`, the scheduler MUST partition the snapshot into deterministic serial
+batches. Every non-final batch contains exactly `B` snapshot records; the final
+batch contains exactly the remaining `N - B * (M - 1)` records. It MUST NOT
+admit a short non-final batch while at least `B` unadmitted snapshot records
+remain. Batches do not overlap, and each snapshot record receives exactly one
+provider attempt in that bounded scan. Failed attempts become eligible only in a
+later snapshot after capped backoff. Records becoming actionable after snapshot
+capture belong to a later scan and do not increase `N` retroactively.
+
+Execution within each admitted batch is work-conserving up to `K`: the scheduler
+starts `min(K, batchSize)` attempts on admission, and whenever an attempt returns
+or reaches its hard timeout while unstarted records remain, it starts enough
+attempts in the same scheduler turn to fill all available slots up to `K`. It
+MUST NOT intentionally leave a slot idle while an unstarted record remains in
+the admitted batch. Thus a batch of size `b` has at most `ceil(b / K)` attempt
+rounds.
 
 Let:
 
 ```text
-M = ceil(N / B)       batches in the snapshot
-Q = ceil(B / K)       maximum provider-attempt rounds per batch
+M   = ceil(N / B)                    batches when N > 0; otherwise 0
+b_j = B for j < M; N - B*(M-1) for j = M
+Q   = ceil(B / K)                    conservative rounds per batch
 ```
 
-Every record in the snapshot MUST be considered, and every successful responsive
-provider attempt MUST complete, within the conservative bound:
+Under the availability premises below, every snapshot record starts and reaches
+a provider response or enforced timeout within the tighter bound
+`M*I + sum(j=1..M, ceil(b_j/K)*R)`, and therefore within the conservative bound:
 
 ```text
 M * (I + Q * R)
 ```
 
-The formula deliberately includes provider-attempt duration for every possible
-round in every batch. Implementations MAY provide a tighter measured bound, but
-MUST NOT claim a smaller normative bound without adopting and documenting a
-scheduler that proves it. A provider that fails or times out is still considered
-within the bound; successful reclamation cannot be bounded when the provider
-never succeeds.
+This theorem is conditional on continuous host, process, and provider-call-path
+availability from snapshot capture through completion: the host and scheduler
+process remain alive and runnable; the scheduler is not paused or drained; the
+lease, quarantine, clock, and catalog authorities remain readable and writable;
+up to `K` attempt slots remain available; the provider invocation path remains
+callable; and every started attempt returns or can be forcibly cancelled within
+`R`. A provider failure or timeout is still considered within the bound, but
+successful reclamation cannot be bounded when the provider does not return
+success.
+
+A crash, process stop, host outage, provider-call-path outage, or unavailable
+durable authority invalidates the original snapshot's unconditional wall-clock
+deadline; this ADR places no bound on downtime. After restart or restored
+availability, Donmai first completes D3/D6 recovery and rebuilds actionable
+indexes. At the instant that reconciliation declares the scheduler runnable it
+captures a **new recovery snapshot**, including interrupted attempts recovered to
+an actionable state, with a new `N`. The first recovery batch MUST be admitted no
+later than `I` after that readiness instant, and the exact partition,
+work-conserving rule, and theorem above apply anew to that recovery snapshot.
+Donmai MUST NOT subtract downtime from the new first-admission bound or claim the
+original snapshot deadline survived the outage.
+
+Implementations MAY publish the tighter sum or a measured bound, but MUST NOT
+claim a smaller normative bound without documenting a scheduler that proves it.
 
 Before invoking provider release, the scheduler MUST durably record
 `release-pending`. Every durable `release-pending` record MUST cause at least one
@@ -502,9 +657,17 @@ The downstream extension MUST define, without changing the Donmai schemas above:
   evidence digest semantics, timestamp rounding, Unicode rejection, and shared
   cross-language fixtures for those schemas;
 - its separate durable result outbox, receiver mapping, delivery/application
-  states, replay, credential freshness, and authorization rules;
+  states, replay, and receiver-bound credential freshness;
+- the reviewed non-delegable authorization invariant: privileged scope is derived
+  only from current persisted capability plus eligible lifecycle/readiness state,
+  is never present in default registration scopes, and cannot be supplied by a
+  caller or inherited from a stale credential; every registration path and every
+  credential/token refresh path recomputes it from that authoritative state, and
+  capability loss, deregistration, supersession, or readiness loss MUST converge
+  the scope away from registrations and outstanding authorization before another
+  privileged claim;
 - any multi-tenant ownership, platform compare-and-set settlement, lifecycle
-  convergence, and readiness supervision;
+  convergence, and readiness supervision needed to enforce that invariant;
 - the complete sandbox contract and supported-host proof required before the
   privileged capability may be advertised; and
 - all migration, template, node, claim-routing, workflow/CI activation, rollback,

@@ -267,21 +267,38 @@ restart do not end exclusive ownership. Ownership ends only at durable
 workarea unavailable. Recovery loads quarantine records, every `active` and
 `release-pending` lease, local claims, and outbox state before pool admission.
 
-The proposed `settlementBudgetMs` is exactly `977000 ms`. Its `60000 ms` lease
-safety margin is separate, so a claim requires strictly more than `1037000 ms`
-remaining. The optional `60000 ms` pre-claim queue window is also separate, so
-enqueue requires strictly more than `1097000 ms`. The initial lease is
-`1800000 ms` with a `7200000 ms` maximum.
+Lease arithmetic uses signed integer Unix milliseconds. Acquisition samples the
+persisted nondecreasing clock once and sets
+`expiresAtMs = acquiredAtMs + leaseDurationMs`; the immutable maximum is
+`acquiredAtMs + maxLeaseDurationMs`. Enqueue and claim each sample once and use
+signed `remainingMs = expiresAtMs - nowMs`, with no second rounding step. The
+proposed `settlementBudgetMs` is exactly `977000 ms`. Its separate `60000 ms`
+safety margin makes claim require `remainingMs > 1037000`; the optional separate
+`60000 ms` pre-claim queue makes enqueue require `remainingMs > 1097000`. Clock
+rollback is clamped to the persisted high-water mark; a forward jump can make a
+lease immediately reapable. The initial lease is `1800000 ms` with a fixed
+`7200000 ms` maximum. Renewal may update both the durable active lease and full
+descriptor only before the terminal-status body carrying `expiresAt` is durably
+saved; after that save renewal is forbidden.
 
-For actionable count `N`, batch size `B`, provider concurrency `K`, maximum
-initial/inter-batch delay `I`, and provider-attempt timeout `R`, the serial-batch
-reaper gives each snapshot record one attempt before failed retries move to a
-later scan. It considers every scan-snapshot record—and completes every
-successful responsive attempt—within:
+For a scan snapshot of actionable count `N`, exact batch capacity `B`, provider
+concurrency `K`, maximum initial/inter-batch delay `I`, and provider-attempt
+timeout `R`, every non-final serial batch contains exactly `B` records and the
+final batch contains the remainder. Every batch executes work-conservingly up to
+`K`, immediately filling available attempt slots while an unstarted record
+remains. Each snapshot record receives exactly one attempt before failed retries
+move to a later scan. Subject to continuous host, process, durable-authority,
+attempt-slot, and provider-call-path availability, every attempt responds or
+times out within:
 
 ```text
 ceil(N / B) * (I + ceil(B / K) * R)
 ```
+
+Downtime has no bounded wall-clock duration. After restart or restored
+availability, reconciliation creates a new recovery snapshot with a new `N` and
+a new first-admission deadline no later than `I`; the exact partition,
+work-conserving rule, and bound apply anew.
 
 Every durable `release-pending` record MUST cause at least one provider release
 attempt. Provider release MUST be idempotent for the same workarea and equivalent

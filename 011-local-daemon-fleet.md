@@ -252,22 +252,40 @@ successful provider disposition followed by durable `released` does so.
 Recovery order is quarantine journal, leases and local claims, terminal-status
 outbox, session/catalog reconciliation, actionable indexes, then pool admission.
 Duplicate terminal submissions reuse a record only for the same terminal-result
-identity and byte-equivalent invariants. The proposed `settlementBudgetMs` is
-`977000 ms`; its `60000 ms` lease safety margin is separate. Claims require
-strictly more than `1037000 ms` remaining, and an optional separate `60000 ms`
-pre-claim queue requires strictly more than `1097000 ms`. Renewal cannot cross
-the `7200000 ms` maximum fixed at acquisition.
+identity and canonical-byte-equivalent Donmai invariants.
 
-The reaper declares actionable count `N`, batch size `B`, provider concurrency
-`K`, maximum initial/inter-batch delay `I`, and provider-attempt timeout `R`.
-Batches are serial, each runs at most `K` attempts concurrently, and each
-snapshot record receives one attempt before failed retries move to a later scan.
-Every record in the scan snapshot is considered—and every successful responsive
-attempt completes—within:
+Lease time uses signed integer Unix milliseconds. Acquisition samples the
+persisted nondecreasing clock once and sets
+`expiresAtMs = acquiredAtMs + leaseDurationMs`; the immutable maximum is
+`acquiredAtMs + maxLeaseDurationMs`. Enqueue and claim each sample once and use
+signed `remainingMs = expiresAtMs - nowMs`, with no second rounding step. The
+proposed `settlementBudgetMs` is `977000 ms`; its separate `60000 ms` safety
+margin makes claim require `remainingMs > 1037000`, and the optional separate
+`60000 ms` pre-claim queue makes enqueue require `remainingMs > 1097000`.
+Rollback is clamped to the persisted high-water mark and cannot increase
+remaining time; a forward jump may make the lease immediately reapable. Renewal
+may extend the same active lease only up to the acquisition-fixed `7200000 ms`
+maximum and only before the terminal-status body carrying `expiresAt` is durably
+saved. Before that save, renewal atomically updates both the durable lease and
+full descriptor; afterward it is forbidden.
+
+For a scan snapshot of actionable count `N`, exact batch capacity `B`, provider
+concurrency `K`, maximum initial/inter-batch delay `I`, and provider-attempt
+timeout `R`, every non-final serial batch contains exactly `B` records and the
+final batch contains the remainder. Each admitted batch is work-conserving up to
+`K`: it fills available attempt slots while an unstarted record remains. Each
+snapshot record receives exactly one attempt before a failed attempt moves to a
+later scan. Subject to continuous host, process, durable-authority, attempt-slot,
+and provider-call-path availability, every attempt responds or times out within:
 
 ```text
 ceil(N / B) * (I + ceil(B / K) * R)
 ```
+
+Downtime has no bounded wall-clock duration. After restart or restored
+availability, reconciliation creates a new recovery snapshot with a new `N` and
+a new first-admission deadline no later than `I`; the exact partition,
+work-conserving rule, and bound then apply anew.
 
 Every durable `release-pending` record MUST cause at least one provider release
 attempt. The callback MUST be idempotent for the same workarea and equivalent
