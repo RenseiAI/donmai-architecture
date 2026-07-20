@@ -1,8 +1,8 @@
 # 003 — WorkareaProvider
 
 **Status:** Reference (initial draft)
-**Last updated:** 2026-05-06
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `ADR-2026-05-06-tui-noun-consolidation.md`
+**Last updated:** 2026-07-19
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`
 
 ## Why this exists
 
@@ -28,6 +28,12 @@ interface WorkareaProvider extends Provider<'workarea'> {
    * Returns the workarea to the provider. The caller declares intent;
    * the provider chooses what to do with it (destroy, return to pool,
    * pause and retain, archive to cold storage).
+   *
+   * The following obligation is Proposed and is not currently effective:
+   * if ADR-2026-07-18-bounded-terminal-workarea-leases.md is Accepted and
+   * implemented, release() MUST be idempotent when invoked more than once
+   * for the same Workarea.id and equivalent ReleaseMode. A crash-recovered
+   * caller MAY repeat the callback; a different disposition is a conflict.
    */
   release(workarea: Workarea, mode: ReleaseMode): Promise<void>
 
@@ -154,6 +160,76 @@ interface WorkareaProviderCapabilities {
 ```
 
 The scheduler uses this struct to pick a provider for a given `WorkareaSpec`. Example: a session declaring `toolchain.java = "17"` and `mode: 'exclusive'` is routed to a provider where `supportedToolchains.includes('java')` and `supportsSharedMode` is irrelevant. If two providers qualify, the one with lower `expectedAcquireMs.p95` wins.
+
+## Terminal settlement lease (Proposed; implementation pending)
+
+`ADR-2026-07-18-bounded-terminal-workarea-leases.md` proposes a bounded,
+crash-recoverable lease on the exact `Workarea.id` for a terminal exchange that
+requires workarea-backed verification. This target contract is unreleased and
+must not be treated as an available capability. The lease is an overlay on
+`acquired`; it is not a second pool-member state and does not transfer ownership
+to another session.
+
+The workarea lifecycle owner would enforce these invariants:
+
+1. **Exclusive ownership ends only at durable `released`.** The originating
+   session remains the exclusive owner through verification, acknowledgement or
+   expiry eligibility, `release-pending`, provider disposition, and the final
+   durable `released` save. A non-released workarea cannot be joined in shared
+   mode or selected for another acquire.
+2. **Exact identity is preserved.** Verification addresses the existing
+   `Workarea.id` and host-local path through a path-free lease projection. A
+   different workarea is not an acceptable substitute even when its source
+   metadata matches.
+3. **The local execution claim precedes access.** Before a verifier accesses the
+   workarea, the lifecycle owner durably binds one invocation and claim to the
+   lease, session, terminal result, and workarea. A different claim conflicts.
+4. **Acknowledgement and expiry/reaping are separate.** An exact semantic
+   acknowledgement for the durable claim moves `active -> release-pending`.
+   Expiry merely makes `active` eligible for the reaper, which separately records
+   its reason and moves it to `release-pending`. Neither event makes the workarea
+   reusable; only successful provider release followed by durable `released`
+   does so.
+5. **Recovery and acquisition failure fail closed.** Every `active` and
+   `release-pending` lease is loaded before pool admission. A separate durable
+   quarantine guard is written before lease acquisition; guard or lease failure
+   excludes the exact workarea at boot and during bounded cleanup.
+6. **Lease time is exact and replay-coherent.** `acquiredAtMs` is the
+   acquisition transaction's single persisted nondecreasing UTC millisecond
+   sample; `expiresAtMs = acquiredAtMs + leaseDurationMs`; and the immutable
+   maximum is `acquiredAtMs + maxLeaseDurationMs`. Enqueue and claim each sample
+   once and compute signed `remainingMs = expiresAtMs - nowMs`, with no second
+   rounding step. `settlementBudgetMs` is `977000 ms`; the `60000 ms` safety
+   margin is separate, so claim requires `remainingMs > 1037000`. The optional
+   separate `60000 ms` queue window requires `remainingMs > 1097000`. Clock
+   rollback is clamped by the persisted high-water mark; a forward jump may make
+   the lease immediately reapable. Renewal may extend the same active lease only
+   up to the acquisition-fixed maximum and only before the first durable
+   terminal-status body; before that save it updates the authoritative descriptor,
+   and after that save it is forbidden.
+7. **Reclamation uses a proved actionable bound.** A scan snapshot of `N`
+   records is partitioned into serial batches: every non-final batch contains
+   exactly `B` records and the final batch contains the remainder. Each admitted
+   batch executes work-conservingly up to `K` concurrent attempts, filling a free
+   slot immediately while an unstarted record remains. With maximum
+   initial/inter-batch delay `I`, hard attempt timeout `R`,
+   `M = ceil(N/B)`, and `Q = ceil(B/K)`, every snapshot attempt responds or times
+   out within `M * (I + Q * R)`. The theorem assumes continuous host, scheduler,
+   durable-authority, attempt-slot, and provider-call-path availability. An outage
+   has no bounded wall-clock duration; after reconciliation the runtime captures a
+   new recovery snapshot whose first batch is admitted within a new `I`, then
+   applies the same exact partition, work-conserving rule, and bound.
+8. **Provider release is idempotent and at least once.** Every durable
+   `release-pending` record MUST cause at least one `release(workarea, mode)`
+   attempt. The caller MAY repeat it after a crash, and the provider MUST make an
+   equivalent repeated callback safe. Failure leaves `release-pending`, retains
+   the workarea, and remains operator-visible.
+
+A duplicate terminal submission reuses the lease keyed by its stable terminal
+result identity only when its bytes and invariants are equivalent. Expiry is
+never a successful acknowledgement or a terminal-verdict change. A requested
+lease is independent of `PreserveWorktreeAlways`; ordinary preservation cannot
+suppress the descriptor or the lease state machine.
 
 ## The local-pool implementation (OSS-shipped reference)
 
