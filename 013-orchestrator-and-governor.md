@@ -1,9 +1,9 @@
 # 013 — Orchestrator, Governor, Worker, AgentRuntime
 
 **Status:** Reference (initial draft)
-**Last updated:** 2026-04-27
+**Last updated:** 2026-07-19
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/013-orchestrator-and-governor-platform-extensions.md`)
-**Related:** `001-layered-execution-model.md`, `004-sandbox-capability-matrix.md`, `015-plugin-spec.md`, `016-workflow-engine.md`, `011-local-daemon-fleet.md`.
+**Related:** `001-layered-execution-model.md`, `004-sandbox-capability-matrix.md`, `015-plugin-spec.md`, `016-workflow-engine.md`, `011-local-daemon-fleet.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`.
 
 ## Why this exists
 
@@ -228,6 +228,84 @@ consumer falls back to the marker scan). A `blocked` verdict is the structured
 form of the deliberate-decline signal and routes to needs-clarification, not a
 generic failure. See `ADR-2026-06-15-turn-result-manifest.md`.
 
+### Terminal workarea ownership spans durable release (ADR-2026-07-18, Proposed)
+
+`ADR-2026-07-18-bounded-terminal-workarea-leases.md` proposes an
+implementation-pending, unreleased target contract for terminal settlement that
+includes workarea-backed verification. Before ordinary teardown, the workarea
+owner first fsyncs a guard
+in a separate acquisition-quarantine authority and then persists a bounded lease
+on the session's exact workarea. A retry after connection loss resolves to the
+same terminal-result identity only when its bytes and invariants are equivalent.
+No consumer capability may be advertised from this proposal alone.
+
+The common completion prefix would be normative:
+
+1. persist the quarantine guard;
+2. persist and re-read the terminal workarea lease, then clear only the redundant
+   guard;
+3. submit the terminal result through the receiver-affine durable outbox; and
+4. before verification access, persist one local execution claim binding the
+   invocation and claim to the exact lease, session, terminal result, and
+   workarea.
+
+Release then follows one of two separate paths:
+
+- **Acknowledgement path:** the consumer returns the exact semantic
+  acknowledgement; Donmai compares every field with the durable descriptor and
+  local claim; it atomically stores the local acknowledgement outcome and moves
+  `active -> release-pending`; the provider release worker applies the normal
+  disposition and finally persists `released`.
+- **Expiry/reaping path:** reaching `expiresAt` only makes `active` eligible; the
+  reaper records expiry as the reason, moves `active -> release-pending`, invokes
+  the same provider release path, and finally persists `released`. Expiry is not
+  acknowledgement and does not change the terminal verdict.
+
+Worker-process exit, transport delivery, acknowledgement, expiry, and daemon
+restart do not end exclusive ownership. Ownership ends only at durable
+`released`; provider failure retains `release-pending` and keeps the exact
+workarea unavailable. Recovery loads quarantine records, every `active` and
+`release-pending` lease, local claims, and outbox state before pool admission.
+
+Lease arithmetic uses signed integer Unix milliseconds. Acquisition samples the
+persisted nondecreasing clock once and sets
+`expiresAtMs = acquiredAtMs + leaseDurationMs`; the immutable maximum is
+`acquiredAtMs + maxLeaseDurationMs`. Enqueue and claim each sample once and use
+signed `remainingMs = expiresAtMs - nowMs`, with no second rounding step. The
+proposed `settlementBudgetMs` is exactly `977000 ms`. Its separate `60000 ms`
+safety margin makes claim require `remainingMs > 1037000`; the optional separate
+`60000 ms` pre-claim queue makes enqueue require `remainingMs > 1097000`. Clock
+rollback is clamped to the persisted high-water mark; a forward jump can make a
+lease immediately reapable. The initial lease is `1800000 ms` with a fixed
+`7200000 ms` maximum. Renewal may update both the durable active lease and full
+descriptor only before the terminal-status body carrying `expiresAt` is durably
+saved; after that save renewal is forbidden.
+
+For a scan snapshot of actionable count `N`, exact batch capacity `B`, provider
+concurrency `K`, maximum initial/inter-batch delay `I`, and provider-attempt
+timeout `R`, every non-final serial batch contains exactly `B` records and the
+final batch contains the remainder. Every batch executes work-conservingly up to
+`K`, immediately filling available attempt slots while an unstarted record
+remains. Each snapshot record receives exactly one attempt before failed retries
+move to a later scan. Subject to continuous host, process, durable-authority,
+attempt-slot, and provider-call-path availability, every attempt responds or
+times out within:
+
+```text
+ceil(N / B) * (I + ceil(B / K) * R)
+```
+
+Downtime has no bounded wall-clock duration. After restart or restored
+availability, reconciliation creates a new recovery snapshot with a new `N` and
+a new first-admission deadline no later than `I`; the exact partition,
+work-conserving rule, and bound apply anew.
+
+Every durable `release-pending` record MUST cause at least one provider release
+attempt. Provider release MUST be idempotent for the same workarea and equivalent
+release mode and MAY be invoked more than once after crash recovery. Full target
+contract: `ADR-2026-07-18-bounded-terminal-workarea-leases.md` and
+`003-workarea-provider.md` § "Terminal settlement lease".
+
 ### CI verification is orchestration-owned and durable (ADR-2026-06-10)
 
 The `development` row above ends at "PR created" **deliberately** — remote-CI
@@ -239,8 +317,12 @@ verification is not part of the agent session's completion contract:
   PR-open). It MUST NOT wait for remote CI inside the session — and more
   generally MUST NOT park on in-process harness timers (schedule-wakeup
   tools, background polls) expecting to be woken after its final message.
-  The runner treats the terminal event as end-of-session and tears the
-  provider down; in-process wake-up state dies with it.
+  The runner treats the terminal event as the end of agent activity and tears
+  the runtime process down; in-process wake-up state dies with it. This does not
+  authorize early workarea release: under the proposed lease contract, every
+  non-released terminal lease retains the exact workarea through verification,
+  acknowledgement or expiry eligibility, provider disposition, and durable
+  `released`.
 - The CI wait happens at the orchestration layer as a **durable
   suspend/resume gate** correlated on the session's head commit SHA. The
   runner captures the SHA at envelope-build time (after the backstop, which
