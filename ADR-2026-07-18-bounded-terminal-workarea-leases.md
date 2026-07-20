@@ -363,9 +363,11 @@ The Donmai lease alone never proves sandbox readiness.
 Before a consumer accesses the workarea or runs a command, Donmai MUST durably
 store the exact D1 execution claim, binding one `invocationId` and `claimId` to
 the lease, session, terminal result, and workarea. Repeating a claim with the
-same D1 canonical bytes is idempotent. Any different invocation, claim, identity, or payload
-conflicts and cannot execute. The descriptor alone grants no execution or
-release authority.
+same D1 canonical bytes is idempotent. Any different invocation, claim, identity,
+or payload conflicts and cannot execute. Claim acceptance returns D7's same
+transaction sample as signed integer `claimNowMs`; this operation metadata is
+not a ninth member of the D1 claim schema. The descriptor alone grants no
+execution or release authority.
 
 Acknowledgement and expiry/reaping are separate paths:
 
@@ -489,13 +491,16 @@ nowMs    = max(rawNowMs, persistedClockHighWatermarkMs)
 
 Before a time-based decision or response becomes visible, Donmai MUST durably
 advance the provider root's clock high-water mark to `nowMs`, atomically with the
-lease mutation when there is one. A wall-clock rollback therefore cannot increase
-`remainingMs` or resurrect an expired lease: logical time stays at the durable
-high-water mark until realtime catches up. That pause can delay expiry in physical
-elapsed time by the rollback magnitude, so this ADR claims no elapsed-time bound
-across a clock discontinuity. A forward jump advances the high-water mark and may
-make a lease immediately eligible for reaping; later rollback does not reverse
-that decision. If the clock authority or its high-water mark cannot be read or
+lease mutation when there is one. For a successful claim, returned `claimNowMs`
+MUST equal that transaction's `nowMs` and the Unix-millisecond value projected by
+its canonical `claimedAt`; Donmai MUST NOT resample or reconstruct the value after
+claim commit. A wall-clock rollback therefore cannot increase `remainingMs` or
+resurrect an expired lease: logical time stays at the durable high-water mark
+until realtime catches up. That pause can delay expiry in physical elapsed time
+by the rollback magnitude, so this ADR claims no elapsed-time bound across a
+clock discontinuity. A forward jump advances the high-water mark and may make a
+lease immediately eligible for reaping; later rollback does not reverse that
+decision. If the clock authority or its high-water mark cannot be read or
 persisted, the affected provider root fails closed under the same readiness
 posture as D3.
 
@@ -794,7 +799,8 @@ This proposal is implementation-pending and unreleased. Before it may become
    crash points.
 3. Shared fixtures must cover exact bytes; canonical IDs and timestamps; unknown,
    duplicate-key, surrogate, path, and trailing-value rejection; claim/enqueue
-   one-millisecond boundaries; no-local-claim acknowledgement; receiver-key
+   one-millisecond boundaries; returned `claimNowMs`/`claimedAt` equality and no
+   post-commit resample; no-local-claim acknowledgement; receiver-key
    rotation and missing resolution; restart at every outbox/ack/release boundary;
    `PreserveWorktreeAlways`; guard-before-lease failure; unavailable quarantine
    persistence; quarantine cleanup; actionable-index rebuild; and repeated
