@@ -1,7 +1,7 @@
 # 013 — Orchestrator, Governor, Worker, AgentRuntime
 
 **Status:** Reference (initial draft)
-**Last updated:** 2026-07-19
+**Last updated:** 2026-07-22
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/013-orchestrator-and-governor-platform-extensions.md`)
 **Related:** `001-layered-execution-model.md`, `004-sandbox-capability-matrix.md`, `015-plugin-spec.md`, `016-workflow-engine.md`, `011-local-daemon-fleet.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`.
 
@@ -228,26 +228,31 @@ consumer falls back to the marker scan). A `blocked` verdict is the structured
 form of the deliberate-decline signal and routes to needs-clarification, not a
 generic failure. See `ADR-2026-06-15-turn-result-manifest.md`.
 
-### Terminal workarea ownership spans durable release (ADR-2026-07-18, Proposed)
+### Terminal workarea ownership spans durable release (ADR-2026-07-18, Accepted architecture)
 
-`ADR-2026-07-18-bounded-terminal-workarea-leases.md` proposes an
+`ADR-2026-07-18-bounded-terminal-workarea-leases.md` accepts an
 implementation-pending, unreleased target contract for terminal settlement that
 includes workarea-backed verification. Before ordinary teardown, the workarea
-owner first fsyncs a guard
-in a separate acquisition-quarantine authority and then persists a bounded lease
-on the session's exact workarea. A retry after connection loss resolves to the
-same terminal-result identity only when its bytes and invariants are equivalent.
-No consumer capability may be advertised from this proposal alone.
+owner first fsyncs a guard in a separate acquisition-quarantine authority and
+then persists a bounded lease on the session's exact workarea. A retry after
+connection loss resolves to the same terminal-result identity only when its bytes
+and invariants are equivalent. Architecture acceptance is not implementation,
+released-artifact, advertisement, rollout, or activation evidence.
 
-The common completion prefix would be normative:
+The common completion prefix is normative for a conforming implementation:
 
 1. persist the quarantine guard;
 2. persist and re-read the terminal workarea lease, then clear only the redundant
    guard;
-3. submit the terminal result through the receiver-affine durable outbox; and
+3. submit the terminal result through the receiver-affine durable outbox;
 4. before verification access, persist one local execution claim binding the
    invocation and claim to the exact lease, session, terminal result, and
-   workarea.
+   workarea; that Donmai transaction is the sole claim-clock origin, and exact
+   replay returns its immutable canonical claim bytes, `claimNowMs`, and
+   `claimedAt` without resampling; and
+5. send that exact local claim tuple through the downstream idempotent
+   claim-acknowledgement protocol and durably retain its exact successful receipt
+   before snapshot/filesystem access, command start, or result acceptance.
 
 Release then follows one of two separate paths:
 
@@ -266,15 +271,22 @@ restart do not end exclusive ownership. Ownership ends only at durable
 `released`; provider failure retains `release-pending` and keeps the exact
 workarea unavailable. Recovery loads quarantine records, every `active` and
 `release-pending` lease, local claims, and outbox state before pool admission.
+A privileged verification composition remains unavailable unless the running
+released-artifact set and, when Kit commands are selected, the active package
+identity and command-composition digest exactly match their approved values.
+Architecture acceptance, package publication, and source conformance do not
+satisfy the separate advertisement, authorization, claim-enablement, workflow/CI
+activation, or rollback gates.
 
 Lease arithmetic uses signed integer Unix milliseconds. Acquisition samples the
 persisted nondecreasing clock once and sets
 `expiresAtMs = acquiredAtMs + leaseDurationMs`; the immutable maximum is
 `acquiredAtMs + maxLeaseDurationMs`. Enqueue and claim each sample once and use
 signed `remainingMs = expiresAtMs - nowMs`, with no second rounding step. The
-proposed `settlementBudgetMs` is exactly `977000 ms`. Its separate `60000 ms`
-safety margin makes claim require `remainingMs > 1037000`; the optional separate
-`60000 ms` pre-claim queue makes enqueue require `remainingMs > 1097000`. Clock
+accepted architecture sets `settlementBudgetMs` to exactly `977000 ms`. Its
+separate `60000 ms` safety margin makes claim require `remainingMs > 1037000`;
+the optional separate `60000 ms` pre-claim queue makes enqueue require
+`remainingMs > 1097000`. Clock
 rollback is clamped to the persisted high-water mark; a forward jump can make a
 lease immediately reapable. The initial lease is `1800000 ms` with a fixed
 `7200000 ms` maximum. Renewal may update both the durable active lease and full
@@ -319,8 +331,9 @@ verification is not part of the agent session's completion contract:
   tools, background polls) expecting to be woken after its final message.
   The runner treats the terminal event as the end of agent activity and tears
   the runtime process down; in-process wake-up state dies with it. This does not
-  authorize early workarea release: under the proposed lease contract, every
-  non-released terminal lease retains the exact workarea through verification,
+  authorize early workarea release: under the accepted, implementation-pending
+  lease architecture, every non-released terminal lease retains the exact
+  workarea through verification,
   acknowledgement or expiry eligibility, provider disposition, and durable
   `released`.
 - The CI wait happens at the orchestration layer as a **durable

@@ -1,7 +1,7 @@
 # 011 — Local Daemon Fleet (Operations & UX)
 
 **Status:** Reference (initial draft)
-**Last updated:** 2026-07-19
+**Last updated:** 2026-07-22
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/011-local-daemon-fleet-platform-extensions.md`)
 **Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`), `ADR-2026-07-18-bounded-terminal-workarea-leases.md`.
 
@@ -201,7 +201,7 @@ Where the daemon receives work assignments.
 When the daemon needs to restart (auto-update, manual stop, system reboot scheduled), it drains:
 
 1. **Stop accepting new work.** Daemon updates its registered status to `draining`; the orchestrator routes new sessions elsewhere.
-2. **Wait for in-flight sessions.** Up to `drainTimeoutSeconds` (default 600). Sessions get a SIGTERM at the timeout. Unleased workareas follow the configured post-mortem release policy. Under the proposed terminal-lease contract, every `active` or `release-pending` workarea remains unavailable until provider disposition is complete and `released` is durably saved; acknowledgement and expiry only select a release path.
+2. **Wait for in-flight sessions.** Up to `drainTimeoutSeconds` (default 600). Sessions get a SIGTERM at the timeout. Unleased workareas follow the configured post-mortem release policy. Under the accepted, implementation-pending terminal-lease architecture, every `active` or `release-pending` workarea remains unavailable until provider disposition is complete and `released` is durably saved; acknowledgement and expiry only select a release path.
 3. **Release eligible pool members.** Pool members in `ready` or `warming` state are torn down; `acquired` members follow the policy above. Drain never overrides a non-released terminal workarea lease or acquisition-quarantine guard.
 4. **Restart.** New process boots, re-registers, status returns to `ready`.
 
@@ -212,7 +212,7 @@ For graceful planned restarts (e.g., a reboot), `donmai host drain` returns when
 If the daemon process dies unexpectedly:
 
 1. **System service auto-restart.** launchd / systemd brings it back. Default backoff: immediate, then 30s, 5m for repeated crashes.
-2. **In-flight sessions become orphans.** Their workareas remain on disk. Under the proposed terminal-lease contract, the new daemon loads the separate acquisition-quarantine journal first, then every durable `active` and `release-pending` lease, before classifying orphan workareas. Any guarded, quarantined, non-released, or unreconciled exact workarea remains unavailable under its originating session identity; only an unleased, unguarded orphan follows the ordinary post-mortem policy.
+2. **In-flight sessions become orphans.** Their workareas remain on disk. Under the accepted, implementation-pending terminal-lease architecture, the new daemon loads the separate acquisition-quarantine journal first, then every durable `active` and `release-pending` lease, before classifying orphan workareas. Any guarded, quarantined, non-released, or unreconciled exact workarea remains unavailable under its originating session identity; only an unleased, unguarded orphan follows the ordinary post-mortem policy.
 3. **Pool state survives.** Pool members are filesystem state; they are rediscovered only after quarantine, lease, session, and pool-catalog reconciliation. A member with a quarantine record or non-released lease cannot be admitted to an available state.
 4. **Logs preserve crash context.** macOS: `~/Library/Logs/donmai/daemon.log`; Linux: `journalctl --user -u donmai-daemon`. The daemon emits a final crash dump to the same path before exiting (when possible).
 
@@ -224,12 +224,13 @@ If the daemon refuses to start, common causes:
 
 `donmai host doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, pool sane) and prints the failing condition.
 
-## Terminal workarea lease recovery and reaping (Proposed; implementation pending)
+## Terminal workarea lease recovery and reaping (Accepted architecture; implementation and release pending)
 
-`ADR-2026-07-18-bounded-terminal-workarea-leases.md` proposes the target daemon
-contract below. It is unreleased: the daemon must not advertise a consumer
-capability that depends on it until the lease, quarantine, outbox, recovery, and
-provider-release fixtures pass in released artifacts.
+`ADR-2026-07-18-bounded-terminal-workarea-leases.md` accepts the target daemon
+contract below as architecture only. Implementation and release remain pending:
+the daemon must not advertise a consumer capability that depends on it until the
+lease, quarantine, outbox, recovery, and provider-release fixtures pass against
+the exact approved released artifacts.
 
 Before attempting to persist a terminal lease, the daemon writes and fsyncs a
 record in a separate acquisition-quarantine journal. A durable lease supersedes
@@ -242,26 +243,38 @@ unready; absence of a record after an I/O failure is never evidence of safety.
 The lease keeps the exact workarea under the originating session's exclusive
 ownership through the final durable `released` state. Before verification
 access, one durable local execution claim binds the invocation and claim to the
-lease, session, terminal result, and workarea. A byte-exact semantic
-acknowledgement for that claim moves `active -> release-pending`. Expiry is a
-separate path: it only makes `active` eligible, after which the reaper records the
-expiry reason and moves it to `release-pending`. Worker exit, drain, restart,
-acknowledgement, and expiry do not themselves make the workarea reusable. Only a
-successful provider disposition followed by durable `released` does so.
+lease, session, terminal result, and workarea. That Donmai transaction is the
+sole claim-clock origin: its canonical claim bytes, returned `claimNowMs`, and
+canonical `claimedAt` form one immutable tuple that byte-identical replay returns
+without resampling after restart or ambiguous transport. The downstream consumer
+must durably retain the exact successful claim-acknowledgement receipt before
+any command starts or result is accepted. A byte-exact semantic acknowledgement
+for the local claim moves `active -> release-pending`. Expiry is a separate path:
+it only makes `active` eligible, after which the reaper records the expiry reason
+and moves it to `release-pending`. Worker exit, drain, restart, acknowledgement,
+and expiry do not themselves make the workarea reusable. Only a successful
+provider disposition followed by durable `released` does so.
 
 Recovery order is quarantine journal, leases and local claims, terminal-status
-outbox, session/catalog reconciliation, actionable indexes, then pool admission.
+outbox, downstream receipt/result outbox state when configured,
+session/catalog reconciliation, actionable indexes, then pool admission.
 Duplicate terminal submissions reuse a record only for the same terminal-result
-identity and canonical-byte-equivalent Donmai invariants.
+identity and canonical-byte-equivalent Donmai invariants. A configured privileged
+consumer remains disabled unless the running released-artifact set and, when Kit
+commands are selected, the active package identity and command-composition
+digest exactly match their approved values. Package publication, architecture
+acceptance, and source conformance do not by themselves authorize capability
+advertisement, claim enablement, or workflow/CI activation.
 
 Lease time uses signed integer Unix milliseconds. Acquisition samples the
 persisted nondecreasing clock once and sets
 `expiresAtMs = acquiredAtMs + leaseDurationMs`; the immutable maximum is
 `acquiredAtMs + maxLeaseDurationMs`. Enqueue and claim each sample once and use
 signed `remainingMs = expiresAtMs - nowMs`, with no second rounding step. The
-proposed `settlementBudgetMs` is `977000 ms`; its separate `60000 ms` safety
-margin makes claim require `remainingMs > 1037000`, and the optional separate
-`60000 ms` pre-claim queue makes enqueue require `remainingMs > 1097000`.
+accepted architecture sets `settlementBudgetMs` to `977000 ms`; its separate
+`60000 ms` safety margin makes claim require `remainingMs > 1037000`, and the
+optional separate `60000 ms` pre-claim queue makes enqueue require
+`remainingMs > 1097000`.
 Rollback is clamped to the persisted high-water mark and cannot increase
 remaining time; a forward jump may make the lease immediately reapable. Renewal
 may extend the same active lease only up to the acquisition-fixed `7200000 ms`
@@ -303,8 +316,9 @@ is the single in-process choke point; the localhost-only
 drive it. A cancel rides the existing lock-refresh heartbeat (the refresh response
 gains a `stop` field) for a fast cooperative in-band stop, escalating to
 SIGTERM→SIGKILL only if the child does not exit. An unleased workarea follows the
-post-mortem release policy. Under the proposed terminal-lease contract, a
-non-released lease retains the exact workarea through `release-pending` until
+post-mortem release policy. Under the accepted, implementation-pending
+terminal-lease architecture, a non-released lease retains the exact workarea
+through `release-pending` until
 provider disposition is durably `released`; acknowledgement and expiry are only
 separate eligibility reasons.
 

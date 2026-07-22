@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-07-18
 boundary: shared
 split: sibling-extensions
@@ -7,9 +7,9 @@ split: sibling-extensions
 
 # ADR-2026-07-18 — Bounded terminal workarea leases
 
-**Status:** Proposed — implementation pending and unreleased
+**Status:** Accepted — architecture decision; implementation, release, downstream migration, and activation pending
 **Date:** 2026-07-18
-**Boundary:** shared (OSS-canonical lease contract here; downstream platform stub and sibling extension required before acceptance)
+**Boundary:** shared (OSS-canonical lease contract here; downstream mirror and platform extension ratified in the coordinated architecture pair)
 **Authors:** architecture agent
 
 ## Context
@@ -37,18 +37,20 @@ extension under the shared-ADR mechanism in `BOUNDARY.md`.
 
 ## Decision
 
-This ADR proposes a **bounded terminal workarea lease**. The workarea-owning
+This ADR defines a **bounded terminal workarea lease**. The workarea-owning
 runtime persists the lease before terminal teardown can make the workarea
 reusable. A requested lease is independent of ordinary preservation policy.
 Durable ownership ends only at durable `released`: exact acknowledgement and
 expiry are separate reasons that may make provider release eligible, but neither
 reason itself releases the workarea.
 
-This is a target contract, not a shipped claim. No released Donmai artifact is
-asserted to implement it, and no downstream privileged consumer may advertise or
-activate a capability solely because this proposal exists. The ADR remains
-`Proposed` until the OSS contract, its fixtures, the required quarantine
-authority, and the downstream extension are implemented and verified.
+`Accepted` ratifies this architecture only. It is not a shipped implementation,
+released-artifact, migration, advertisement, rollout, or activation claim. No
+released Donmai artifact is asserted to implement it, and no downstream
+privileged consumer may advertise or activate a capability solely because the
+architecture is accepted. Source conformance, implementation, fixture,
+released-artifact, downstream migration, rollout, and activation gates remain
+independent and fail closed.
 
 ### D1 — Exact Donmai-owned v1 schemas
 
@@ -121,7 +123,7 @@ decodes to the same value compares as the same Donmai value, while every Donmai
 producer MUST emit the canonical bytes directly. D6 separately defines the
 authoritative retained bytes of the complete terminal-status body.
 
-The lease request has exactly these five fields and, for this proposed profile,
+The lease request has exactly these five fields and, for this accepted profile,
 these exact values:
 
 ```json
@@ -362,12 +364,16 @@ The Donmai lease alone never proves sandbox readiness.
 
 Before a consumer accesses the workarea or runs a command, Donmai MUST durably
 store the exact D1 execution claim, binding one `invocationId` and `claimId` to
-the lease, session, terminal result, and workarea. Repeating a claim with the
-same D1 canonical bytes is idempotent. Any different invocation, claim, identity,
-or payload conflicts and cannot execute. Claim acceptance returns D7's same
-transaction sample as signed integer `claimNowMs`; this operation metadata is
-not a ninth member of the D1 claim schema. The descriptor alone grants no
-execution or release authority.
+the lease, session, terminal result, and workarea. Claim acceptance returns D7's
+same transaction sample as signed integer `claimNowMs`; this operation metadata
+is not a ninth member of the D1 claim schema. That durable local transaction is
+the sole claim-clock origin. After commit, the canonical claim bytes,
+`claimNowMs`, and canonical `claimedAt` are one immutable replay tuple: repeating
+the same D1 canonical claim returns that exact tuple after restart or ambiguous
+transport, without resampling, reconstructing, or extending time. Any different
+invocation, claim, identity, canonical claim byte, or claimed-time value
+conflicts and cannot execute. The descriptor alone grants no execution or
+release authority.
 
 <!-- BOUNDARY-SYNC-START: adr-2026-07-18-terminal-claim-clock -->
 The cross-repository delivery/claim clock contract is:
@@ -491,7 +497,7 @@ connection loss.
 
 ### D7 — Exact settlement and lease timing
 
-The proposed settlement budget is exactly:
+The accepted settlement budget is exactly:
 
 ```text
 900000 ms  maximum consumer command/result evidence duration
@@ -672,10 +678,12 @@ destruction plus catalog removal, permits later capacity admission.
 
 ### D9 — Required downstream extension; exact consumer protocol deferred
 
-Because this ADR is `shared`, the platform corpus must carry the thin mirrored
-stub prescribed by `BOUNDARY.md` plus a sibling platform-extension ADR. Both are
-pre-acceptance dependencies and are not created or made normative by this OSS
-file.
+Because this ADR is `shared`, the platform corpus carries the thin mirrored
+stub prescribed by `BOUNDARY.md` plus the sibling platform-extension ADR. The
+coordinated pair ratifies one architecture while preserving ownership: this OSS
+file remains canonical for Donmai contracts, and the platform extension remains
+canonical for consumer-specific authority. Acceptance of either architecture is
+not implementation or release evidence.
 
 The downstream extension MUST define, without changing the Donmai schemas above:
 
@@ -684,8 +692,16 @@ The downstream extension MUST define, without changing the Donmai schemas above:
 - closed field sets, optional/null rules, canonical byte projection, content and
   evidence digest semantics, timestamp rounding, Unicode rejection, and shared
   cross-language fixtures for those schemas;
+- its idempotent claim-acknowledgement protocol, including verification of the
+  exact canonical Donmai claim and returned `claimNowMs`, stable replay under its
+  exact consumer-owned receipt semantics, and durable consumer retention of the
+  exact successful receipt returned to it before any command starts or any result
+  is accepted;
 - its separate durable result outbox, receiver mapping, delivery/application
   states, replay, and receiver-bound credential freshness;
+- exact approval bindings for the released-artifact set and, when Kit commands
+  are selected, the canonical package identity and command-composition digest
+  from `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`;
 - the reviewed non-delegable authorization invariant: privileged scope is derived
   only from current persisted capability plus eligible lifecycle/readiness state,
   is never present in default registration scopes, and cannot be supplied by a
@@ -698,14 +714,17 @@ The downstream extension MUST define, without changing the Donmai schemas above:
   convergence, and readiness supervision needed to enforce that invariant;
 - the complete sandbox contract and supported-host proof required before the
   privileged capability may be advertised; and
-- all migration, template, node, claim-routing, workflow/CI activation, rollback,
-  and lifecycle-evidence gates.
+- separate package publication, released-artifact approval, capability
+  advertisement, authorization issuance, claim enablement, workflow/CI
+  activation, rollback, and lifecycle-evidence gates; architecture acceptance or
+  package publication alone satisfies none of the later gates.
 
 No consumer capability, schema name, credential scope, migration identity,
 template identity, workflow node, or activation state is defined by this ADR.
-Until the downstream extension is accepted, implemented, fixture-compatible, and
-default-off activation is deliberately enabled, the downstream feature remains
-unavailable.
+The downstream architecture is accepted in the coordinated platform ADR, but the
+feature remains unavailable until source conformance, implementation, shared
+fixture compatibility, released-artifact proof, migration approval, and deliberate
+default-off rollout/activation gates all pass.
 
 ## Consequences
 
@@ -733,9 +752,9 @@ unavailable.
 - The host must operate two durable authorities—the lease/outbox store and the
   independent quarantine journal—and recover both before pool admission.
 - Providers must tolerate repeated equivalent release callbacks.
-- This proposal cannot be accepted or activated from one repository alone; it
-  requires cross-language fixtures, runtime implementation, and the downstream
-  extension.
+- Architecture acceptance requires coordinated corpus changes, while usable
+  availability still requires cross-language fixtures, runtime implementation,
+  released artifacts, and the downstream rollout gates.
 
 ### Risks
 
@@ -776,64 +795,80 @@ unavailable.
 
 ## Affected documents
 
-- `003-workarea-provider.md` — proposed lease overlay, ownership through durable
-  `released`, claim/release paths, separate safety margin, actionable `N`, and
-  idempotent repeated provider release.
-- `011-local-daemon-fleet.md` — proposed drain, crash recovery, quarantine-first
-  boot ordering, release-pending retention, and bounded scheduler operations.
-- `013-orchestrator-and-governor.md` — proposed terminal completion ordering with
-  local claim, separate acknowledgement and expiry/reaping paths, and durable
-  provider disposition.
+- `003-workarea-provider.md` — accepted lease overlay, ownership through durable
+  `released`, sole-origin local claim clock, claim/release paths, separate safety
+  margin, actionable `N`, and idempotent repeated provider release; implementation
+  and released-artifact proof remain pending.
+- `011-local-daemon-fleet.md` — accepted drain, crash recovery, quarantine-first
+  boot ordering, exact claim replay and receipt-retention boundary,
+  release-pending retention, and bounded scheduler operations; implementation and
+  release remain pending.
+- `013-orchestrator-and-governor.md` — accepted terminal completion ordering with
+  sole-origin local claim time, durable downstream claim-acknowledgement receipt,
+  separate acknowledgement and expiry/reaping paths, and durable provider
+  disposition; implementation and activation remain pending.
 - `ADR-2026-06-22-daemon-per-session-cancel-wire.md` — its historical post-mortem
-  release statements remain unchanged but would be constrained by this proposal:
-  a non-released terminal lease retains the exact workarea.
-- `006-cross-provider-interactions.md` — intentionally unchanged. This proposal
+  release statements remain unchanged but are constrained by this accepted
+  architecture once implemented: a non-released terminal lease retains the exact
+  workarea.
+- `006-cross-provider-interactions.md` — intentionally unchanged. This decision
   introduces no new provider-family seam beyond the WorkareaProvider lifecycle;
   a particular verifier seam belongs in the downstream extension.
-- `015-plugin-spec.md` — intentionally unchanged. This proposal defines no plugin
+- `015-plugin-spec.md` — intentionally unchanged. This decision defines no plugin
   capability or verb identifier.
-- `016-workflow-engine.md` — intentionally unchanged. This proposal defines no
+- `016-workflow-engine.md` — intentionally unchanged. This decision defines no
   workflow node, template, or CI transition.
-- `README.md` and `AGENTS.md` — index this ADR honestly as Proposed, shared,
-  implementation-pending, and unreleased.
+- `README.md` and `AGENTS.md` — index this ADR honestly as Accepted architecture,
+  shared, implementation-pending, and unreleased.
 - [`rensei-architecture/ADR-2026-07-18-bounded-terminal-workarea-leases.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/ADR-2026-07-18-bounded-terminal-workarea-leases.md)
-  — a thin `Mirrored` stub is required downstream before acceptance.
+  — the thin `Mirrored` stub records canonical status `Accepted`.
 - [`rensei-architecture/ADR-2026-07-18-bounded-terminal-workarea-leases-platform-extensions.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/ADR-2026-07-18-bounded-terminal-workarea-leases-platform-extensions.md)
-  — the consumer protocol, authorization, sandbox, and activation extension is
-  required downstream before acceptance.
+  — the accepted consumer protocol, authorization, sandbox, and activation
+  architecture; implementation, release, migration, and activation remain pending.
 
 No synchronized `BOUNDARY-SYNC` region is changed.
 
 ## Affected work items
 
 No tracker identifier is embedded in this OSS ADR. Implementations should link
-their own work item to this proposal.
+their own work item to this decision.
 
-## Implementation and acceptance gates
+## Architecture acceptance and delivery gates
 
-This proposal is implementation-pending and unreleased. Before it may become
-`Accepted`:
+`Accepted` means the architecture decision and coordinated corpus amendments are
+ratified. It does not assert source conformance, implementation, release,
+migration, advertisement, rollout, or activation. Those states remain separate:
 
-1. Donmai must implement the exact schemas, raw-wire validation, claim,
-   acknowledgement outcome, outbox, receiver resolver, lease state machine,
-   quarantine authority, recovery ordering, timing boundaries, and scheduler.
-2. The local and every supported WorkareaProvider release path must pass repeated
-   equivalent release fixtures and preserve continuous unavailability through
-   crash points.
-3. Shared fixtures must cover exact bytes; canonical IDs and timestamps; unknown,
-   duplicate-key, surrogate, path, and trailing-value rejection; claim/enqueue
-   one-millisecond boundaries; returned `claimNowMs`/`claimedAt` equality and no
-   post-commit resample; no-local-claim acknowledgement; receiver-key
-   rotation and missing resolution; restart at every outbox/ack/release boundary;
+1. **Architecture acceptance.** The canonical ADR, mirror status, platform
+   extension, affected reference sections, and indexes agree on the exact
+   contract. This gate is satisfied by the coordinated corpus commits only.
+2. **Source conformance.** Donmai source must implement the exact schemas,
+   raw-wire validation, claim, acknowledgement outcome, outbox, receiver resolver,
+   lease state machine, quarantine authority, recovery ordering, timing
+   boundaries, and scheduler. Source review or acceptance does not satisfy any
+   later gate.
+3. **Implementation verification.** The local and every supported
+   WorkareaProvider release path must pass repeated equivalent release fixtures
+   and preserve continuous unavailability through crash points. Shared fixtures
+   must cover exact bytes; canonical IDs and timestamps; unknown, duplicate-key,
+   surrogate, path, and trailing-value rejection; claim/enqueue one-millisecond
+   boundaries; returned `claimNowMs`/`claimedAt` equality; byte-identical restart
+   replay of the immutable claim-time tuple with no post-commit resample; durable
+   downstream retention of the exact successful claim-acknowledgement receipt
+   before command/result; no-local-claim acknowledgement; receiver-key rotation
+   and missing resolution; restart at every outbox/ack/release boundary;
    `PreserveWorktreeAlways`; guard-before-lease failure; unavailable quarantine
    persistence; quarantine cleanup; actionable-index rebuild; and repeated
    provider release.
-4. The downstream mirrored stub must exist with `status: Mirrored` and
-   `canonical: donmai-architecture/ADR-2026-07-18-bounded-terminal-workarea-leases.md`.
-   Only the downstream
-   `ADR-2026-07-18-bounded-terminal-workarea-leases-platform-extensions.md`
-   must become `Accepted` and supply cross-language consumer fixtures and
-   sandbox proof.
-5. Released-artifact tests—not branch-local or snapshot-only evidence—must prove
-   the combined contract before any privileged capability is advertised or any
-   activation control is enabled.
+4. **Released-artifact proof.** Released-artifact tests—not branch-local,
+   workspace-linked, or snapshot-only evidence—must prove the canonical and
+   downstream fixtures against the exact approved artifact set, package identity,
+   and command-composition identity used by the operation.
+5. **Downstream migration and rollout.** The downstream migration, package and
+   command-composition approval, template publication, claim enablement,
+   privileged capability advertisement/authorization issuance, and CI activation
+   each require their own downstream-owned approval and evidence. Architecture
+   acceptance and source acceptance satisfy or waive none of them.
+6. **Activation.** No privileged capability may be advertised and no activation
+   control may be enabled until the downstream accepted ADR's release, migration,
+   rollout, sandbox, and rollback gates authorize that exact operation.
