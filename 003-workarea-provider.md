@@ -1,7 +1,7 @@
 # 003 — WorkareaProvider
 
 **Status:** Reference (initial draft)
-**Last updated:** 2026-07-19
+**Last updated:** 2026-07-22
 **Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`
 
 ## Why this exists
@@ -29,10 +29,10 @@ interface WorkareaProvider extends Provider<'workarea'> {
    * the provider chooses what to do with it (destroy, return to pool,
    * pause and retain, archive to cold storage).
    *
-   * The following obligation is Proposed and is not currently effective:
-   * if ADR-2026-07-18-bounded-terminal-workarea-leases.md is Accepted and
-   * implemented, release() MUST be idempotent when invoked more than once
-   * for the same Workarea.id and equivalent ReleaseMode. A crash-recovered
+   * ADR-2026-07-18-bounded-terminal-workarea-leases.md accepts the following
+   * architecture obligation, but does not claim current implementation or
+   * release: a conforming release() MUST be idempotent when invoked more than
+   * once for the same Workarea.id and equivalent ReleaseMode. A crash-recovered
    * caller MAY repeat the callback; a different disposition is a conflict.
    */
   release(workarea: Workarea, mode: ReleaseMode): Promise<void>
@@ -161,16 +161,16 @@ interface WorkareaProviderCapabilities {
 
 The scheduler uses this struct to pick a provider for a given `WorkareaSpec`. Example: a session declaring `toolchain.java = "17"` and `mode: 'exclusive'` is routed to a provider where `supportedToolchains.includes('java')` and `supportsSharedMode` is irrelevant. If two providers qualify, the one with lower `expectedAcquireMs.p95` wins.
 
-## Terminal settlement lease (Proposed; implementation pending)
+## Terminal settlement lease (Accepted architecture; implementation and release pending)
 
-`ADR-2026-07-18-bounded-terminal-workarea-leases.md` proposes a bounded,
+`ADR-2026-07-18-bounded-terminal-workarea-leases.md` accepts a bounded,
 crash-recoverable lease on the exact `Workarea.id` for a terminal exchange that
-requires workarea-backed verification. This target contract is unreleased and
-must not be treated as an available capability. The lease is an overlay on
-`acquired`; it is not a second pool-member state and does not transfer ownership
-to another session.
+requires workarea-backed verification. Acceptance ratifies the architecture;
+implementation and release remain pending, and the contract must not be treated
+as an available capability. The lease is an overlay on `acquired`; it is not a
+second pool-member state and does not transfer ownership to another session.
 
-The workarea lifecycle owner would enforce these invariants:
+A conforming workarea lifecycle owner must enforce these invariants:
 
 1. **Exclusive ownership ends only at durable `released`.** The originating
    session remains the exclusive owner through verification, acknowledgement or
@@ -181,9 +181,14 @@ The workarea lifecycle owner would enforce these invariants:
    `Workarea.id` and host-local path through a path-free lease projection. A
    different workarea is not an acceptable substitute even when its source
    metadata matches.
-3. **The local execution claim precedes access.** Before a verifier accesses the
-   workarea, the lifecycle owner durably binds one invocation and claim to the
-   lease, session, terminal result, and workarea. A different claim conflicts.
+3. **The local execution claim is the sole claim-clock origin and precedes
+   access.** Before a verifier accesses the workarea, the lifecycle owner durably
+   binds one invocation and claim to the lease, session, terminal result, and
+   workarea. The commit's canonical claim bytes, `claimNowMs`, and `claimedAt`
+   form one immutable replay tuple; byte-identical retry returns that tuple
+   without resampling, while any changed stable value conflicts. No command may
+   start and no result may be accepted until the consumer durably retains the
+   exact successful downstream claim-acknowledgement receipt.
 4. **Acknowledgement and expiry/reaping are separate.** An exact semantic
    acknowledgement for the durable claim moves `active -> release-pending`.
    Expiry merely makes `active` eligible for the reaper, which separately records

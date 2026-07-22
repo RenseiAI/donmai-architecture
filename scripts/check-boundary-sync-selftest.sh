@@ -6,15 +6,16 @@
 # Builds throwaway corpus pairs under mktemp and asserts the checker's
 # observable contract:
 #
-#   1. byte-identical pair  → OK, exit 0
-#   2. drifted pair         → DRIFT, exit 1
-#   3. no markers at all    → friendly message, exit 0
-#      (regression: a no-match grep used to abort the script silently with
-#       exit 1 under `set -o pipefail`)
-#   4. worktree layout (<repo>.wt/<name>): repo detected from the git remote
+#   1. byte-identical pair             → OK, exit 0
+#   2. content or trailing-byte drift  → DRIFT, exit 1
+#   3. END-only marker                 → ERROR, exit 2
+#   4. pair present only in sibling    → ERROR, exit 2
+#   5. duplicate id across files       → ERROR, exit 2
+#   6. no markers in either corpus     → friendly message, exit 0
+#   7. worktree layout (<repo>.wt/<name>): repo detected from the git remote
 #      URL, sibling auto-resolved to the paired worktree → OK, exit 0
 #      (regression: basename-only detection rejected every worktree checkout)
-#   5. unrecognizable repo  → ERROR, exit 2
+#   8. unrecognizable repo             → ERROR, exit 2
 #
 # Usage:
 #     ./scripts/check-boundary-sync-selftest.sh
@@ -32,6 +33,12 @@ FAIL=0
 # write_pair <file> <body> — write a single m1-marked sync section.
 write_pair() {
   printf '<!-- BOUNDARY-SYNC-START: m1 -->\n%s\n<!-- BOUNDARY-SYNC-END: m1 -->\n' "$2" > "$1"
+}
+
+# reset_side — remove every markdown fixture from the side-by-side corpora.
+reset_side() {
+  find "${SIDE}/donmai-architecture" "${SIDE}/rensei-architecture" \
+    -maxdepth 1 -type f -name '*.md' -delete
 }
 
 # run_case <name> <want-exit> <want-output-substring> <script-path>
@@ -60,13 +67,35 @@ FIX_CHECKER="${SIDE}/donmai-architecture/scripts/check-boundary-sync.sh"
 
 write_pair "${SIDE}/donmai-architecture/a.md" "shared"
 write_pair "${SIDE}/rensei-architecture/b.md" "shared"
-run_case "identical pair → OK"      0 "OK  m1"    "${FIX_CHECKER}"
+run_case "identical pair → OK"             0 "OK  m1"    "${FIX_CHECKER}"
 
 write_pair "${SIDE}/rensei-architecture/b.md" "drifted"
-run_case "drifted pair → DRIFT"     1 "DRIFT  m1" "${FIX_CHECKER}"
+run_case "content drift → DRIFT"           1 "DRIFT  m1" "${FIX_CHECKER}"
 
-echo "plain markdown, no markers" > "${SIDE}/donmai-architecture/a.md"
-run_case "no markers → exit 0"      0 "no BOUNDARY-SYNC markers found" "${FIX_CHECKER}"
+write_pair "${SIDE}/donmai-architecture/a.md" "shared"
+write_pair "${SIDE}/rensei-architecture/b.md" $'shared\n'
+run_case "trailing blank line → DRIFT"     1 "DRIFT  m1" "${FIX_CHECKER}"
+
+reset_side
+printf '<!-- BOUNDARY-SYNC-END: m1 -->\n' > "${SIDE}/donmai-architecture/a.md"
+write_pair "${SIDE}/rensei-architecture/b.md" "shared"
+run_case "orphan END-only marker → error"  2 "has 0 START and 1 END" "${FIX_CHECKER}"
+
+reset_side
+printf 'plain markdown, no markers\n' > "${SIDE}/donmai-architecture/a.md"
+write_pair "${SIDE}/rensei-architecture/b.md" "shared"
+run_case "sibling-only pair → error"       2 "has 0 START and 0 END" "${FIX_CHECKER}"
+
+reset_side
+write_pair "${SIDE}/donmai-architecture/a.md" "shared"
+write_pair "${SIDE}/donmai-architecture/duplicate.md" "shared"
+write_pair "${SIDE}/rensei-architecture/b.md" "shared"
+run_case "duplicate marker id → error"     2 "has 2 START and 2 END" "${FIX_CHECKER}"
+
+reset_side
+printf 'plain markdown, no markers\n' > "${SIDE}/donmai-architecture/a.md"
+printf 'plain markdown, no markers\n' > "${SIDE}/rensei-architecture/b.md"
+run_case "no markers → exit 0"             0 "no BOUNDARY-SYNC markers found" "${FIX_CHECKER}"
 
 # --- fixture: <repo>.wt/<name> worktrees (remote-URL detection) -------------
 WT="${TMP}/wt"
@@ -78,13 +107,13 @@ git -C "${WT}/donmai-architecture.wt/lane" remote add origin \
 
 write_pair "${WT}/donmai-architecture.wt/lane/a.md" "shared"
 write_pair "${WT}/rensei-architecture.wt/lane/b.md" "shared"
-run_case "worktree layout → OK"     0 "OK  m1" \
+run_case "worktree layout → OK"            0 "OK  m1" \
   "${WT}/donmai-architecture.wt/lane/scripts/check-boundary-sync.sh"
 
-# --- fixture: directory the checker cannot identify --------------------------
+# --- fixture: directory the checker cannot identify -------------------------
 mkdir -p "${TMP}/foo/scripts"
 cp "${CHECKER}" "${TMP}/foo/scripts/"
-run_case "unknown repo → exit 2"    2 "must be invoked from inside" \
+run_case "unknown repo → exit 2"           2 "must be invoked from inside" \
   "${TMP}/foo/scripts/check-boundary-sync.sh"
 
 if [ "${FAIL}" -ne 0 ]; then

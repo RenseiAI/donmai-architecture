@@ -17,8 +17,8 @@
 # Exit codes:
 #     0 — all pairs match
 #     1 — at least one pair drifts (diff printed to stderr)
-#     2 — configuration error: marker missing in sibling repo, unbalanced pair,
-#         or sibling repo not found
+#     2 — configuration error: marker missing in sibling repo, unbalanced or
+#         duplicate marker id, sibling repo not found, or helper unavailable
 #
 # Environment:
 #     DONMAI_ARCH_PATH   override path to the sibling corpus repo; defaults to
@@ -96,78 +96,106 @@ fi
 
 SIBLING_REPO_ROOT="$(cd "${SIBLING_REPO_ROOT}" && pwd)"
 
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "ERROR: python3 is required for byte-exact BOUNDARY-SYNC checking" >&2
+  exit 2
+fi
+
+TMP_ROOT="$(mktemp -d)"
+trap 'rm -rf "${TMP_ROOT}"' EXIT
+THIS_INVENTORY="${TMP_ROOT}/this-markers.tsv"
+SIBLING_INVENTORY="${TMP_ROOT}/sibling-markers.tsv"
+
 # ---------------------------------------------------------------------------
 # Marker discovery + extraction helpers.
 # ---------------------------------------------------------------------------
 
 # enumerate_markers <repo-root>
-# Prints "<marker-id>\t<file-path-relative-to-repo>" lines for every
-# BOUNDARY-SYNC-START marker found under <repo-root>/*.md.
+# Prints "<marker-id>\t<START|END>\t<relative-file>\t<line>" for every marker
+# under <repo-root>/*.md. Discovering both kinds makes orphan END markers and
+# marker pairs present only in the sibling visible to the all-pairs union.
 enumerate_markers() {
   local repo_root="$1"
-  # The trailing `|| true` keeps a no-match grep (exit 1) from aborting the
-  # whole script under `set -o pipefail` — no markers is a valid state.
-  # shellcheck disable=SC2016
-  { grep -RHnE '<!-- BOUNDARY-SYNC-START: [a-zA-Z0-9_-]+ -->' "${repo_root}" \
-      --include='*.md' 2>/dev/null || true; } \
-    | sed -E 's|^([^:]+):[0-9]+:.*BOUNDARY-SYNC-START: ([a-zA-Z0-9_-]+).*|\2'$'\t''\1|' \
-    | while IFS=$'\t' read -r marker_id file_path; do
-        # rewrite absolute path → repo-relative
-        rel="${file_path#${repo_root}/}"
-        printf '%s\t%s\n' "${marker_id}" "${rel}"
-      done \
-    | sort
+  python3 - "${repo_root}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+pattern = re.compile(rb"<!-- BOUNDARY-SYNC-(START|END): ([a-zA-Z0-9_-]+) -->")
+records = []
+for path in sorted(root.rglob("*.md")):
+    data = path.read_bytes()
+    relative = path.relative_to(root).as_posix()
+    for line_number, line in enumerate(data.splitlines(keepends=True), 1):
+        for match in pattern.finditer(line):
+            records.append(
+                (
+                    match.group(2).decode("ascii"),
+                    match.group(1).decode("ascii"),
+                    relative,
+                    line_number,
+                )
+            )
+for marker_id, kind, relative, line_number in sorted(records):
+    print(f"{marker_id}\t{kind}\t{relative}\t{line_number}")
+PY
 }
 
-# extract_section <file-path> <marker-id>
-# Prints the text BETWEEN the START and END markers (not inclusive of marker
-# lines themselves). Output is byte-identical for byte-identical mirrored
-# regions.
+# resolve_marker_file <inventory> <corpus-name> <marker-id>
+# Prints the unique file carrying one ordered START/END pair. Returns 2 for an
+# orphan, duplicate id anywhere in the corpus, split-file pair, or reversed pair.
+resolve_marker_file() {
+  local inventory="$1"
+  local corpus_name="$2"
+  local marker_id="$3"
+  local starts ends start_file end_file start_line end_line
+
+  starts="$(awk -F $'\t' -v id="${marker_id}" '$1 == id && $2 == "START" { count++ } END { print count + 0 }' "${inventory}")"
+  ends="$(awk -F $'\t' -v id="${marker_id}" '$1 == id && $2 == "END" { count++ } END { print count + 0 }' "${inventory}")"
+  if [ "${starts}" != "1" ] || [ "${ends}" != "1" ]; then
+    echo "ERROR: marker '${marker_id}' in ${corpus_name} has ${starts} START and ${ends} END across the corpus (expected 1 each)" >&2
+    return 2
+  fi
+
+  start_file="$(awk -F $'\t' -v id="${marker_id}" '$1 == id && $2 == "START" { print $3 }' "${inventory}")"
+  end_file="$(awk -F $'\t' -v id="${marker_id}" '$1 == id && $2 == "END" { print $3 }' "${inventory}")"
+  if [ "${start_file}" != "${end_file}" ]; then
+    echo "ERROR: marker '${marker_id}' in ${corpus_name} starts in ${start_file} but ends in ${end_file}" >&2
+    return 2
+  fi
+
+  start_line="$(awk -F $'\t' -v id="${marker_id}" '$1 == id && $2 == "START" { print $4 }' "${inventory}")"
+  end_line="$(awk -F $'\t' -v id="${marker_id}" '$1 == id && $2 == "END" { print $4 }' "${inventory}")"
+  if [ "${start_line}" -ge "${end_line}" ]; then
+    echo "ERROR: marker '${marker_id}' in ${corpus_name}/${start_file}: END (line ${end_line}) does not follow START (line ${start_line})" >&2
+    return 2
+  fi
+
+  printf '%s\n' "${start_file}"
+}
+
+# extract_section <file-path> <marker-id> <output-path>
+# Writes the exact bytes on lines BETWEEN the START and END marker lines. The
+# temporary file avoids command substitution, which strips trailing newlines.
 extract_section() {
   local file="$1"
   local marker_id="$2"
-  awk -v id="${marker_id}" '
-    BEGIN { inside = 0 }
-    $0 ~ ("<!-- BOUNDARY-SYNC-START: " id " -->") { inside = 1; next }
-    $0 ~ ("<!-- BOUNDARY-SYNC-END: " id " -->")   { inside = 0; next }
-    inside { print }
-  ' "${file}"
-}
+  local output="$3"
+  python3 - "${file}" "${marker_id}" "${output}" <<'PY'
+import sys
+from pathlib import Path
 
-# verify_pair_balance <file-path> <marker-id>
-# Returns 0 if the file has exactly one START and one END for the marker,
-# and the END follows the START. Returns 2 otherwise.
-verify_pair_balance() {
-  local file="$1"
-  local marker_id="$2"
-  local starts ends
-  starts=$(grep -cE "<!-- BOUNDARY-SYNC-START: ${marker_id} -->" "${file}" || true)
-  ends=$(grep -cE "<!-- BOUNDARY-SYNC-END: ${marker_id} -->" "${file}" || true)
-  if [ "${starts}" != "1" ] || [ "${ends}" != "1" ]; then
-    echo "ERROR: marker '${marker_id}' in ${file} has ${starts} START and ${ends} END (expected 1 each)" >&2
-    return 2
-  fi
-  # Order check: START line number must be < END line number.
-  local start_line end_line
-  start_line=$(grep -nE "<!-- BOUNDARY-SYNC-START: ${marker_id} -->" "${file}" | head -n1 | cut -d: -f1)
-  end_line=$(grep -nE "<!-- BOUNDARY-SYNC-END: ${marker_id} -->" "${file}" | head -n1 | cut -d: -f1)
-  if [ "${start_line}" -ge "${end_line}" ]; then
-    echo "ERROR: marker '${marker_id}' in ${file}: END (line ${end_line}) appears before START (line ${start_line})" >&2
-    return 2
-  fi
-  return 0
-}
-
-# ---------------------------------------------------------------------------
-# Pair lookup: given a marker id, find the file in this repo + the file in
-# the sibling repo that carry the marker pair.
-# ---------------------------------------------------------------------------
-
-find_marker_file() {
-  local repo_root="$1"
-  local marker_id="$2"
-  enumerate_markers "${repo_root}" \
-    | awk -F'\t' -v id="${marker_id}" '$1 == id { print $2; exit }'
+file_path = Path(sys.argv[1])
+marker_id = sys.argv[2].encode("ascii")
+output_path = Path(sys.argv[3])
+start_marker = b"<!-- BOUNDARY-SYNC-START: " + marker_id + b" -->"
+end_marker = b"<!-- BOUNDARY-SYNC-END: " + marker_id + b" -->"
+lines = file_path.read_bytes().splitlines(keepends=True)
+start_index = next(i for i, line in enumerate(lines) if start_marker in line)
+end_index = next(i for i, line in enumerate(lines) if end_marker in line)
+output_path.write_bytes(b"".join(lines[start_index + 1 : end_index]))
+PY
 }
 
 # ---------------------------------------------------------------------------
@@ -176,55 +204,64 @@ find_marker_file() {
 
 check_one_pair() {
   local marker_id="$1"
-
   local this_file sibling_file
-  this_file="$(find_marker_file "${THIS_REPO_ROOT}" "${marker_id}")"
-  sibling_file="$(find_marker_file "${SIBLING_REPO_ROOT}" "${marker_id}")"
 
-  if [ -z "${this_file}" ]; then
-    echo "ERROR: marker '${marker_id}' not found in ${THIS_REPO_NAME}" >&2
+  if ! this_file="$(resolve_marker_file "${THIS_INVENTORY}" "${THIS_REPO_NAME}" "${marker_id}")"; then
     return 2
   fi
-  if [ -z "${sibling_file}" ]; then
-    echo "ERROR: marker '${marker_id}' not found in sibling ${SIBLING_NAME}" >&2
+  if ! sibling_file="$(resolve_marker_file "${SIBLING_INVENTORY}" "${SIBLING_NAME}" "${marker_id}")"; then
     return 2
   fi
-
-  local this_abs sibling_abs
-  this_abs="${THIS_REPO_ROOT}/${this_file}"
-  sibling_abs="${SIBLING_REPO_ROOT}/${sibling_file}"
-
-  verify_pair_balance "${this_abs}" "${marker_id}" || return 2
-  verify_pair_balance "${sibling_abs}" "${marker_id}" || return 2
 
   local this_section sibling_section
-  this_section="$(extract_section "${this_abs}" "${marker_id}")"
-  sibling_section="$(extract_section "${sibling_abs}" "${marker_id}")"
+  this_section="${TMP_ROOT}/${marker_id}.this"
+  sibling_section="${TMP_ROOT}/${marker_id}.sibling"
+  extract_section "${THIS_REPO_ROOT}/${this_file}" "${marker_id}" "${this_section}"
+  extract_section "${SIBLING_REPO_ROOT}/${sibling_file}" "${marker_id}" "${sibling_section}"
 
-  if [ "${this_section}" = "${sibling_section}" ]; then
+  if cmp -s "${this_section}" "${sibling_section}"; then
     echo "OK  ${marker_id}  (${this_file}  <->  ${SIBLING_NAME}/${sibling_file})"
     return 0
   fi
 
   echo "DRIFT  ${marker_id}  (${this_file}  <->  ${SIBLING_NAME}/${sibling_file})" >&2
-  diff <(printf '%s\n' "${this_section}") <(printf '%s\n' "${sibling_section}") >&2 || true
+  diff -u "${this_section}" "${sibling_section}" >&2 || true
   return 1
 }
 
 main() {
   local target_id="${1:-}"
 
+  if [ "$#" -gt 1 ]; then
+    echo "ERROR: expected zero arguments or one marker id" >&2
+    return 2
+  fi
+  if [ -n "${target_id}" ] && [[ ! "${target_id}" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    echo "ERROR: invalid marker id '${target_id}'" >&2
+    return 2
+  fi
+
+  if ! enumerate_markers "${THIS_REPO_ROOT}" > "${THIS_INVENTORY}"; then
+    echo "ERROR: failed to enumerate markers in ${THIS_REPO_NAME}" >&2
+    return 2
+  fi
+  if ! enumerate_markers "${SIBLING_REPO_ROOT}" > "${SIBLING_INVENTORY}"; then
+    echo "ERROR: failed to enumerate markers in ${SIBLING_NAME}" >&2
+    return 2
+  fi
+
   if [ -n "${target_id}" ]; then
     check_one_pair "${target_id}"
     return $?
   fi
 
-  # No argument: enumerate every marker in this repo, check the pair.
+  # No argument: check the union of START and END ids in both corpora. This is
+  # what exposes END-only, sibling-only, and otherwise malformed marker sets.
   local all_ids
-  all_ids="$(enumerate_markers "${THIS_REPO_ROOT}" | cut -f1 | sort -u)"
+  all_ids="$({ cut -f1 "${THIS_INVENTORY}"; cut -f1 "${SIBLING_INVENTORY}"; } | LC_ALL=C sort -u)"
 
   if [ -z "${all_ids}" ]; then
-    echo "no BOUNDARY-SYNC markers found in ${THIS_REPO_NAME}; nothing to check"
+    echo "no BOUNDARY-SYNC markers found in ${THIS_REPO_NAME} or ${SIBLING_NAME}; nothing to check"
     return 0
   fi
 
@@ -241,7 +278,7 @@ main() {
     fi
   done <<< "${all_ids}"
 
-  return ${rc}
+  return "${rc}"
 }
 
 main "$@"
