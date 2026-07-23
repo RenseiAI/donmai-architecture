@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-07-12
 boundary: shared
 split: synchronized-mirror
@@ -7,7 +7,7 @@ split: synchronized-mirror
 
 # ADR-2026-07-12-interactive-pty-session-host
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-07-12
 **Boundary:** shared (cross-cutting; canonical here, mirrored stub in `rensei-architecture`)
 **Authors:** Claude (Opus 4.8) — W1 foundations/contracts author
@@ -16,6 +16,19 @@ split: synchronized-mirror
 > Platform extensions (relay service, control plane, session/quota policy, iOS client):
 > `rensei-architecture/ADR-2026-07-12-interactive-sessions-platform.md`.
 > Driving program: `runs/2026-07-11-ios-interactive-sessions-program/` (W1 — Foundations & contracts).
+
+> **Implementation status — Accepted / shipped (2026-07-24).** All three OSS
+> primitives this ADR mandates have landed in the `donmai` binary (PR #182):
+> the **PTY session host** as package `ptyhost/` (`session.go`, `ring.go`
+> seq-numbered ring buffer, `snapshot.go`/`vt.go` host-side headless-VT snapshot
+> authority, `local.go` standalone `LocalAttach`); the brand-neutral **framing
+> library** as package `attachwire/` (implements `protocol/interactive-attach-v1.md`);
+> and the **generic outbound attach client** as package `attachclient/`
+> (dial-out with a bearer token, reconnect discipline, no inbound listener). The
+> interactive runner mode lives in `runner/interactive_loop.go`. Status flips
+> Proposed → Accepted to match this shipped reality; the synchronized
+> outbound-stream mandate in § 4 (marker `adr-2026-07-12-interactive-outbound-mandate`)
+> is unchanged by this flip.
 
 ## Context
 
