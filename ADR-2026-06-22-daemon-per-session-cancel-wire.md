@@ -287,10 +287,11 @@ id.
 
 ## Implementation notes
 
-- `StopSession` lives on the worker-spawner component; the HTTP handler at
-  `daemon/handle_sessions.go` (or sibling) wires `POST /api/daemon/sessions/<id>/
-  stop` to it. The handler is localhost-only and attaches no auth, consistent with
-  the rest of the daemon API.
+- `StopSession` lives on the worker-spawner component (`daemon/worker_spawner.go`,
+  `WorkerSpawner.StopSession`, delegated from `Daemon.StopSession` in
+  `daemon/daemon.go`); the HTTP handler `handleSessionStop` in `daemon/server.go`
+  wires `POST /api/daemon/sessions/<id>/stop` to it. The handler is localhost-only
+  and attaches no auth, consistent with the rest of the daemon API.
 - The `stop` field is added to the lock-refresh response struct shared by daemon
   and worker; the worker's refresh loop checks it each cycle and initiates a
   cooperative in-band stop when set.
