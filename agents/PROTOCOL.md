@@ -81,6 +81,42 @@ sends you back to work, not to the send button:
 4. Did I solve what was actually asked, or only what was literally written?
 5. What breaks first downstream (CI, prod, a consumer repo) — did I say so?
 
+### Review depth and cadence (R7, adopted 2026-07-23)
+
+Standing protocol org-wide since 2026-07-23. Decision record:
+`runs/2026-07-23-sustainable-velocity-program/05-founder-decisions.md` D3
+(rule text: `runs/2026-07-23-sustainable-velocity-program/02-operating-model.md`
+R7). Governs every review, verification, or validation workflow this
+protocol scopes.
+
+- V9. Only a confirmed P0 or P1 finding blocks progression (merge, publish,
+  lease). A confirmed P2 is recorded as a follow-up (program folder or
+  tracked issue), not a blocker. A P3 needs no record beyond the review
+  output.
+- V10. After a repair, review the repaired area plus its direct blast radius
+  only. Full multi-lens exact-head review is reserved for a candidate's
+  first review and for re-review after a confirmed P0 — never repeat it on
+  areas a repair didn't touch.
+- V11. Cap review/validation workflow size: at most 10 agents per workflow,
+  at most 2 verification agents per individual finding, unless a confirmed
+  P0 is on the table. Never re-run a suite that already passed unless the
+  repair touched it.
+- V12. Scale review depth to blast radius: **S** (single repo, ≤5 files, no
+  schema/API/contract change) gets one reviewer; **M** (≤15 files or one
+  subsystem) gets one bounded multi-lens review (≤6 lenses); **L**
+  (multi-repo or cross-cutting contract change) gets one review per piece
+  plus one integration review.
+- V13. Any change touching an authz, credential, secret-handling, or
+  blocklist surface carries a permanent security lens regardless of
+  blast-radius size — never scale it away.
+- V14. A review/verification stage producing no outcome delta (commit
+  landed, PR opened/merged, gate green, proof captured) within 2 hours
+  stops and posts a `BLOCKED` entry naming 2–3 decision options, instead of
+  continuing to spin.
+- V15. Founder-owned gates (production migrations, release tags, public
+  package publishes, and any other gate a program doc names founder-owned)
+  are unchanged by this policy — it governs everything below them.
+
 ## D — When something fails
 
 - D1. Reproduce first: run the exact failing command and quote the line showing
