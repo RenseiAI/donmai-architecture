@@ -1,12 +1,12 @@
 ---
-status: Proposed
+status: Accepted
 boundary: OSS-only
 date: 2026-07-24
 ---
 
 # ADR-2026-07-24-acp-posture
 
-**Status:** Proposed
+**Status:** Accepted (founder decision 2026-07-24, runs/2026-07-21-open-harness-strategy)
 **Date:** 2026-07-24
 **Boundary:** OSS-only
 **Authors:** open-harness strategy run, filed by the coordinator session

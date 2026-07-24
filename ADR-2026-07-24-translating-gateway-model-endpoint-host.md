@@ -1,12 +1,12 @@
 ---
-status: Proposed
+status: Accepted
 boundary: shared
 date: 2026-07-24
 ---
 
 # ADR-2026-07-24-translating-gateway-model-endpoint-host
 
-**Status:** Proposed
+**Status:** Accepted (founder decision 2026-07-24, runs/2026-07-21-open-harness-strategy)
 **Date:** 2026-07-24
 **Boundary:** shared (OSS-canonical here; `status: Mirrored` stub in `rensei-architecture`)
 **Authors:** open-harness strategy run, filed by the coordinator session

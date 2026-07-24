@@ -181,8 +181,8 @@ renaming an ADR.
 | [`ADR-2026-07-12-interactive-pty-session-host.md`](ADR-2026-07-12-interactive-pty-session-host.md) | Accepted | shared | — |
 | [`ADR-2026-07-12-kit-catalog-expansion.md`](ADR-2026-07-12-kit-catalog-expansion.md) | Proposed | OSS-only | — |
 | [`ADR-2026-07-18-bounded-terminal-workarea-leases.md`](ADR-2026-07-18-bounded-terminal-workarea-leases.md) | Accepted | shared | Bounded terminal workarea leases |
-| [`ADR-2026-07-24-acp-posture.md`](ADR-2026-07-24-acp-posture.md) | Proposed | OSS-only | — |
-| [`ADR-2026-07-24-harness-addition-v2-checklist.md`](ADR-2026-07-24-harness-addition-v2-checklist.md) | Proposed | shared | — |
-| [`ADR-2026-07-24-translating-gateway-model-endpoint-host.md`](ADR-2026-07-24-translating-gateway-model-endpoint-host.md) | Proposed | shared | — |
+| [`ADR-2026-07-24-acp-posture.md`](ADR-2026-07-24-acp-posture.md) | Accepted | OSS-only | — |
+| [`ADR-2026-07-24-harness-addition-v2-checklist.md`](ADR-2026-07-24-harness-addition-v2-checklist.md) | Accepted | shared | — |
+| [`ADR-2026-07-24-translating-gateway-model-endpoint-host.md`](ADR-2026-07-24-translating-gateway-model-endpoint-host.md) | Accepted | shared | — |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
