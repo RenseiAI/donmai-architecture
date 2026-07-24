@@ -1,12 +1,12 @@
 ---
-status: Proposed
+status: Accepted
 boundary: shared
 date: 2026-07-24
 ---
 
 # ADR-2026-07-24-harness-addition-v2-checklist
 
-**Status:** Proposed
+**Status:** Accepted (founder decision 2026-07-24, runs/2026-07-21-open-harness-strategy)
 **Date:** 2026-07-24
 **Boundary:** shared (the checklist binds OSS harness authors and the
 platform enablement steps that follow each OSS landing; `status: Mirrored`
