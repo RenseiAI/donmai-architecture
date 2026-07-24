@@ -169,7 +169,7 @@ renaming an ADR.
 | [`ADR-2026-06-19-requester-provider-inbound-agent-family.md`](ADR-2026-06-19-requester-provider-inbound-agent-family.md) | Accepted | shared | RequesterProvider: the inbound agent-request family |
 | [`ADR-2026-06-20-byoa-requester-registration-record.md`](ADR-2026-06-20-byoa-requester-registration-record.md) | Accepted | shared | Requester registration: the inbound principal record |
 | [`ADR-2026-06-21-byoa-workflow-authoring-verbs.md`](ADR-2026-06-21-byoa-workflow-authoring-verbs.md) | Proposed | shared | BYOA workflow-authoring verbs: the `workflow:author` capability |
-| [`ADR-2026-06-21-mcp-adapter-archetype.md`](ADR-2026-06-21-mcp-adapter-archetype.md) | Proposed | shared | MCP adapter archetype: a facade over the inbound dispatch primitive |
+| [`ADR-2026-06-21-mcp-adapter-archetype.md`](ADR-2026-06-21-mcp-adapter-archetype.md) | Accepted | shared | MCP adapter archetype: a facade over the inbound dispatch primitive |
 | [`ADR-2026-06-21-webhook-callback-delivery.md`](ADR-2026-06-21-webhook-callback-delivery.md) | Proposed | shared | Webhook callback delivery: the push-back contract |
 | [`ADR-2026-06-22-daemon-per-session-cancel-wire.md`](ADR-2026-06-22-daemon-per-session-cancel-wire.md) | Accepted | OSS-only | Daemon per-session cancel-wire and progress watchdogs |
 | [`ADR-2026-06-22-linear-backlog-grooming-verbs.md`](ADR-2026-06-22-linear-backlog-grooming-verbs.md) | Accepted | OSS-only | OSS Linear CLI verb contract for backlog grooming |
@@ -179,7 +179,7 @@ renaming an ADR.
 | [`ADR-2026-07-07-sibling-context-repos.md`](ADR-2026-07-07-sibling-context-repos.md) | Accepted | OSS-only | — |
 | [`ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`](ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md) | Accepted | OSS-only | — |
 | [`ADR-2026-07-12-interactive-pty-session-host.md`](ADR-2026-07-12-interactive-pty-session-host.md) | Accepted | shared | — |
-| [`ADR-2026-07-12-kit-catalog-expansion.md`](ADR-2026-07-12-kit-catalog-expansion.md) | Proposed | OSS-only | — |
+| [`ADR-2026-07-12-kit-catalog-expansion.md`](ADR-2026-07-12-kit-catalog-expansion.md) | Accepted | OSS-only | — |
 | [`ADR-2026-07-18-bounded-terminal-workarea-leases.md`](ADR-2026-07-18-bounded-terminal-workarea-leases.md) | Accepted | shared | Bounded terminal workarea leases |
 | [`ADR-2026-07-24-acp-posture.md`](ADR-2026-07-24-acp-posture.md) | Accepted | OSS-only | — |
 | [`ADR-2026-07-24-harness-addition-v2-checklist.md`](ADR-2026-07-24-harness-addition-v2-checklist.md) | Accepted | shared | — |

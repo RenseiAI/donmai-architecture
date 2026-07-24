@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 boundary: shared
 split: sibling-extensions
 date: 2026-06-21
@@ -7,10 +7,23 @@ date: 2026-06-21
 
 # ADR-2026-06-21 — MCP adapter archetype: a facade over the inbound dispatch primitive
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-06-21
 **Boundary:** shared (canonical here; mirrored stub in the platform corpus)
 **Authors:** agent:claude (design session)
+
+> **Implementation status — Accepted / shipped (2026-07-24).** The platform's
+> `POST /api/cli/mcp` endpoint implements exactly the fixed three-tool surface
+> this ADR mandates (`dispatch` / `get_receipt` / `list_workflows`, no fourth
+> tool) as a facade over the identical auth/authz pipeline as
+> `POST /api/cli/dispatch`: bearer/session auth → `dispatch:invoke` scope →
+> org-scoped project resolution → registration allowlist → the fail-closed
+> Cedar PEP, returning a JSON-RPC error before any instance is created on a
+> deny; `list_workflows` is scoped to the resolved registration's allowlist
+> when one is bound. Status flips Proposed → Accepted to match this shipped
+> reality. File:line evidence (closed-source platform paths, not citable in
+> this OSS corpus per `guard-b-lint`) is recorded in the mirrored stub,
+> `rensei-architecture/ADR-2026-06-21-mcp-adapter-archetype.md`.
 
 ## Context
 

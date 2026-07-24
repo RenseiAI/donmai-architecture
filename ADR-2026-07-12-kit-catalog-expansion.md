@@ -1,16 +1,28 @@
 ---
-status: Proposed
+status: Accepted
 boundary: OSS-only
 ---
 
 # ADR-2026-07-12-kit-catalog-expansion
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-07-12
 **Boundary:** OSS-only
 **Authors:** Kit-catalog-expansion execution lane
 **Amends:** `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`
 (the catalog-expansion hold in §6 Phase L1 and §7)
+
+> **Implementation status — Accepted / shipped (2026-07-24).** The machinery
+> this ADR specifies has landed in `donmai-kits`: `EXPECTED_KIT_IDENTITIES`
+> includes `"swift": "default/swift"` (`scripts/package_kits.py:78`),
+> `first_publication_pending()` classifies never-signed authorized kits and
+> enforces the §3(5) demotion-hole guard exactly as specified
+> (`scripts/package_kits.py:952-976`), and `default/swift` has fully graduated
+> to `published` — `kits/swift/` carries all three trust artifacts
+> (`kit.toml.sigstore`, `kit.package.json`, `kit.package.json.sigstore`) and
+> `sign.yml`'s manifest/descriptor/immutable-tree arrays list it
+> (`.github/workflows/sign.yml:115,170,255`). Status flips Proposed → Accepted
+> to match this shipped reality.
 
 ## Context
 
