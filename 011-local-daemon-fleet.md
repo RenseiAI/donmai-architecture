@@ -200,7 +200,7 @@ Where the daemon receives work assignments.
 
 When the daemon needs to restart (auto-update, manual stop, system reboot scheduled), it drains:
 
-1. **Stop accepting new work.** Daemon updates its registered status to `draining`; the orchestrator routes new sessions elsewhere.
+1. **Stop accepting new work.** Daemon updates its registered status to `draining` and reports it on the next heartbeat; a compliant orchestrator reads it and stops routing new sessions to the host. This depends on the heartbeat request actually carrying the status field on the wire, not just computing it internally — see `ADR-2026-08-03-daemon-host-status-signal-completion.md`, which closes a prior gap where the daemon computed this status every beat and silently dropped it before serialization. Until a daemon build including that fix is in use, treat "the orchestrator routes new sessions elsewhere" as aspirational rather than guaranteed.
 2. **Wait for in-flight sessions.** Up to `drainTimeoutSeconds` (default 600). Sessions get a SIGTERM at the timeout. Unleased workareas follow the configured post-mortem release policy. Under the accepted, implementation-pending terminal-lease architecture, every `active` or `release-pending` workarea remains unavailable until provider disposition is complete and `released` is durably saved; acknowledgement and expiry only select a release path.
 3. **Release eligible pool members.** Pool members in `ready` or `warming` state are torn down; `acquired` members follow the policy above. Drain never overrides a non-released terminal workarea lease or acquisition-quarantine guard.
 4. **Restart.** New process boots, re-registers, status returns to `ready`.
