@@ -184,6 +184,7 @@ renaming an ADR.
 | [`ADR-2026-07-24-acp-posture.md`](ADR-2026-07-24-acp-posture.md) | Accepted | OSS-only | — |
 | [`ADR-2026-07-24-harness-addition-v2-checklist.md`](ADR-2026-07-24-harness-addition-v2-checklist.md) | Accepted | shared | — |
 | [`ADR-2026-07-24-translating-gateway-model-endpoint-host.md`](ADR-2026-07-24-translating-gateway-model-endpoint-host.md) | Accepted | shared | — |
+| [`ADR-2026-08-03-cli-noun-tree-fleet-retirement.md`](ADR-2026-08-03-cli-noun-tree-fleet-retirement.md) | Proposed | shared | CLI noun tree: retire `fleet`, consolidate on `host` + `capacity` |
 | [`ADR-2026-08-03-daemon-host-status-signal-completion.md`](ADR-2026-08-03-daemon-host-status-signal-completion.md) | Accepted | OSS-only | Daemon host-status signal completion (outbound status + inbound claim gating + `pool.deleted`) |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
