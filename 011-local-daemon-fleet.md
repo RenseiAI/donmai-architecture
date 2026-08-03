@@ -3,9 +3,9 @@
 **Status:** Reference (initial draft)
 **Last updated:** 2026-07-22
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/011-local-daemon-fleet-platform-extensions.md`)
-**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`), `ADR-2026-07-18-bounded-terminal-workarea-leases.md`.
+**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md` (superseded in part), `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`), `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md`.
 
-> **Command surface note (2026-05-06):** Per `ADR-2026-05-06-tui-noun-consolidation.md`, the daemon CLI lifecycle commands (install, status, doctor, drain, update) are now invoked as `<binary> host *` (e.g., `donmai host install` for the OSS binary; the platform binary's equivalent on the platform). Both binaries share the same noun model via `afcli.RegisterCommands`. The `<binary> daemon *` form shown in the example fences below remains as a hidden deprecated alias for one release.
+> **Command surface note (2026-08-03):** `ADR-2026-05-06-tui-noun-consolidation.md` called for the daemon CLI lifecycle commands (install, status, doctor, drain, update) to be invoked as `<binary> host *` on both binaries via a shared `afcli.RegisterCommands` tree. That never shipped in the OSS binary: as verified against the code on 2026-08-03, `donmai` still exposes these under `daemon *` (`donmai daemon install`, `donmai daemon status`, …), with no exported `host` command. The example fences below use this shipped OSS form. `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` D2 commits `afcli` to exporting a real `host` parent with `daemon` demoted to a hidden deprecated alias — once that OSS release ships, `donmai host install` etc. become correct and `daemon *` becomes the alias. Until then, treat `host *` forms as the target, not the current command. (The platform binary already exposes its own hand-assembled `host` tree today; see that ADR's Finding 3.)
 
 ## Why this exists
 
@@ -23,7 +23,7 @@ The architectural answer is the daemon model from `004`. This doc makes it real 
 
 Concretely, the user's day:
 
-1. **Once at install:** `brew install donmai && donmai host install` (or equivalent on Linux). Daemon starts; registers as a system service.
+1. **Once at install:** `brew install donmai && donmai daemon install` (or equivalent on Linux). Daemon starts; registers as a system service.
 2. **Once per project:** `donmai project allow github.com/foo/bar`. Daemon now accepts work for that project. Credentials are picked up from system keychain or per-project config.
 3. **Day-to-day:** open VSCode for any allowed project, or don't. Linear webhooks → orchestrator → daemon. The daemon clones the repo on first session, warms a workarea pool, and runs sessions. No window-switching, no per-workspace fleet management.
 4. **On release:** daemon auto-updates on configured channel. Drains in-flight work, restarts cleanly. User sees a single notification or nothing at all.
@@ -35,11 +35,11 @@ Concretely, the user's day:
 ```bash
 # One-line install
 brew install donmai
-donmai host install            # writes ~/Library/LaunchAgents/dev.donmai.daemon.plist
-                           # loads agent; survives reboots and re-logins
+donmai daemon install          # writes ~/Library/LaunchAgents/dev.donmai.daemon.plist
+                                # loads agent; survives reboots and re-logins
 
 # Verify
-donmai host status
+donmai daemon status
 # donmai-daemon: running   pid 12345   uptime 2h13m   sessions 3 / 8
 ```
 
@@ -52,11 +52,11 @@ The launchd plist is generated from a template; the user doesn't edit it directl
 curl -fsSL https://get.donmai.dev | sh
 
 # User-scoped systemd unit (recommended)
-donmai host install --user
+donmai daemon install --user
 systemctl --user status af-daemon
 
 # System-scoped unit (multi-user shared machine)
-sudo donmai host install --system
+sudo donmai daemon install --system
 sudo systemctl status af-daemon
 ```
 
@@ -91,7 +91,7 @@ Useful for CI, ephemeral dev environments, or machines where the user doesn't wa
 On first install, an interactive wizard captures the minimum config.
 
 ```
-$ donmai host setup
+$ donmai daemon setup
 
 Welcome to Donmai. Let's get your machine working.
 
@@ -134,9 +134,9 @@ Welcome to Donmai. Let's get your machine working.
   Drain timeout (max wait for in-flight work before restart): [600] seconds
 
 ✔ Setup complete. Daemon is running.
-  Status: donmai host status
-  Logs:   donmai host logs
-  Stop:   donmai host stop
+  Status: donmai daemon status
+  Logs:   donmai daemon logs
+  Stop:   donmai daemon stop
 ```
 
 The wizard writes `~/.donmai/daemon.yaml` matching the schema in `004`. Idempotent: re-running re-prompts for changed values without resetting unchanged ones.
@@ -151,7 +151,7 @@ The full schema is in `004`. Key knobs and when to use them:
 
 How many sessions the daemon will run in parallel. Default: 8 on a Mac Studio, 4 on a MacBook Pro. Hard ceiling enforced by the scheduler.
 
-If sessions are heavy (Cargo builds, large test suites), drop this. If sessions are light (TS typecheck only), raise it. Watch `donmai host stats` for per-session resource usage.
+If sessions are heavy (Cargo builds, large test suites), drop this. If sessions are light (TS typecheck only), raise it. Watch `donmai daemon stats` for per-session resource usage.
 
 ### `capacity.reservedForSystem`
 
@@ -186,7 +186,7 @@ For SSH-based remotes, set `sshKey` instead of `credentialHelper`.
 
 - `nightly` — check for updates at 03:00 local time. Drains and restarts if an update is available. Recommended.
 - `on-release` — checks immediately when a release notification arrives (requires SaaS or webhook). Lower latency for fixes.
-- `manual` — never auto-updates; you run `donmai host update` when ready.
+- `manual` — never auto-updates; you run `donmai daemon update` when ready.
 
 ### `orchestrator.url`
 
@@ -205,7 +205,7 @@ When the daemon needs to restart (auto-update, manual stop, system reboot schedu
 3. **Release eligible pool members.** Pool members in `ready` or `warming` state are torn down; `acquired` members follow the policy above. Drain never overrides a non-released terminal workarea lease or acquisition-quarantine guard.
 4. **Restart.** New process boots, re-registers, status returns to `ready`.
 
-For graceful planned restarts (e.g., a reboot), `donmai host drain` returns when drain completes. CI scripts or shutdown hooks can wait on it.
+For graceful planned restarts (e.g., a reboot), `donmai daemon drain` returns when drain completes. CI scripts or shutdown hooks can wait on it.
 
 ## Recovery from crash
 
@@ -219,10 +219,10 @@ If the daemon process dies unexpectedly:
 If the daemon refuses to start, common causes:
 
 - **Bad credentials** for a configured project. Daemon logs the project ID and exits. Fix via `donmai project credentials github.com/foo/bar`.
-- **Port collision** for the local exec endpoint. Daemon picks a free port by default; explicit `localExecPort` in config can hit collisions. Run `donmai host doctor` to detect.
+- **Port collision** for the local exec endpoint. Daemon picks a free port by default; explicit `localExecPort` in config can hit collisions. Run `donmai daemon doctor` to detect.
 - **Disk full** in the pool directory. Pool members are scratch FS; running out of disk halts acquires. Default cleanup: warn at 80%, refuse new pool members at 90%.
 
-`donmai host doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, pool sane) and prints the failing condition.
+`donmai daemon doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, pool sane) and prints the failing condition.
 
 ## Terminal workarea lease recovery and reaping (Accepted architecture; implementation and release pending)
 
@@ -344,8 +344,8 @@ work as the deferred root's "no progress." Full contract:
 
 Three observability surfaces:
 
-- **`donmai host logs`** — tail the daemon log. NDJSON by default. Pretty-printed when stdout is a TTY.
-- **`donmai host stats`** — current capacity, sessions in flight, pool state per (repo, toolchain), recent acquire/release latencies.
+- **`donmai daemon logs`** — tail the daemon log. NDJSON by default. Pretty-printed when stdout is a TTY.
+- **`donmai daemon stats`** — current capacity, sessions in flight, pool state per (repo, toolchain), recent acquire/release latencies.
 - **Prometheus metrics** at `http://localhost:9101/metrics` (configurable). Scrape into your own monitoring if running multi-machine.
 
 Key NDJSON fields the daemon emits (consumed by Layer 6 observability per `006`):
@@ -361,7 +361,9 @@ Key NDJSON fields the daemon emits (consumed by Layer 6 observability per `006`)
 ## HTTP Control API
 
 The daemon binds to `127.0.0.1:7734` (configurable) and exposes a JSON HTTP
-control API used by the `donmai`/platform-binary `host *` CLI surface, by per-session
+control API used by the `donmai daemon *` CLI surface (the platform binary's
+already-shipped `host *` tree drives the same API downstream; see
+`ADR-2026-08-03-cli-noun-tree-fleet-retirement.md`), by per-session
 worker children, and by integration tooling. The contract is locked in
 `ADR-2026-05-07-daemon-http-control-api.md`; this section is the
 operations-facing reference.
@@ -447,19 +449,19 @@ the caveat from the flag rather than sniffing for emptiness.
 ### "I want to test a beta release on one machine"
 
 ```bash
-donmai host set autoUpdate.channel beta
-donmai host update                 # force-pull now
-donmai host status                 # confirm new version
+donmai daemon set autoUpdate.channel beta
+donmai daemon update                 # force-pull now
+donmai daemon status                 # confirm new version
 # revert later:
-donmai host set autoUpdate.channel stable
+donmai daemon set autoUpdate.channel stable
 ```
 
 ### "I want to pause work for an hour without uninstalling"
 
 ```bash
-donmai host pause                  # stops accepting new work; existing finishes
+donmai daemon pause                  # stops accepting new work; existing finishes
 # ... do something ...
-donmai host resume
+donmai daemon resume
 ```
 
 ### "I want to add a project I haven't wired credentials for yet"
@@ -474,10 +476,10 @@ donmai project credentials github.com/newco/newrepo
 ### "Pool's getting big, disk is filling"
 
 ```bash
-donmai host stats --pool           # see usage by (repo, toolchain)
-donmai host evict --repo github.com/old/project --older-than 7d
+donmai daemon stats --pool           # see usage by (repo, toolchain)
+donmai daemon evict --repo github.com/old/project --older-than 7d
 # or
-donmai host set capacity.poolMaxDiskGb 100
+donmai daemon set capacity.poolMaxDiskGb 100
 # the daemon will LRU-evict to fit
 ```
 
@@ -493,7 +495,7 @@ donmai session restore-workarea <session-id> --to ~/debug/sess-XYZ
 ## Open questions
 
 1. **Per-machine vs per-user install on shared machines.** A workstation shared by two users: do they share one daemon (system-scoped) or each get their own (user-scoped)? Default user-scoped because credentials/policy diverge per user; system-scoped for hosted-team-machine scenarios. Tenant config selects.
-2. ~~**GUI status surface.**~~ **Resolved.** The TUI's `host status` view (rendered via Bubble Tea v2) IS the GUI surface. A separate menu-bar / system-tray app would duplicate the same data and create a third surface to keep in sync.
+2. ~~**GUI status surface.**~~ **Resolved.** The TUI's `daemon status` view (rendered via Bubble Tea v2) IS the GUI surface — `host status` once `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` D2 ships. A separate menu-bar / system-tray app would duplicate the same data and create a third surface to keep in sync.
 3. **Self-update verification.** The daemon must verify its own update binary before swapping. Sigstore verification on the binary; reject if signature fails. Concrete impl ties to provider signing & trust verification.
 4. **Daemon-to-daemon delegation.** Two daemons on the same LAN: should one delegate work to the other when overloaded? Or always go through the orchestrator? Default: through the orchestrator (preserves audit chain, scope resolution, cost attribution). Direct delegation is a P3 optimization.
 

@@ -144,7 +144,7 @@ renaming an ADR.
 | [`ADR-2026-04-28-workflow-piping-uses-nodes.md`](ADR-2026-04-28-workflow-piping-uses-nodes.md) | Accepted | — | — |
 | [`ADR-2026-04-29-long-running-runtime-substrate.md`](ADR-2026-04-29-long-running-runtime-substrate.md) | Accepted | shared | — |
 | [`ADR-2026-05-03-locus-of-workflow-definition.md`](ADR-2026-05-03-locus-of-workflow-definition.md) | Accepted | shared | — |
-| [`ADR-2026-05-06-tui-noun-consolidation.md`](ADR-2026-05-06-tui-noun-consolidation.md) | Accepted | shared | — |
+| [`ADR-2026-05-06-tui-noun-consolidation.md`](ADR-2026-05-06-tui-noun-consolidation.md) | Superseded | shared | — |
 | [`ADR-2026-05-07-daemon-http-control-api.md`](ADR-2026-05-07-daemon-http-control-api.md) | Accepted | — | — |
 | [`ADR-2026-05-10-native-rich-providers.md`](ADR-2026-05-10-native-rich-providers.md) | Accepted | shared | Provider abstractions are native-rich; never lowest-common-denominator |
 | [`ADR-2026-05-12-cli-linear-proxy.md`](ADR-2026-05-12-cli-linear-proxy.md) | Accepted | shared | CLI Linear proxy via platform login session |
@@ -184,6 +184,7 @@ renaming an ADR.
 | [`ADR-2026-07-24-acp-posture.md`](ADR-2026-07-24-acp-posture.md) | Accepted | OSS-only | — |
 | [`ADR-2026-07-24-harness-addition-v2-checklist.md`](ADR-2026-07-24-harness-addition-v2-checklist.md) | Accepted | shared | — |
 | [`ADR-2026-07-24-translating-gateway-model-endpoint-host.md`](ADR-2026-07-24-translating-gateway-model-endpoint-host.md) | Accepted | shared | — |
+| [`ADR-2026-08-03-cli-noun-tree-fleet-retirement.md`](ADR-2026-08-03-cli-noun-tree-fleet-retirement.md) | Accepted | shared | CLI noun tree: retire `fleet`, consolidate on `host` + `capacity` |
 | [`ADR-2026-08-03-daemon-host-status-signal-completion.md`](ADR-2026-08-03-daemon-host-status-signal-completion.md) | Accepted | OSS-only | Daemon host-status signal completion (outbound status + inbound claim gating + `pool.deleted`) |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->

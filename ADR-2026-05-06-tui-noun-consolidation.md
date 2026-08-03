@@ -1,6 +1,6 @@
 # ADR-2026-05-06-tui-noun-consolidation
 
-**Status:** Accepted
+**Status:** Superseded in part by `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` (retires the `fleet` top-level noun decided below; `host` and `capacity` stand)
 **Date:** 2026-05-06
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/ADR-2026-05-06-tui-noun-consolidation-platform-extensions.md`)
 **Authors:** mark, claude
@@ -23,15 +23,17 @@ The CLI noun model itself is OSS — it applies to the `donmai` binary too via `
 
 ## Decision
 
+> **Superseded in part (2026-08-03):** `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` retires `fleet` as a top-level noun — the three-noun consolidation below is now two nouns (`host`, `capacity`); `fleet`'s org-side leaves move under `capacity`, and OSS `fleet` (a pre-existing, differently-scoped single-machine command) is deprecated and scheduled for removal. See that ADR for the current noun tree and the reasoning; the bullets below are kept verbatim as the historical record of what this ADR actually decided.
+
 The TUI consolidates to three top-level nouns, each owning exactly one concept layer:
 
 - **`host`** — *this machine.* Daemon lifecycle (install / status / doctor / drain / update), capacity envelope, local workarea pool, installed providers. Subsumes the old `worker` (daemon-as-worker), `workarea` (top-level), and the daemon-side `provider`.
 - **`fleet`** — *other machines + how this org's projects route to them.* Plural rename of `machine`, also subsuming the old top-level `route` and `routing`. `fleet list` enumerates remote daemons; `fleet route set` binds a project's execution route policy.
 - **`capacity`** — *org-wide execution provider + pool config.* Rename of `execution`, subsuming the old `execution provider` and `execution pool` subtrees.
 
-Old top-level commands (`worker`, `machine`, `execution`, `workarea`, the top-level `provider`) remain available as **hidden deprecated aliases** for one release. They print a one-line deprecation notice that names the new command, then forward. After one release they are removed.
+Old top-level commands (`worker`, `machine`, `execution`, `workarea`, the top-level `provider`) remain available as **hidden deprecated aliases** for one release. They print a one-line deprecation notice that names the new command, then forward. After one release they are removed. **This window closed without the aliases being removed; `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` D5 replaces the unbound "one release" promise with aliases that declare an explicit removal version.**
 
-A first-run wizard chains the onboarding path — `auth add --user` → `host install` → `fleet route set` — so a freshly logged-in user reaches a routable, working state without prior knowledge of the noun map. The OSS binary's onboarding wizard targets self-hosted orchestration; the platform-binary form targets the SaaS auth path documented in the platform extensions.
+A first-run wizard chains the onboarding path — `auth add --user` → `host install` → `capacity route set` — so a freshly logged-in user reaches a routable, working state without prior knowledge of the noun map. The OSS binary's onboarding wizard targets self-hosted orchestration; the platform-binary form targets the SaaS auth path documented in the platform extensions. (Originally `fleet route set`; updated to `capacity route set` per `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md`, which moved this leaf under `capacity`.)
 
 ## Consequences
 
