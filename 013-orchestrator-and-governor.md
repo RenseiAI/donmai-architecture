@@ -106,6 +106,16 @@ type RegisterResponse struct {
 }
 ```
 
+> **Two heartbeat implementations, not one.** `donmai` ships two separate
+> worker/heartbeat implementations: the generic `worker/` package's
+> `RegisterRequest.Status` above, and the `daemon/` package's
+> `HeartbeatPayload.Status` (`daemon/types.go`) used by the local-daemon fleet
+> (`011-local-daemon-fleet.md`). They are unrelated structs on unrelated wire
+> paths. Conflating them previously masked a real bug: the `daemon/` package
+> computed its status every beat but never serialized it onto the wire — see
+> `ADR-2026-08-03-daemon-host-status-signal-completion.md`. When citing "the
+> worker sends its status," always name which package you mean.
+
 The flow:
 
 1. Worker process starts. Reads a one-time registration token from env (`rsp_live_…`-style).
