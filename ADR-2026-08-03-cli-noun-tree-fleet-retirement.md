@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-03
 boundary: shared
 split: sibling-extensions
@@ -7,8 +7,8 @@ split: sibling-extensions
 
 # ADR-2026-08-03 — CLI noun tree: retire `fleet`, consolidate on `host` + `capacity`
 
-**Status:** Proposed — no code changes have been made; this ADR describes work not yet done
-**Date:** 2026-08-03
+**Status:** Accepted — architecture decision; the OSS `host` factory (D2), the OSS/downstream alias-and-deletion sequencing (D5), and most of the downstream `capacity`-migration work are implementation and release pending. Downstream `fleet` retirement (moving its leaves under `capacity`, deleting overdue aliases) proceeds now per the 2026-08-03 operator ruling; OSS `daemon`→`host` has not shipped. See § Implementation notes.
+**Date:** 2026-08-03 (proposed and accepted same day)
 **Boundary:** shared (OSS-canonical here; `status: Mirrored` stub plus a platform-extensions delta in `rensei-architecture`)
 **Authors:** agent:claude, filed for mark
 **Supersedes in part:** `ADR-2026-05-06-tui-noun-consolidation.md` (the three-noun decision and its one-release alias window)
@@ -406,11 +406,17 @@ here.
 
 ## Implementation notes
 
-Nothing in this ADR has been implemented. Order matters: OSS `host` factory →
-OSS minor → downstream `go get` bump → downstream alias-deletion minor →
-downstream `fleet`-deletion minor. Attempting the downstream move before the
-OSS factory exists reproduces the hand-assembled tree this ADR is trying to
-delete.
+As of this ADR's acceptance (2026-08-03), nothing in it has shipped. Per the
+2026-08-03 operator ruling, downstream implementation proceeds now — `fleet`
+retires org-side and overdue aliases get deleted — while OSS `host` (D2) is
+built but not yet merged. Order still matters for the sequencing that depends
+on the unmerged piece: OSS `host` factory → OSS minor → downstream `go get`
+bump → downstream alias-deletion minor → downstream `fleet`-deletion minor.
+Attempting the downstream move before the OSS factory exists reproduces the
+hand-assembled tree this ADR is trying to delete. Until an OSS release
+carrying D2 exists, `011-local-daemon-fleet.md` and `014-tui-operator-surfaces.md`
+correctly describe the OSS binary as `daemon`-shaped (see their command-surface
+notes) even though this ADR is `Accepted`.
 
 The platform-side delta — which platform endpoints back the moved leaves, the
 route write-path semantics the moved `capacity route set` inherits, and the

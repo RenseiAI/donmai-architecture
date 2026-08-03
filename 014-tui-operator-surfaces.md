@@ -1,25 +1,24 @@
 # 014 — TUI Operator Surfaces
 
 **Status:** Reference (initial draft)
-**Last updated:** 2026-05-06
+**Last updated:** 2026-08-03
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/014-tui-operator-surfaces-platform-extensions.md`)
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `011-local-daemon-fleet.md`, `013-orchestrator-and-governor.md`, `ADR-2026-05-06-tui-noun-consolidation.md`.
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `011-local-daemon-fleet.md`, `013-orchestrator-and-governor.md`, `ADR-2026-05-06-tui-noun-consolidation.md` (superseded in part), `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md`.
 
 ## Noun model
 
-Per `ADR-2026-05-06-tui-noun-consolidation.md`, the TUI's top-level nouns map to three concept layers:
+`ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` retired `fleet` as a top-level noun, superseding in part the three-noun table `ADR-2026-05-06-tui-noun-consolidation.md` established here. The TUI's top-level nouns now map to two concept layers:
 
-| Top-level | Concept layer | Owns |
-|---|---|---|
-| `host` | This machine | Daemon lifecycle (install / status / doctor / drain / update), capacity envelope, local workarea pool, installed providers |
-| `fleet` | Other machines + per-project routing | Remote daemon visibility, `fleet route set` for execution-route policy on a project |
-| `capacity` | Org-wide capacity config | Org execution providers and pool definitions the routing policy chooses from |
+| Top-level | Concept layer | Owns | Implemented in |
+|---|---|---|---|
+| `host` | This machine | Daemon lifecycle (install / status / doctor / drain / update), capacity envelope, local workarea pool, installed providers and kits, project admission, the local live-session dashboard | OSS; composed downstream unchanged |
+| `capacity` | The org's execution capacity | Execution providers, pools, live instances (persistent hosts and on-demand sandboxes), project→pool routing, cost rollups | Downstream only; name reserved (not implemented) in OSS |
 
-The previous top-levels (`worker`, `machine`, `execution`, `workarea`, top-level `provider`, `route`, `routing`) ship as **hidden deprecated aliases** that print a one-line deprecation notice and forward to the new command. Aliases are removed after one release.
+`fleet` is retired as a top-level noun. Downstream, its leaves move under `capacity` (e.g. `fleet route set` becomes `capacity route set`). In OSS, `fleet` keeps its pre-existing single-machine meaning (the worker processes supervised on this host) but is now deprecated in favor of `host`/`daemon` and scheduled for removal, per that ADR's D3/D5. The previous top-levels (`worker`, `machine`, `execution`, `workarea`, top-level `provider`, `route`, `routing`) ship as **hidden deprecated aliases** that print a one-line deprecation notice and forward to the new command; per D5.4, every alias now declares its removal version at creation rather than an unbound "one release."
 
-This means TUI primitives in this doc render under their owning top-level: `WorkerRow` and `WorkareaPoolPanel` are surfaced inside `host`; `FleetGrid` and `MachinePivot` are surfaced inside `fleet`; capacity-shaped panels (provider lists, pool config) live under `capacity`. The widgets are unchanged — only the command-tree under which they render moved.
+This means TUI primitives in this doc render under their owning top-level: `WorkerRow` and `WorkareaPoolPanel` are surfaced inside `host`; `FleetGrid` and `MachinePivot` are re-homed from `fleet` to `capacity` (a multi-machine/multi-instance breakdown is an org-capacity concern, not a per-host one); capacity-shaped panels (provider lists, pool config) live under `capacity`. The widgets are unchanged — only the command-tree under which they render moved.
 
-Both binaries (`donmai` and the platform binary) speak the noun model — `donmai host install` is the OSS-binary form; the platform binary's `host install` is the platform form. Composition lives at the cobra-command-factory layer (`afcli.RegisterCommands`), so the noun model is shared across binaries.
+As verified against the code on 2026-08-03, only the downstream/platform binary assembles a `host` parent command today, and it does so by hand in its own `main` — not via a shared factory. The OSS `donmai` binary still exposes daemon lifecycle under `daemon *`, with no exported `host` command. `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` D2 commits `afcli` to exporting a real `host` parent (with `daemon` demoted to a hidden deprecated alias) so both binaries genuinely share the noun-tree factory via `afcli.RegisterCommands`; until that OSS release ships, "both binaries speak the noun model via `afcli.RegisterCommands`" is the target, not the current state. See `011-local-daemon-fleet.md`'s command-surface note for the OSS-side detail.
 
 ## Why this exists
 
