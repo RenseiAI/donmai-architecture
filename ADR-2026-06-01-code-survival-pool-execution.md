@@ -75,7 +75,7 @@ Both loops are stateless across cycles; restart re-scans. The queue claim is ato
 
 ### 4. Pool capability requirements (`runtime_provides`)
 
-A pool MUST declare it can satisfy the `code-survival-scan` work-type via the existing capability mechanism (`ADR-2026-05-12-capacity-pools-and-substrate-resolution.md §2`, the platform-side resolver). The base contract adds these **requirement kinds** to the substrate vocabulary:
+A pool MUST declare it can satisfy the `code-survival-scan` work-type via the existing capability mechanism ([`rensei-architecture/ADR-2026-05-12-capacity-pools-and-substrate-resolution.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/ADR-2026-05-12-capacity-pools-and-substrate-resolution.md) §2 — a **platform-side** resolver, not an OSS-shipped one; the bare filename this line used to carry resolves to nothing in this corpus). The base contract adds these **requirement kinds** to the substrate vocabulary:
 - `git` — git binary present.
 - `full-history-clone` — can clone deep enough to reach an arbitrary merge commit (NOT `--depth 1`).
 - `toolchain:go`, `toolchain:node` — language toolchains for the reachability pass.
