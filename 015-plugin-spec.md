@@ -86,6 +86,19 @@ verbs:
     sideEffectClass: external-write
     idempotencyKey: ${input.deploymentId || hash(input.projectId, input.commit)}
 
+    # A `node` block makes this verb a visible canvas node. Omit it and the
+    # verb stays invokable but never reaches the palette.
+    node:
+      category: deployment
+      displayName: Deploy to Vercel
+      providerId: vercel.deployment
+      ports:
+        inputs: [projectId, commit]
+        outputs: [deploymentId, url]
+      configSchema: ./schemas/deploy.config.json
+      lifecycleTag: enabled
+      requiredProviders: [vercel.deployment]
+
   - id: vercel.list_deployments
     description: List recent deployments for a project.
     inputSchema: ./schemas/list.input.json
@@ -212,8 +225,17 @@ interface VerbDeclaration {
 
   // For gate verbs
   eventSubscription?: string           // pipe-delimited event type ids
+
+  // Node-surfacing metadata. Presence of this block is what makes the verb a
+  // visible, editable canvas node — see "Node-surfacing metadata" below.
+  node?: NodeSurface
 }
 ```
+
+`inputSchema` / `outputSchema` may be given either as a path (as above) or inlined
+as JSON Schema 7. Inline them when the manifest is consumed from a registry blob:
+an inlined manifest is self-contained and can be refreshed without fetching the
+tarball.
 
 **Namespace enforcement.** Every verb id must start with `<plugin-id>.` (the same `metadata.id` from the manifest). The registry validates at install:
 
@@ -225,6 +247,48 @@ ERROR: plugin 'slack' declares verb 'vercel.notify' — verb namespace must matc
 This is the discipline none of the surveyed ecosystems enforce, and they all suffer collision incidents because of that gap. We enforce.
 
 **Reserved generic prefixes.** The registry additionally rejects verb ids whose plugin segment matches a Provider Family name (`tracker`, `vcs`, `sandbox`, `workarea`, `agent-runtime`, `deployment`, `agent-registry`, `kit`, `requester-provider`). Verbs are *provider-shaped*, not *family-shaped* — `linear.comment.create` and `github_issues.comment.create` are correct; `tracker.comment.create` is not. This prevents accidental lowest-common-denominator drift across Provider Families and is the registry-side enforcement of `ADR-2026-05-10-native-rich-providers.md`.
+
+### Node-surfacing metadata
+
+A verb that carries a `node` block **is** a workflow node — the locus rule from
+`ADR-2026-05-03`. Without the block the verb is invokable but never appears on the
+canvas; with it, the palette renders the verb as a node and the block supplies
+everything the frontend needs that the verb declaration does not already carry.
+
+```ts
+interface NodeSurface {
+  category: string                     // palette grouping
+  displayName: string
+  providerId: string                   // the provider this node binds to
+  ports: PortSpec                      // inputs/outputs surfaced on the canvas
+  configSchema?: string | object       // JSON Schema for the node's config panel;
+                                       // path or inlined, same rule as the verb schemas
+  lifecycleTag?: 'enabled' | 'experimental'
+                                       // seeds the default enablement state;
+                                       // defaults to 'enabled' when omitted
+  deprecated?: boolean
+  requiredProviders: string[]          // provider ids that must be configured
+                                       // before the node can run
+}
+```
+
+**Two validation rules attach to this block**, checked at install alongside
+namespace and reserved-prefix enforcement:
+
+```
+ERROR: verb 'acme.deploy' sets implementedBy 'acme.missing' — no such entry in `providers`.
+ERROR: verb 'acme.deploy' node.requiredProviders does not include its own providerId 'acme.deployment'.
+```
+
+The first makes `implementedBy` a real reference rather than a free string. The
+second prevents a node that surfaces on the palette but can never satisfy its own
+provider precondition.
+
+**Why this block exists.** It is what lets a node be *delivered* from an external
+signed source rather than compiled in — the manifest becomes rich enough to
+describe the node's whole declarative surface, while execution stays bound to
+`implementedBy` and therefore to implementations the host already vetted. See
+`ADR-2026-06-20-externally-delivered-nodes.md`.
 
 **Verb kinds and the workflow engine.** The `kind` field tells the workflow engine how to treat the verb in a graph:
 
