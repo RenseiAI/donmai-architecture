@@ -85,6 +85,7 @@ That discipline — particularly point (4), "removing the platform leaves a usab
 - **`ADR-2026-07-24-translating-gateway-model-endpoint-host.md`** — Ships a translating-gateway `ModelEndpoint` host natively in the OSS daemon: the reserved cross-protocol extension point from `ADR-2026-06-06` D2, one canonical intermediate representation for translation, a hot-reloadable (never hard-coded) per-provider Class-S sanction table that deny-by-default, and structural exclusions on vendor-identity impersonation. Amends `ADR-2026-06-06`. Cross-cutting; mirrored as stub in `rensei-architecture`.
 - **`ADR-2026-07-24-acp-posture.md`** — Closes the long-open ACP (Agent Client Protocol) thread: native per-harness adapters remain the primary integration surface (ACP lacks fleet primitives), with a single capped-`experimental` `acp-generic` breadth adapter prototyped for basic-fidelity coverage of any ACP-registered agent. OSS-only.
 - **`ADR-2026-07-24-harness-addition-v2-checklist.md`** — Amends the harness-addition procedure from `ADR-2026-06-06` with eight mandatory gates: binary pin + pin-bump protocol, policy injection, fail-closed trust boundary, endpoint pin, event-contract conformance test, full smoke set, and tier-entry-at-`untested`. Amends `ADR-2026-06-06`. Cross-cutting; mirrored as stub in `rensei-architecture`.
+- **`ADR-2026-08-05-versioned-execution-cell-and-session-reference.md`** — Defines the additive `DispatchIntent` → `ResolvedExecutionCell` → immutable admission/claim receipts → common `SessionRef` contract across harness/model/endpoint/auth/placement/mode/capability axes, keeps claim-time host narrowing as a linked receipt, specifies lossless legacy projection and heterogeneous-axis/transport/denial fixtures, and moves native/platform/A2A/host-CLI delegation transport onto typed parent/child edges. Any headlessly drivable harness with an admitted transport may be a child. Cross-cutting; mirrored with platform implications in `rensei-architecture`.
 
 ### Agents (archetypes)
 
@@ -169,6 +170,7 @@ renaming an ADR.
 | [`ADR-2026-06-15-turn-result-manifest.md`](ADR-2026-06-15-turn-result-manifest.md) | Accepted | shared | Turn-result manifest is the deterministic turn outcome |
 | [`ADR-2026-06-19-requester-provider-inbound-agent-family.md`](ADR-2026-06-19-requester-provider-inbound-agent-family.md) | Accepted | shared | RequesterProvider: the inbound agent-request family |
 | [`ADR-2026-06-20-byoa-requester-registration-record.md`](ADR-2026-06-20-byoa-requester-registration-record.md) | Accepted | shared | Requester registration: the inbound principal record |
+| [`ADR-2026-06-20-externally-delivered-nodes.md`](ADR-2026-06-20-externally-delivered-nodes.md) | Accepted | shared | — |
 | [`ADR-2026-06-21-byoa-workflow-authoring-verbs.md`](ADR-2026-06-21-byoa-workflow-authoring-verbs.md) | Proposed | shared | BYOA workflow-authoring verbs: the `workflow:author` capability |
 | [`ADR-2026-06-21-mcp-adapter-archetype.md`](ADR-2026-06-21-mcp-adapter-archetype.md) | Accepted | shared | MCP adapter archetype: a facade over the inbound dispatch primitive |
 | [`ADR-2026-06-21-webhook-callback-delivery.md`](ADR-2026-06-21-webhook-callback-delivery.md) | Proposed | shared | Webhook callback delivery: the push-back contract |
@@ -187,5 +189,6 @@ renaming an ADR.
 | [`ADR-2026-07-24-translating-gateway-model-endpoint-host.md`](ADR-2026-07-24-translating-gateway-model-endpoint-host.md) | Accepted | shared | — |
 | [`ADR-2026-08-03-cli-noun-tree-fleet-retirement.md`](ADR-2026-08-03-cli-noun-tree-fleet-retirement.md) | Accepted | shared | CLI noun tree: retire `fleet`, consolidate on `host` + `capacity` |
 | [`ADR-2026-08-03-daemon-host-status-signal-completion.md`](ADR-2026-08-03-daemon-host-status-signal-completion.md) | Accepted | OSS-only | Daemon host-status signal completion (outbound status + inbound claim gating + `pool.deleted`) |
+| [`ADR-2026-08-05-versioned-execution-cell-and-session-reference.md`](ADR-2026-08-05-versioned-execution-cell-and-session-reference.md) | Accepted | shared | Versioned execution cell, admission receipt, SessionRef, and delegation edge |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->

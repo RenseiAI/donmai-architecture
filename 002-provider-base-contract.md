@@ -602,6 +602,62 @@ The five proposals captured by the prior draft are now accepted as v2 enrichment
 
 The full `ModelEndpoint` capability shape (the company-named `Resolve(EndpointRequest) → EndpointBinding` verb, `HostDesc` cells, the 5-mode AuthMode vocabulary, cost model) and the HARNESS **Drive surface** (`Drives`/`DrivesHosts` and the `(harness × endpoint)` validity rule) are specified in **ADR-2026-06-06-two-axis-provider-model**. Go-manifest hosting for both new axes (the `harness` and `model-endpoint` provider-manifest registrations) is defined in `015-plugin-spec.md` § "Provider Family registrations".
 
+### Versioned execution-cell admission contract (2026-08-05)
+
+The two-axis matrix is the **declared compatibility ceiling**, not a complete
+run identity and not proof of live availability. Per
+`ADR-2026-08-05-versioned-execution-cell-and-session-reference.md`, the
+admission boundary consumes a versioned `DispatchIntent` and resolves these
+independent refs:
+
+- `HarnessRef` — exact harness id and version;
+- `ModelRef` — model identity and author;
+- `ServingEndpointRef` — stable endpoint id, protocol, operator, and revision;
+- `AuthBindingRef` — non-secret mechanism, commercial mode, authority, binding
+  scope, portability, and delivery boundary;
+- `PlacementRef` — exact host/sandbox/remote peer or a claim-bound pool;
+- `SessionMode` — autonomous or human-controlled; and
+- required/optional capability requests plus explicit fallback alternatives.
+
+Admission is the intersection of declared matrix compatibility, live runtime
+inventory, exact auth proof, placement reachability/capabilities, requested
+mode/capabilities, and required evidence tier. The result is a
+`ResolvedExecutionCell` and an immutable `AdmissionReceipt` persisted before
+enqueue. Evidence tiers are `declared → implemented → unit_verified →
+integration_verified → smoked → production_eligible`; a manifest row or code
+shape alone does not imply routability.
+
+The v1alpha1 admission schema is closed: unknown fields, versions, and
+discriminators fail with a typed contract error. Unknown explicit selectors,
+missing auth/placement proof, unsupported required capabilities, insufficient
+evidence, and undeclared fallback produce a typed denial receipt before spawn.
+A fallback must match one complete named alternative; independently permitted
+axes from different alternatives cannot be combined into an undeclared cell.
+The current warn-and-strip behavior for unsupported `Spec.MCPServers` or
+`Spec.AllowedTools` remains a legacy translation behavior only; it is not valid
+for a required v1alpha1 capability unless the caller named an allowed downgrade
+and the receipt records it.
+
+A legacy adapter maps fused queued-work/resolved-profile fields onto the new
+intent without changing current scheduling behavior. Every inferred harness,
+endpoint, auth binding, placement, or default becomes a `legacy_inference`
+resolver decision. The adapter never substitutes an unknown explicit selector
+or drops a required capability.
+
+A `PlacementRef` may be `claim_bound` when the concrete host is selected only
+after queue claim. The pre-enqueue receipt binds the pool/reservation and
+machine-policy ceiling; the claiming host writes a separate immutable claim
+receipt after re-running narrow-only admission. It never mutates the first
+receipt and never receives credentials before that gate succeeds.
+
+`SessionRef` is the common lifecycle handle for autonomous,
+human-controlled, child, and remote-peer sessions. It links the admission (and
+optional claim) receipt and declares watch/replay/cancel/take-control
+capabilities. Delegation transport is not part of the cell: it is a typed graph
+edge (`native_harness | platform_dispatch | a2a | host_cli`). Any harness with
+`canRunHeadlessly` and at least one admitted transport may act as a child;
+`canSpawnNativeChildren` is a separate optional capability.
+
 ## OSS vs SaaS responsibilities
 
 | Concern | OSS (`donmai`) | SaaS (Donmai Platform) |
@@ -613,6 +669,9 @@ The full `ModelEndpoint` capability shape (the company-named `Resolve(EndpointRe
 | Signature verification | ✅ ships permissive default | ✅ ships allowlist + attested modes |
 | Scope resolution | ✅ ships | inherits |
 | Lifecycle hook emission | ✅ ships | inherits |
+| Execution-cell admission contract | ✅ owns; implementation pending | consumes + extends |
+| Immutable admission/claim receipts | ✅ owns; implementation pending | aggregates |
+| Common `SessionRef` lifecycle | ✅ owns; implementation pending | aggregates + extends |
 | Hook consumers (policy rules) | ❌ not in OSS | ✅ owns |
 | Multi-tenant administration | ❌ not in OSS | ✅ owns |
 

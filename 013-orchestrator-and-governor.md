@@ -161,23 +161,47 @@ A child worker is a short-lived process that runs one session. When the session 
 
 ## AgentRuntime dispatch
 
-The orchestrator selects an `AgentRuntimeProvider` per session based on:
+The orchestrator admits a versioned `DispatchIntent` and selects one
+`ResolvedExecutionCell` per session based on:
 
-1. **Tenant config** — preferred runtime for this project (claude, codex, etc.).
-2. **Capability match** — workflow may declare `requires.capabilities: ['agent.supportsToolPlugins']`; runtime must satisfy.
-3. **Cost / latency hints** — Routing Intelligence (two-dimensional per `004`) picks based on historical performance.
-4. **Model selection** — within an AgentRuntime, the dispatch model (Opus/Sonnet/Haiku for Claude; equivalent tiers elsewhere) is set per workflow step or session profile.
+1. **Explicit intent and config** — requested harness/model/endpoint/auth/
+   placement, or documented defaults whose provenance is recorded.
+2. **Declared compatibility** — the harness/endpoint matrix is the ceiling.
+3. **Live proof** — runtime inventory, auth binding, placement reachability,
+   requested mode/capabilities, and evidence tier all satisfy the intent.
+4. **Cost / latency hints** — routing may rank already-valid candidates but
+   cannot invent an undeclared fallback.
 
-The orchestrator does **not** pick models per-step within an agent's session — that's the agent's own decision (and the topic of Principle 1 in `001`: sub-agents within sessions, not sub-issues). The orchestrator picks the *runtime* and the *initial model* for the session; the agent can spawn cheaper sub-agents internally.
+Before enqueue, the orchestrator persists an immutable `AdmissionReceipt` and
+returns a `SessionRef`. A claim-bound pool writes a separate `ClaimReceipt`
+after host selection and the narrow-only gate; neither claim nor spawn mutates
+the first receipt. Secret delivery remains after admission/claim. Full contract:
+`ADR-2026-08-05-versioned-execution-cell-and-session-reference.md`.
 
-### Sub-agent dispatch (intra-session)
+The orchestrator selects the runtime and initial model for the parent session.
+If an agent delegates, each child is resolved independently; a parent choice is
+inherited only when the edge explicitly requests it and the child receipt
+records that inheritance.
 
-Per `001` Principle 2, decomposition is session-internal. When a coordinator agent uses sub-agents:
+### Child-agent dispatch (native and independently admitted)
 
-- **Claude provider:** Uses the Task tool. Sub-agent events emit through the session's event stream (`emitsSubagentEvents: true` capability). Operator-surface views render them as nested nodes when the runtime supports it.
-- **Codex / Spring AI / others:** Per-provider behavior varies. If the runtime doesn't expose a Task-equivalent or doesn't emit events for it, sub-agents are invisible to operator-surface views (`emitsSubagentEvents: false`). The architecture admits this; the operator-surface (`014`) shows a "sub-agent visibility limited" indicator for runs on those providers.
+Per `001` Principle 2, decomposition belongs to the session graph. Four typed
+edge transports are admitted:
 
-Sub-agents share the parent's workarea by default (per `003` `mode: 'shared'`). Cross-machine fan-out is possible but rare — for very large work, a coordinator may dispatch parallel sub-sessions to the orchestrator (which appear as separate sessions in operator-surface views, parented to the coordinator).
+- **`native_harness`** — the selected harness exposes a child primitive and an
+  adapter maps its identity/events/lifecycle into a logical child `SessionRef`.
+- **`platform_dispatch`** — a control plane submits a new admitted child intent.
+- **`a2a`** — a task is admitted through the A2A/requester seam and mapped to a
+  child session; the underlying harness need not implement A2A itself.
+- **`host_cli`** — a host command launches the admitted child and returns its
+  receipt/session reference.
+
+`canSpawnNativeChildren` and `canRunHeadlessly` are distinct. Native support is
+an optimization; any `canRunHeadlessly` cell with at least one admitted
+transport may be a child. Every child has its own intent, receipt, cell, and
+`SessionRef`. Shared workarea, process, context, auth, continuation domain, or
+budget is explicit on the edge/admission decisions; there is no default resource
+inheritance by process accident.
 
 ### The Linear sub-issue anti-pattern
 
@@ -398,6 +422,9 @@ Any future binary added to the OSS distribution channel inherits this rule. Its 
 | Worker registration + dial-out | ✅ ships | inherits |
 | Work queue (Redis or in-memory) | ✅ ships | ✅ Redis |
 | Completion contract + backstop | ✅ ships | inherits |
+| Execution-cell admission + local receipts | ✅ owns; implementation pending | inherits + aggregates |
+| `SessionRef` lifecycle | ✅ owns; implementation pending | aggregates + extends control |
+| Child delegation transports | ✅ owns contract; implementation pending | governs + extends |
 | Topology view (React Flow) | ❌ TUI equivalent | ✅ ships |
 | TUI fleet view | ✅ ships | extended |
 | Multi-tenant orchestrator | ❌ | ✅ owns |
@@ -409,8 +436,8 @@ OSS users get a fully working orchestrator + governor + worker fleet on their Ma
 
 ## Open questions
 
-1. **Worker draining when daemon updates.** Per `011`, the daemon drains in-flight work before self-update. Sub-agents in a Claude session count as in-flight; do we wait for them too? Default: yes — sub-agent completion rolls up to parent session completion.
-2. **Cross-machine sub-agent fan-out.** Today's session-tree model handles parent-child relationships within one daemon. If a coordinator wants to dispatch parallel sub-sessions across machines, those become *separate* sessions in the orchestrator (parented via metadata). Operator-surface views render them as siblings of the coordinator with edges. Worth surfacing in the workflow engine as a verb (`donmai.spawn_parallel_subsession`)?
+1. **Worker draining when daemon updates.** Per `011`, the daemon drains in-flight work before self-update. Native and independently admitted children count as in-flight; do we wait for them too? Default: yes — child completion rolls up to parent session completion unless its edge is explicitly detached.
+2. **Workflow authoring surface for graph delegation.** The execution contract now admits cross-machine and cross-transport child sessions through typed edges. Whether workflow authors receive one generic delegation verb or transport-specific nodes remains an authoring decision; the runtime contract must not expose an implicit fork.
 3. **Workflow-engine vs orchestrator-vs-governor boundary clarity.** Three things are involved in turning a Linear issue into a session: workflow trigger fires, governor (or workflow engine?) creates a SessionSpec, orchestrator dispatches. Today the boundary is fuzzy — the legacy SDLC YAML implements logic that arguably belongs in the governor. As workflows mature, more logic migrates from governor to workflow definition, and the governor shrinks toward "fire workflow on trigger event." Worth tracking; not blocking.
 
 These are intentional gaps for ADRs as we get implementation experience.
