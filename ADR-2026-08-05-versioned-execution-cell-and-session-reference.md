@@ -103,6 +103,7 @@ interface AuthBindingRef {
   authority: string
   bindingScope: 'process' | 'session' | 'harness' | 'endpoint' | 'host' | 'pool' | 'project' | 'org'
   portability: 'portable' | 'endpoint_bound' | 'harness_bound' | 'host_bound'
+  delivery: 'environment' | 'endpoint_header' | 'brokered_token' | 'host_cli_home_reference' | 'platform_gateway' | 'none'
 }
 
 interface PlacementRef {
@@ -115,8 +116,11 @@ interface PlacementRef {
 `ServingEndpointRef` identifies routing configuration but never carries a
 secret-bearing URL or header in a receipt. `AuthBindingRef` identifies the
 technical mechanism separately from commercial mode, authority, scope, and
-portability, but never carries credential bytes, tokens, file contents, or
-environment values. A runtime receives the actual binding through its existing
+portability. It also names delivery independently: process environment,
+endpoint header, brokered token, a host CLI-home reference, a platform gateway,
+or no delivery for a no-auth endpoint. Delivery identifies the runtime boundary
+without carrying credential bytes, tokens, file contents, headers, or
+environment values. A runtime receives the actual binding through the named
 secret-delivery boundary after admission.
 
 Mechanism and commercial mode are deliberately orthogonal. A subscription for
@@ -126,6 +130,10 @@ be `harness_bound`; an API key is commonly `usage_billed` and
 with `self_hosted`. `platform_metered` is a commercial mode, never an auth
 mechanism. A subscription appearing in more than one harness catalog does not
 make it portable: the binding's declared portability still controls admission.
+Delivery is likewise orthogonal: `api_key` may arrive through an environment,
+endpoint header, broker, or gateway, while `cli_session` commonly references a
+host CLI home. `none` requires `delivery='none'`; it never authorizes ambient
+credentials.
 
 The legacy five-value `AuthMode` remains an adapter input; this ADR does not
 rename that shipped wire. The adapter must project it into explicit auth-binding
@@ -172,8 +180,10 @@ interface DispatchIntent {
 
 Fallback is denied by default. Each permitted alternative is named in advance;
 there is no implicit primary provider, ambient endpoint, or default harness
-after an explicit selector fails. Applying an alternative produces a resolver
-decision that names the rejected choice, selected alternative, and reason.
+after an explicit selector fails. One admission may select only one complete
+named alternative: it may not assemble a cross-product from axes that appear in
+different alternatives. Applying an alternative produces a resolver decision
+that names the rejected choice, selected alternative, and reason.
 
 ### D4 — ResolvedExecutionCell and admission equation
 
@@ -391,7 +401,7 @@ The required legacy projection is:
 | `resolvedProfile.harness`, else documented legacy provider mapping | `HarnessRef`; inferred mapping is a `legacy_inference` decision |
 | `resolvedProfile.model` + `company`/provider catalog identity | `ModelRef`; model author is not inferred from endpoint operator |
 | `servingHost` + matrix endpoint revision/protocol/operator | `ServingEndpointRef` |
-| `authMode` + stable `credentialId`/pool binding + non-secret credential requirements | `AuthBindingRef`; the adapter derives mechanism and commercial mode from endpoint/credential metadata because legacy `authMode` conflates them; values remain outside payload and receipt |
+| `authMode` + stable `credentialId`/pool binding + non-secret credential requirements | `AuthBindingRef`; the adapter derives mechanism, commercial mode, and delivery from endpoint/credential metadata because legacy `authMode` conflates them; values remain outside payload and receipt |
 | scheduler route/pool/host/sandbox selection | `PlacementRef`; an unresolved pool is `claim_bound` |
 | `mode` (`interactive`/`interview` versus headless) | `SessionMode` plus required watch/input/control capabilities |
 | allowed/disallowed tools, MCP servers, skills, kits, and service blocks | required/optional capability names and parameter digests; definitions remain on the operational payload |
@@ -405,7 +415,8 @@ without a lossless projection blocks adapter promotion; it is not dropped.
 Specifically:
 
 - fused provider/model and derived harness values become separate refs;
-- scalar auth mode becomes an explicit inferred `AuthBindingRef`;
+- scalar auth mode becomes an explicit inferred `AuthBindingRef`, including its
+  independent delivery boundary;
 - serving host and capacity selector become endpoint/placement refs;
 - absent selectors use only existing documented defaults and record
   `legacy_inference` decisions;
@@ -431,7 +442,7 @@ when live inventory and evidence gates pass:
   "harness":{"id":"opencode","version":"pinned-v1"},
   "model":{"id":"llama-large","author":"meta"},
   "endpoint":{"id":"lmstudio-main","protocol":"openai-chat","operator":"local-operator","revision":"rev-7"},
-  "authBinding":{"id":"auth_lmstudio_optional_key","mechanism":"api_key","commercialMode":"self_hosted","authority":"local-user","bindingScope":"endpoint","portability":"endpoint_bound"},
+  "authBinding":{"id":"auth_lmstudio_optional_key","mechanism":"api_key","commercialMode":"self_hosted","authority":"local-user","bindingScope":"endpoint","portability":"endpoint_bound","delivery":"endpoint_header"},
   "placement":{"id":"mac-studio","kind":"host","resolution":"exact"},
   "sessionMode":"autonomous",
   "grantedCapabilities":[],
@@ -444,8 +455,9 @@ when live inventory and evidence gates pass:
 No resolver may rewrite model author to `local-operator`, endpoint operator to
 `meta`, auth authority to either, or harness to an endpoint-branded id. A second
 variant changes the auth-binding mechanism to `none` while preserving every other
-axis, proving optional-key OpenAI-compatible endpoints are explicit cells, not
-new model providers.
+axis except delivery, which becomes `none`, proving optional-key
+OpenAI-compatible endpoints are explicit cells, not new model providers and do
+not inherit ambient credentials.
 
 **Fixture F2 — child semantics do not depend on transport.** Four edge fixtures
 share one parent `SessionRef`, one child request semantic digest, and one child

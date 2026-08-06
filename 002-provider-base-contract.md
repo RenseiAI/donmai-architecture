@@ -614,7 +614,7 @@ independent refs:
 - `ModelRef` — model identity and author;
 - `ServingEndpointRef` — stable endpoint id, protocol, operator, and revision;
 - `AuthBindingRef` — non-secret mechanism, commercial mode, authority, binding
-  scope, and portability;
+  scope, portability, and delivery boundary;
 - `PlacementRef` — exact host/sandbox/remote peer or a claim-bound pool;
 - `SessionMode` — autonomous or human-controlled; and
 - required/optional capability requests plus explicit fallback alternatives.
@@ -631,6 +631,8 @@ The v1alpha1 admission schema is closed: unknown fields, versions, and
 discriminators fail with a typed contract error. Unknown explicit selectors,
 missing auth/placement proof, unsupported required capabilities, insufficient
 evidence, and undeclared fallback produce a typed denial receipt before spawn.
+A fallback must match one complete named alternative; independently permitted
+axes from different alternatives cannot be combined into an undeclared cell.
 The current warn-and-strip behavior for unsupported `Spec.MCPServers` or
 `Spec.AllowedTools` remains a legacy translation behavior only; it is not valid
 for a required v1alpha1 capability unless the caller named an allowed downgrade
