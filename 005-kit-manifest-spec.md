@@ -371,10 +371,10 @@ Composition is where most subtle bugs live; explicit rules prevent silent surpri
 | Contribution | Rule |
 |---|---|
 | `commands` (build/test/validate) | Retain every owner-qualified command. Each generic alias has one explicit owner; ambiguous claims fail before execution. Never last-applied-wins. |
-| `prompt_fragments` | Concatenated in apply order. Each carries `when` filter; only fragments matching `workType` are included. |
-| `tool_permissions` | Union. A command allowed by any active kit is allowed in the session. |
-| `mcp_servers` | Concatenated; duplicate `name` is an error. |
-| `skills` | Concatenated; duplicate `id` is an error. |
+| `prompt_fragments` | Concatenated in apply order. Each carries `when` filter; only fragments matching `workType` are included. The result is an ordered adaptation, not implicit whole-system-prompt replacement. |
+| `tool_permissions` | Union into kit-requested policy contributions. Harness adaptation still intersects them with the admitted policy floor and exact permission grammar; a kit cannot weaken a deny by union. |
+| `mcp_servers` | Concatenated; duplicate `name` is an error. Materialization produces source-addressed MCP adaptation entries. |
+| `skills` | Concatenated; duplicate `id` is an error. Granted capability companion instructions attach automatically; optional explanatory partials remain separate. |
 | `agents` | Concatenated; duplicate `id` errors. Multiple agents may share `work_types`. |
 | `a2a_skills` | Concatenated; duplicate `id` errors. |
 | `intelligence_extractors` | Concatenated by `language` + `emits`. Multiple extractors may emit same kind; results de-duped at the memory layer. |
@@ -440,6 +440,34 @@ session spanning both pulls both kits' contributions. Disjoint scopes produce
 separate command plans; if selectors overlap, generic aliases resolve together
 and ambiguous owners fail before execution. Hooks retain deterministic
 foundation-first order within each effective scope.
+
+### Contributions at harness adaptation
+
+Composition determines the ordered contribution set; it does not prove that a
+selected harness applied that set. After execution-cell admission, every active
+kit contribution that affects an agent session becomes one or more
+source-addressed `HarnessAdaptationPlan` entries per
+`ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`:
+
+- prompt fragments become ordered prepend/append entries with content digests;
+- hooks name host/runner/harness locus and lifecycle phase;
+- MCP servers name their exact delivery strategy;
+- tool permissions name the target grammar or injected policy boundary;
+- skills and capability companion partials retain their distinct identities;
+  and
+- service, credential-reference, environment, config-file, config-home,
+  endpoint, and cleanup contributions remain distinct entries.
+
+Each entry carries the kit/package source ref and digest. A required kit
+contribution that cannot be delivered by the exact harness denies spawn. An
+optional contribution may be denied, or may use only an explicitly authorized
+named downgrade, and the applied receipt records the outcome. Detection errors
+do not silently erase a contribution already admitted as required.
+
+The harness operating protocol is outside kit authority. A kit fragment may
+append to a replaceable base-instruction layer or amend the user prompt, but it
+cannot authorize replacement of the harness protocol. Deterministic ordering is
+the composition apply order, then contribution id as the stable tie-break.
 
 ## Registry sources
 
@@ -608,6 +636,8 @@ The kit doesn't know which provider satisfied the toolchain. The provider doesn'
 | Manifest schema + parser | ✅ owns | consumes |
 | Detection runtime (declarative + executable) | ✅ ships | inherits |
 | Composition algorithm | ✅ ships | inherits |
+| Kit contribution → adaptation entries | ✅ owns contract; implementation pending | consumes |
+| Applied kit contribution evidence | ✅ owns local receipt | aggregates |
 | Default language kits (TS, TS/Next.js, Go, Rust, Java, Python, Ruby) | ✅ ships (OSS catalog in `donmai-kits`) | consumes OSS catalog |
 | Local manifest discovery | ✅ ships | inherits |
 | Tessl / agentskills.io adapters | ✅ ships | inherits |

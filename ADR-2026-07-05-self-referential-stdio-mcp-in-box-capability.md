@@ -45,24 +45,51 @@ The F.5 TODO always named two plugins: `af_linear / af_code`. This ADR ships `af
 
 `defaultMCPServers` remains the single extension point. A capability that does not need the working tree (linear proxying, memory) may still prefer the platform HTTP gate; this pattern is mandatory only when the capability must run where the checkout is — but its activation contract (typed block, runner-authored entry) is the house style for all in-box servers regardless.
 
+### Amendment 2026-08-06 — explicit adaptation and downgrade
+
+This delivery pattern is now one named MCP strategy in the exact-harness
+`HarnessAdaptationPlan` defined by
+`ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`. The plan distinguishes
+`runner_in_box_stdio` installation from usage-prompt guidance and records the
+server/config artifact refs, allowed tool identities, policy grammar, and
+cleanup entry in the applied receipt.
+
+The earlier prompt-only fallback language is narrowed:
+
+- for an **optional** capability, an unsupported harness may record `denied`;
+- a CLI or prompt-guidance fallback is valid only when the caller/policy named
+  that exact downgrade before admission and the receipt records it; and
+- for a **required** MCP capability, unsupported delivery, an old runner that
+  ignores the activation block, or an MCP startup/handshake failure denies
+  before credential delivery and spawn.
+
+Therefore an unknown block on an old runner is wire-compatible but not proof of
+successful activation. Operational rollout must prove that the selected target
+inventory reads the block before a required capability can be admitted there.
+
 ## Consequences
 
 ### Positive
 
 - **Zero extra delivery artifacts.** The server ships inside the binary that is already on every runner-bearing target (local / docker / kubernetes / modal / daytona / e2b); no sidecar image, no on-demand fetch, no node runtime in bare boxes.
-- **One server, every provider.** CLI providers consume it via the existing `--mcp-config` tmpfile; native gemini via the in-process MCP bridge. No per-provider special-casing.
+- **One server artifact, multiple exact-harness delivery adapters.** Supporting
+  harnesses consume the same stdio server through their proven MCP strategy; an
+  applied receipt, not a family-level assumption, proves delivery.
 - **Additive and inert by default.** A session without the block is byte-identical to before; standalone (platform-less) runs get the capability too when a block is present.
 - **The merge-collision class is closed by construction** — runner-authored entries are defaults and defaults win, so the platform cannot accidentally (or deliberately) shadow an in-box server with a card entry of the same name.
 
 ### Negative
 
-- **Version coupling between the platform and the deployed runner fleet.** The typed block only works when the *reading* runner understands it. The forward direction is safe (old runners ignore the unknown `codeIntel` field and simply run without the capability — degraded, not broken), but that makes stamping before rollout a silent no-op: **the platform must not stamp a capability block until the runner version that reads it is deployed to the target pools.** This is the operational rule the W3 platform lane inherits; the platform-corpus sibling extension carries it.
+- **Version coupling between the platform and the deployed runner fleet.** The typed block only works when the *reading* runner understands it. Old runners safely ignore unknown wire fields, but that target must deny a required adaptation rather than run without it. **The platform must not admit/stamp a required capability block until the reading runner version is proven in the selected target inventory.** Optional legacy sessions may degrade only with a visible denied/downgraded receipt.
 - **One artifact per target must carry the right binary version.** The worker image and the e2b template bake the binary; every donmai release that changes an in-box server (or adds one) requires an image/template rebuild+push per target before the platform may activate it. Local targets pick the new binary up on upgrade.
 - **A hand-rolled MCP server surface.** donmai deliberately takes no Go MCP SDK dependency; the JSON-RPC framing is in-repo (`runtime/mcp/server`), kept honest by conformance tests that drive it with the in-repo `runtime/mcp` *client* as oracle. Protocol-revision drift across agent CLIs is ours to track.
 
 ### Risks
 
-- **Provider matrix asymmetry.** MCP-native today: **claude, codex, amp, gemini** (`AcceptsMcpServerSpec: true` — amp reuses the clijsonl `--mcp-config` path; gemini bridges in-process). **ollama, opencode, agycli** ignore MCP server specs and fall back to CLI guidance in the prompt (`donmai code <subcommand>` via Bash) — functional but unstructured: no typed tool results, no allow-list, quality depends on the model following prompt guidance. If a fallback provider family becomes a primary lane, its MCP support (opencode's own plugin system, agycli's deferred `AcceptsMcpServerSpec`) should be revisited rather than leaning harder on prompt guidance.
+- **Harness/version asymmetry.** Exact pinned harness manifests and conformance
+  evidence decide MCP delivery. Unsupported harnesses may not claim activation;
+  prompt/CLI guidance remains an optional, explicitly authorized downgrade with
+  no typed-result or allow-list equivalence.
 - **Warm-up cost at session start.** The server builds the index at startup (~5–10s first-run on a large repo, per Wave-1; incremental thereafter). Warm-up runs concurrently with serving — `tools/call` blocks on it rather than racing an unbuilt index — but a very early first tool call pays the wait.
 - **Per-target binary arch** (e2b template is linux/amd64; worker image per its build; local is host arch) is already handled by the existing cross-compiles, but a new in-box server increases the blast radius of shipping a wrong-arch artifact: the whole capability, not just one subcommand, is absent.
 
@@ -74,13 +101,16 @@ The F.5 TODO always named two plugins: `af_linear / af_code`. This ADR ships `af
 - **Sidecar image / separate tool binary.** Rejected: a second artifact per target with its own version-skew axis, for a capability already compiled into the binary that is present everywhere.
 - **On-demand fetch of a tool binary at session start.** Rejected: cold-start cost and egress assumptions in bare boxes; another supply-chain surface.
 - **Node stdio MCP server (the legacy `@donmai/code-intelligence` shape).** Rejected: requires node+packages in every bare cloud box — exactly the dependency the all-Go constraint removes.
-- **Bash-CLI prompt guidance only (no MCP server).** Rejected as the primary surface: no typed results, no allow-listing, no tool discovery. Retained as the deliberate **fallback** for providers without MCP support.
+- **Bash-CLI prompt guidance only (no MCP server).** Rejected as the primary surface: no typed results, no allow-listing, no tool discovery. Retained only as an explicitly authorized optional downgrade, never silent equivalence for required MCP delivery.
 - **Platform-authored MCP entry (platform sends the full server config in the card).** Rejected: the platform would have to know the in-box binary path and worktree path per target, and a platform-sent entry colliding with runner defaults is exactly the `mergeMCPServers` hazard the ownership split defuses. The platform signals scope; the runner owns launch.
 
 ## Affected documents
 
 - `007-intelligence-services.md` — "Contract: what kits and agents see" is amended by annotation: the shipped Go delivery surface is the in-box stdio MCP server (`af-code-intelligence`, `af_code_*` FQ names) per this ADR; the legacy in-process `donmai_code_*` tool names describe the deprecated TS package. Updated in the same commit.
 - `ADR-2026-07-04-code-intel-index-schema-v2-go-authoritative.md` — not edited (accepted ADRs are immutable); this ADR is the W2 consumer of its warm-cache/concurrency contract that it already anticipates.
+- `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md` — makes the in-box
+  stdio server one explicit delivery strategy with fail-closed required entries
+  and applied/cleanup evidence.
 - `rensei-architecture` (platform corpus) — owes the `Mirrored` stub plus the sibling platform extension (capability resolver, dispatch stamping, the must-not-stamp-before-rollout rule). Deliberately deferred to land **with** the W3 platform-activation lane, since none of the platform side has shipped yet.
 
 ## Affected work items
