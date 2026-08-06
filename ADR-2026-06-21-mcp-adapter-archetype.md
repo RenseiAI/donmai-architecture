@@ -43,9 +43,10 @@ front-ends speak the Model Context Protocol, and an MCP server is how they disco
 call tools. The risk is that an MCP server, being a separate process surface with its
 own tool list, becomes a **side-door** — a second entry path that re-implements
 dispatch, skips the registration resolution, or exposes capabilities the native
-`agent.request` entry does not gate. `002` already flags the adjacent concern in the
-*outbound* direction (the gemini "MCP→functionDeclaration bridge is a follow-up"); the
-*inbound* MCP facade is the dual and is unspecified.
+`agent.request` entry does not gate. The adjacent *outbound* direction is now concrete:
+the Gemini harness ships an in-process MCP→`functionDeclaration` bridge (recorded in
+`ADR-2026-07-05-self-referential-stdio-mcp-in-box-capability.md`). The *inbound* MCP
+facade specified here remains the protocol dual; it is not that harness bridge.
 
 The question this ADR answers: what is the OSS-canonical **shape** of an MCP server that
 fronts the inbound dispatch primitive, such that it is a thin facade — never a parallel
