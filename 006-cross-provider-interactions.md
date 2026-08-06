@@ -360,6 +360,59 @@ credential fallback, silent capability stripping, receipt mutation after host
 claim, and treating transport-specific child telemetry as a second session
 identity.
 
+## Seam 14 — Admission → harness adaptation → credential delivery → spawn
+
+**Problem:** An admitted execution cell proves that the requested harness,
+model, endpoint, auth, placement, mode, and capabilities are compatible. It
+does not prove how the exact harness/version received base/role/user
+instructions, hooks, MCP, native tools, permission policy, skills, services,
+credential bindings, environment, config, endpoint pinning, or lifecycle
+adapters. Translating those
+concerns ad hoc at `Spawn` makes unsupported fields disappear and lets role text
+replace harness operating protocol.
+
+**Cooperation:** Per
+`ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`, Provider Base,
+Harness, Kit, Intelligence Services, Workarea/Sandbox, and orchestration share a
+durable pre-spawn seam:
+
+```text
+immutable AdmissionReceipt
+  → [claim-bound] immutable narrow-only ClaimReceipt
+  → compile exact-harness/version HarnessAdaptationPlan
+  → apply pre-spawn instruction/hook/tool/service/config entries
+  → persist immutable initial AppliedAdaptationReceipt
+  → if ready: deliver secrets and spawn the admitted cell
+  → append runtime and cleanup outcome records
+```
+
+Contract details:
+
+- The harness operating protocol is non-replaceable. Explicit
+  `preserve | append | replace` applies only to the replaceable base-instruction
+  layer; `replace` requires mode/policy authorization. Role intent never grants
+  it.
+- Prompt guidance and capability activation are distinct. A requested MCP,
+  tool, or service cannot be called active merely because a partial describes a
+  CLI fallback.
+- Hook entries name host, runner, or harness locus. MCP entries name native
+  config, CLI/config-file, gateway, or runner-authored in-box stdio delivery.
+  Tool definitions and deny-preserving permission grammar are separate entries.
+- Required application failure denies before credential delivery and spawn.
+  Optional denial and caller-authorized named downgrade remain visible in the
+  receipt. Plans and receipts carry secret refs/digests only.
+- Runtime and cleanup transitions are append-only records linked to the initial
+  receipt. Cleanup is idempotent by stable entry id.
+- Every child gets its own plan and receipt. Native children may explicitly
+  reuse parent mechanics, while every production headless harness proves at
+  least one non-native child path.
+
+**Bug class prevented:** admitted-but-misconfigured sessions, role cards
+displacing harness safety protocol, prompt text masquerading as an active
+service, secret delivery before policy/tool setup succeeds, unrecorded config
+or cleanup residue, and native-child execution bypassing ordinary session
+evidence.
+
 ## How to add a new seam to this doc
 
 When implementation experience reveals a cross-layer cooperation that isn't captured here:

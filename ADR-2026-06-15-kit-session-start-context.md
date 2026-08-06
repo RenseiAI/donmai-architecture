@@ -76,6 +76,21 @@ GIT_COMMITTER_EMAIL = same as AUTHOR_EMAIL
 `runner/backstop.go:runGit` is updated to set `cmd.Env = os.Environ()` so the
 subprocess inherits the session's GIT identity from the process environment.
 
+### Amendment 2026-08-06 — adaptation-plan delivery
+
+The direct `SystemAppend` behavior above remains the shipped legacy adapter.
+Under `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`, detected skills
+and prompt fragments become source-addressed, ordered adaptation entries before
+spawn. The harness operating protocol is preserved; a kit fragment cannot
+authorize whole-system replacement. The initial applied receipt records the
+content digests and exact delivery strategy used by the selected harness.
+
+Detector failure may continue as warn-and-fallback only for contributions the
+caller classified optional through the legacy adapter. Once admission names a
+kit contribution as required, detection or application failure denies before
+credential delivery and spawn. An alternate pre-clone source or prompt/CLI
+downgrade is legal only when named in advance and recorded in the receipt.
+
 ## Consequences
 
 ### Positive
@@ -97,10 +112,10 @@ subprocess inherits the session's GIT identity from the process environment.
 
 ### Risks
 
-- If `KitSkillDetector` or `KitPromptFragmentDetector` errors, the runner falls
-  back to the pre-clone skill sources (for skills) or no fragments (for
-  fragments) with a `WARN`-level log. This is intentional: a detection failure
-  should degrade gracefully rather than abort the session.
+- The shipped legacy adapter still falls back to pre-clone skill sources (for
+  skills) or no fragments (for fragments) with a `WARN`-level log. That
+  behavior is valid only for optional legacy contributions. Required
+  v1alpha1 adaptation entries fail closed before spawn.
 
 ## Alternatives considered
 
@@ -117,6 +132,8 @@ env vars are sufficient and avoid the file creation.
 - `005-kit-manifest-spec.md` — `[provide.prompt_fragments]` runtime injection
   is now implemented; the spec's description of workType filtering is now
   enforced in `LoadPromptFragments`.
+- `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md` — supersedes silent
+  required-contribution degradation with source-addressed, receipted delivery.
 
 No synchronized `BOUNDARY-SYNC` sections are affected by this ADR.
 

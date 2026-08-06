@@ -566,7 +566,16 @@ interface ToolUseSurface {
 }
 ```
 
-Capability declarations must reflect reality, not aspiration. The runner enforces this: `Spec.MCPServers` and `Spec.AllowedTools` are stripped (warn-and-ignore, with a `SpecFieldNote` on the spawn plan) before the call to `Spawn` for any provider that declares the corresponding flag false. Tests in `donmai/afcli/tooluse_matrix_test.go` and `donmai/runner/spec_translation_test.go` enforce the matrix at compile time — the per-provider declarations and the gating behavior cannot drift. The matrix evolves with provider implementations: when a provider's runner gains real tool support, the capability flag and this doc table update in lockstep.
+Capability declarations must reflect reality, not aspiration. Legacy callers may
+still have unsupported `Spec.MCPServers` or `Spec.AllowedTools` stripped with a
+warning while they migrate. A versioned dispatch treats those fields through
+the harness-adaptation contract below: required delivery that the exact harness
+cannot apply denies spawn; an optional denial or caller-authorized downgrade is
+written to the applied receipt. Tests in `donmai/afcli/tooluse_matrix_test.go`
+and `donmai/runner/spec_translation_test.go` enforce the existing matrix at
+compile time. Adaptation conformance adds the exact-harness/version runtime
+proof; a capability flag or successful translation alone is not promotion
+evidence.
 
 ##### Provider × tool-use surface (2026-05-06, wave 8)
 
@@ -581,6 +590,41 @@ Capability declarations must reflect reality, not aspiration. The runner enforce
 | `opencode` | false | false | false | claude | registration-only (SST pre-1.0; per-minor breakage) |
 
 Note: `ToolPermissionFormat` differs from the wire format the provider consumes — it names the *permission-config grammar* the orchestrator emits. Today only `codex` declares a non-`claude` value (matching the legacy capability matrix earlier in this doc); every other shipped runner consumes the `claude` grammar regardless of native protocol. The matrix above mirrors the live `Capabilities()` declarations in `donmai/provider/*/`.
+
+#### E. Harness adaptation surface
+
+Admission selects an exact execution cell. Before spawn, the execution layer
+projects that cell's operational payload through the exact pinned harness by
+compiling a `HarnessAdaptationPlan` and persisting an
+`AppliedAdaptationReceipt` per
+`ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`.
+
+The harness/version adaptation manifest declares support and evidence for these
+independent channels:
+
+- preserve/append/explicitly-authorized-replace base instructions, with the
+  harness operating protocol always preserved;
+- structured role intent and ordered user-prompt prepend/append amendments;
+- lifecycle hooks with host, runner, or harness locus;
+- MCP through native configuration, CLI/config file, gateway, or
+  runner-authored in-box stdio;
+- native tool definitions and deny-preserving permission grammar;
+- skills, prompt partials, and typed services;
+- credential-reference binding, environment, config files, isolated config
+  homes, endpoint binding, and cleanup; and
+- mode-specific input, event, replay, resume, approval, and child adapters.
+
+The plan is not another provider-wide generic spec. It is the auditable answer
+to “how will this exact harness/version apply each admitted session concern?”
+A role card owns role/purpose/output intent; it cannot silently replace the
+harness operating protocol. Prompt guidance is not evidence that a tool or
+service was installed. Unsupported required entries deny before credential
+delivery and spawn; optional denial and authorized downgrade remain visible in
+the receipt.
+
+Native and non-native child runs use the same surface. A native adapter may
+reuse parent mechanics only through explicit plan entries; every independently
+dispatched child receives its own plan and receipt.
 
 ### Decisions (2026-05-06)
 
@@ -672,6 +716,8 @@ edge (`native_harness | platform_dispatch | a2a | host_cli`). Any harness with
 | Execution-cell admission contract | ✅ owns; implementation pending | consumes + extends |
 | Immutable admission/claim receipts | ✅ owns; implementation pending | aggregates |
 | Common `SessionRef` lifecycle | ✅ owns; implementation pending | aggregates + extends |
+| Harness adaptation plan + applied receipt | ✅ owns; implementation pending | consumes + aggregates |
+| Exact-harness adaptation conformance fixtures | ✅ owns platform-free suite | extends with managed-placement smokes |
 | Hook consumers (policy rules) | ❌ not in OSS | ✅ owns |
 | Multi-tenant administration | ❌ not in OSS | ✅ owns |
 

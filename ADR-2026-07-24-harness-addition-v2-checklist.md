@@ -27,7 +27,8 @@ exactly-one-terminal-event contract in a way only a conformance test catches.
 ## Decision
 
 Amend the harness-addition procedure: a new harness (or a harness binary pin
-bump) is DONE only when every row below holds.
+bump) is DONE only when every row below holds. Rows 9–12 are the 2026-08-06
+adaptation-plan amendment.
 
 | # | Requirement | Enforced by |
 |---|---|---|
@@ -39,6 +40,10 @@ bump) is DONE only when every row below holds.
 | 6 | **Event-contract conformance.** Exactly one Init event, complete (never per-token) assistant texts, exactly one terminal event, then channel close — asserted by a reusable conformance test every adapter runs. | shared conformance test in the agent package |
 | 7 | **Smoke set.** spawn, prompt, event-stream shape, permission-denial, teardown (plus injection/steer, resume/replay, and env-hygiene where the caps claim them) against the pinned binary, platform-free. | smokes repo lane per harness |
 | 8 | **Tier entry.** New cells enter at `untested` and are non-routable as cascade defaults until `smoke-validated`; capability claims follow the measurement ladder, never the manifest. | router tier gate (platform) |
+| 9 | **Adaptation manifest.** The exact pinned harness/version declares supported base-instruction strategies, prompt amendments, hook loci, MCP delivery, native tools/permission grammar, skills/services, environment/config/endpoint/cleanup, and mode adapters. Role intent cannot replace the harness operating protocol. | closed-schema manifest validator + parity gate |
+| 10 | **Applied receipt fixtures.** Positive and negative fixtures prove every declared channel, authorized downgrade, optional denial, required-entry pre-spawn denial, secret-ref-only serialization, and idempotent cleanup. Headless and PTY modes carry separate evidence. | shared adaptation conformance suite |
+| 11 | **Child conformance.** Native-child identity/event/cancel/terminal mapping is proven where claimed. Every production headless harness also passes at least one non-native child smoke using an independently admitted cell, adaptation plan, receipt, and `SessionRef`. | child fixture + smokes lane |
+| 12 | **No prompt-equivalence shortcuts.** A prompt/CLI partial cannot prove MCP, native-tool, service, hook, or policy activation. Any such downgrade is optional, named before admission, and visible in the applied receipt. | negative fixture + receipt assertion |
 
 ## Consequences
 
@@ -48,6 +53,9 @@ bump) is DONE only when every row below holds.
 - Uniform trust posture across permission-rich and permission-less harnesses.
 - A conformance test that catches the terminal-event bug class once for all
   adapters.
+- Exact-harness adaptation and cleanup become evidence rather than spawn-time
+  assumptions.
+- Native child support no longer becomes a hidden eligibility requirement.
 
 ### Negative
 
@@ -69,6 +77,9 @@ bump) is DONE only when every row below holds.
   to cross-reference it. Either shape carries identical checklist content,
   so a future maintainer that prefers the amendment-only form loses nothing
   by treating this ADR's decision record as the amendment's changelog entry.
+- **Treat existing `Spec` translation tests as sufficient.** Rejected: they
+  prove field projection, not applied harness behavior, fail-closed denial,
+  runtime adapters, cleanup, or child lifecycle.
 
 ## Affected documents
 
@@ -77,6 +88,7 @@ bump) is DONE only when every row below holds.
 - Matrix spec — `binaryPins` section.
 - Smokes repo charter — per-harness lanes.
 - Capability-tier ADR / eval-spine design — row 8 dependency.
+- `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md` — rows 9–12 contract.
 
 ## Affected work items
 
