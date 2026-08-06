@@ -306,6 +306,20 @@ session mode, granted capabilities, evidence tier, compatibility digest, or fall
 Any capability regression is a claim denial; a change to an admitted axis
 requires a new dispatch intent and admission receipt.
 
+#### D5.1 — Applied harness adaptation links to admission
+
+Per `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`, an admitted (and,
+where applicable, claimed) cell does not proceed directly to credential
+delivery and spawn. The exact harness/version compiles and applies a
+`HarnessAdaptationPlan`, then persists an immutable initial
+`AppliedAdaptationReceipt` linked by `admissionReceiptId` and optional
+`claimReceiptId`. Only `decision='ready'` permits secrets and spawn.
+
+Adaptation cannot change any admitted axis or fallback decision. A required
+application failure is an adaptation denial, not permission to select a new
+cell behind the receipt. Runtime and cleanup outcomes are append-only records
+linked to the initial adaptation receipt.
+
 ### D6 — One SessionRef for every session mode
 
 `SessionRef` is the common lifecycle handle for autonomous,
@@ -544,6 +558,8 @@ outcomes.
   declared compatibility ceiling inside the broader cell.
 - `ADR-2026-04-27-plugin-and-workflow-architecture.md` — the original
   intra-session-only child discipline is amended to the typed session graph.
+- `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md` — defines the linked
+  post-admission/pre-spawn plan and applied receipt.
 
 No `BOUNDARY-SYNC` region changes in this ADR. The platform corpus carries a
 mirrored stub with a small downstream implication section under the
@@ -562,4 +578,6 @@ include host-bound subscription cells, direct and translated API cells, a
 generic OpenAI-compatible endpoint with no auth and API-key auth, a claim-bound
 pool, and native/non-native child delegation. Production promotion requires
 negative admission tests and at least one non-native child smoke for every
-production-eligible headless harness.
+production-eligible headless harness. The same fixtures feed exact-harness
+adaptation plans so admission and applied configuration cannot drift into two
+unrelated contract suites.

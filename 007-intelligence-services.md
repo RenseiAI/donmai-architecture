@@ -301,11 +301,39 @@ This is a retrieval-augmented prompt construction — the same shape Cursor, Con
 
 The injection is **bounded** — `maxTokens` ensures we don't blow the context window. Priority ordering: drift warnings > active issue patterns > project-wide conventions > org-wide patterns. Tenants can tune the slicing per project.
 
+### Intelligence activation at harness adaptation
+
+Granting Memory, Code Intelligence, or Architectural Intelligence and telling an
+agent how to use it are separate operations. Per
+`ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`, each selected service
+becomes a typed `service` entry in the `HarnessAdaptationPlan`; its concrete
+native-tool, MCP, gateway, in-box stdio, environment, file, or hook deliveries
+are linked entries. A usage partial is an ordered prompt contribution linked to
+the service, not activation evidence by itself.
+
+The applied receipt therefore answers three independent questions:
+
+1. Was the service granted and reachable for the admitted scope?
+2. Which exact harness delivery mechanism was installed and policy-bounded?
+3. Which bounded usage/context guidance was amended into the session?
+
+When the service is required, failure of question 1 or 2 denies before spawn.
+An optional service may be denied or use only a pre-authorized named downgrade;
+the receipt records it. A prompt-only “use this CLI instead” path is not a
+silent substitute for required MCP or native tools. Capability companion
+partials attach automatically when their capability is active, so an author
+does not need to wire both a capability and its hidden enabling partial.
+
+Context bodies and credentials remain outside the receipt. Stable refs,
+scope/parameter digests, content digests, and delivery evidence are sufficient
+to audit what the harness received without retaining tenant data or secrets.
+
 ### OSS vs SaaS responsibilities
 
 | Concern | OSS | SaaS |
 |---|---|---|
 | `ArchitecturalIntelligence` interface (contract + kit extension points) | ✅ owns | consumes |
+| Intelligence-service adaptation entries + local receipt | ✅ owns contract; implementation pending | consumes + aggregates |
 | Drift gate + diff observations (Layer 1, `donmai arch assess`) | ✅ ships (Go-native) | inherits |
 | Single-project graph storage / learned baseline (Layer 2) | ❌ — platform-owned (`ADR-2026-06-07`) | ✅ owns |
 | Single-project synthesis / LLM deviation detection (`assessChange`-against-baseline) | ❌ — platform-owned (`ADR-2026-06-07`) | ✅ owns |

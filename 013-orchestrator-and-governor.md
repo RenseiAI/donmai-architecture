@@ -178,6 +178,22 @@ after host selection and the narrow-only gate; neither claim nor spawn mutates
 the first receipt. Secret delivery remains after admission/claim. Full contract:
 `ADR-2026-08-05-versioned-execution-cell-and-session-reference.md`.
 
+Admission/claim is followed by exact-harness adaptation, not immediate spawn.
+Per `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`, the orchestrator
+and execution host compile a versioned `HarnessAdaptationPlan`, apply every
+pre-spawn entry, and persist an initial `AppliedAdaptationReceipt`. Only a
+`ready` receipt permits secret delivery and spawn. A denied required entry
+cannot trigger implicit cell fallback; selecting a different cell requires a
+new dispatch intent and admission receipt.
+
+The adaptation plan covers independently owned base/role/user prompt layers,
+hooks, MCP, native tool definitions, permission grammar, skills, services,
+credential-reference binding, environment, config/config-home, endpoint
+projection, mode adapters, and
+cleanup. Runtime and cleanup outcomes append records to the initial receipt.
+Role intent cannot replace the harness operating protocol, and prompt guidance
+cannot stand in as evidence for a requested service.
+
 The orchestrator selects the runtime and initial model for the parent session.
 If an agent delegates, each child is resolved independently; a parent choice is
 inherited only when the edge explicitly requests it and the child receipt
@@ -199,9 +215,12 @@ edge transports are admitted:
 `canSpawnNativeChildren` and `canRunHeadlessly` are distinct. Native support is
 an optimization; any `canRunHeadlessly` cell with at least one admitted
 transport may be a child. Every child has its own intent, receipt, cell, and
-`SessionRef`. Shared workarea, process, context, auth, continuation domain, or
-budget is explicit on the edge/admission decisions; there is no default resource
-inheritance by process accident.
+`SessionRef`, plus its own harness adaptation plan and receipt. Shared workarea,
+process, context, config home, tool/service bridge, auth, continuation domain,
+or budget is explicit on the edge/admission/adaptation decisions; there is no
+default resource inheritance by process accident. A production headless harness
+proves at least one non-native child path even when it has a native child
+adapter.
 
 ### The Linear sub-issue anti-pattern
 
@@ -425,6 +444,8 @@ Any future binary added to the OSS distribution channel inherits this rule. Its 
 | Execution-cell admission + local receipts | ✅ owns; implementation pending | inherits + aggregates |
 | `SessionRef` lifecycle | ✅ owns; implementation pending | aggregates + extends control |
 | Child delegation transports | ✅ owns contract; implementation pending | governs + extends |
+| Harness adaptation plan + local applied receipt | ✅ owns; implementation pending | consumes + aggregates |
+| Exact-harness adaptation/child conformance | ✅ owns platform-free suite | extends with managed-fleet smokes |
 | Topology view (React Flow) | ❌ TUI equivalent | ✅ ships |
 | TUI fleet view | ✅ ships | extended |
 | Multi-tenant orchestrator | ❌ | ✅ owns |
