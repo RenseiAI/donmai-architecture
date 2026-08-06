@@ -586,10 +586,10 @@ evidence.
 | `ollama` | false | false | false | claude | future: openai-compat tools on supported models (llama3.1, gemma3) |
 | `gemini` | true | true | true | gemini | native `functionDeclarations` in the `generateContent` `tools` array; `AllowedTools` honored by filtering the declaration set; native tools executed by a session-local in-provider executor. The in-process bridge in `provider/harness/gemini/mcp.go` uses `runtime/mcp` to honor `Spec.MCPServers`, discover server tools, declare them to Gemini, and route resulting calls. `ToolPermissionFormat=gemini` (gating via `functionCallingConfig.mode`, not the Claude allow-list grammar) |
 | `stub` | true | true | true | claude | test affordance only — fields observed by the runner gating layer; the scripted handler does not consume them |
-| `amp` | false | false | false | claude | registration-only (Sourcegraph stable HTTP API not shipped) |
-| `opencode` | false | false | false | claude | registration-only (SST pre-1.0; per-minor breakage) |
+| `amp` | true | false | true | claude | MCP via the CLI `--mcp-config` path; flat `AllowedTools` is not honored |
+| `opencode` | false | true | true | claude | per-session project MCP config and native permission map; OpenCode plugins remain an independent axis |
 
-Note: `ToolPermissionFormat` differs from the wire format the provider consumes — it names the *permission-config grammar* the orchestrator emits. Today only `codex` declares a non-`claude` value (matching the legacy capability matrix earlier in this doc); every other shipped runner consumes the `claude` grammar regardless of native protocol. The matrix above mirrors the live `Capabilities()` declarations in `donmai/provider/*/`.
+Note: `ToolPermissionFormat` differs from the wire format the provider consumes — it names the *permission-config grammar* the orchestrator emits. Today `codex` and `gemini` declare their native non-`claude` values; the remaining shipped CLI runners use the `claude` grammar where they expose this legacy field. The matrix above mirrors the live `Capabilities()` declarations in `donmai/provider/harness/*/`.
 
 #### E. Harness adaptation surface
 

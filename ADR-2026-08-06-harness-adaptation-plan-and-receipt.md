@@ -1,7 +1,7 @@
 ---
 status: Accepted
 boundary: shared
-split: sibling-extensions
+split: inline-addenda
 date: 2026-08-06
 ---
 
@@ -219,6 +219,11 @@ interface HarnessAdaptationPlan {
 }
 ```
 
+`planDigest` is the lowercase SHA-256 digest of the canonical closed-plan
+serialization with the `planDigest` field itself omitted. The generated
+contract owns the canonical serialization; implementations may not hash a
+partial projection or rendered prompt/config payload instead.
+
 The schema is closed. Unknown `contractVersion`, channel, delivery strategy,
 phase, or field is a typed pre-spawn denial. Every entry has a stable identity
 so application and cleanup are idempotent.
@@ -351,6 +356,16 @@ and spawn. Pre-spawn entries must already be terminal (`installed`, `preserved`,
 `amended`, `downgraded`, or `denied`). Runtime and cleanup entries may be
 `pending_runtime` or `pending_cleanup`; their transitions are append-only
 `AdaptationOutcomeRecord`s, never mutations to the initial receipt.
+
+The initial `entries` array is a total, closed projection of the plan: every
+plan entry appears exactly once, no unknown or duplicate `entryId` is allowed,
+and omission of either a required or optional entry is a malformed-receipt
+denial. Each outcome must be valid for the entry's channel, phase, and selected
+delivery. `decision='ready'` is valid only when every required pre-spawn/spawn
+entry has a successful terminal outcome (including an authorized downgrade),
+every required runtime/cleanup entry is explicitly pending or already
+successful, and no required entry is denied. Receipt validation fails closed;
+it never repairs missing evidence by inference from process state.
 
 A `ready` receipt contains no denied required entry. Any required entry denial
 produces `decision='denied'` and zero credential-delivery/spawn side effects.
