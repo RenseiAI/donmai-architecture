@@ -1,7 +1,7 @@
 # 002 — Provider Base Contract
 
 **Status:** Reference. v2 enrichments **Accepted (2026-05-06)**.
-**Last updated:** 2026-05-06
+**Last updated:** 2026-08-05
 **Related:** `001-layered-execution-model.md`, `005-kit-manifest-spec.md`, `013-orchestrator-and-governor.md`
 
 ## Why this exists
@@ -469,7 +469,7 @@ Each implementation is a peer-package under `donmai/provider/`:
 - `provider/codex/` — Codex `app-server` JSON-RPC over stdio. Long-lived subprocess; multiple sessions multiplex via `thread/start`; permission-config bridge implements canUseTool-equivalent.
 - `provider/stub/` — deterministic scripted-event sequences for tests and the F.4 smoke harness; supports every capability so the runner exercises every gating branch.
 - `provider/ollama/` (added 2026-05-06) — local-first HTTP. Probe via `GET /api/tags`; spawn via streaming `POST /api/chat`; deliberately conservative capability profile (no inject, no resume, no tools).
-- `provider/gemini/` (added 2026-06-02) — native HTTPS client to `generativelanguage.googleapis.com`. Auth via `GEMINI_API_KEY` (BYOK); `GOOGLE_API_KEY` accepted as fallback; key resolved per-`Spawn` from `Spec.Env` (supports per-session BYOK + rotation). Probe via API-key presence check. Drives a multi-turn `POST /v1beta/models/{model}:generateContent` conversation (the provider owns the `contents` history; REST is stateless). Tool-use via native `functionDeclarations` in the request `tools` array, with a **session-local in-provider tool executor** that runs native tools (Bash/Read/Edit/Write) in the session Cwd/Env and folds `functionResponse` turns back (the raw REST API returns `functionCall`s expecting the caller to execute them — unlike the CLI-wrapping providers whose tools run inside the vendor binary). Reasoning effort maps to `thinkingConfig` (`thinking_level` for 3.x model IDs, `thinkingBudget` for 2.5). `MaxTurns` enforced as a hard round-trip ceiling. **MCP-server spec is NOT yet honored** (`acceptsMcpServerSpec=false`): there is no in-box MCP stdio client; an MCP→`functionDeclaration` bridge is a documented follow-up. Stability tier: `beta`.
+- `provider/harness/gemini/` (added 2026-06-02) — native HTTPS client to `generativelanguage.googleapis.com`. Auth via `GEMINI_API_KEY` (BYOK); `GOOGLE_API_KEY` accepted as fallback; key resolved per-`Spawn` from `Spec.Env` (supports per-session BYOK + rotation). Probe via API-key presence check. Drives a multi-turn `POST /v1beta/models/{model}:generateContent` conversation (the provider owns the `contents` history; REST is stateless). Tool-use via native `functionDeclarations` in the request `tools` array, with a **session-local in-provider tool executor** that runs native tools (Bash/Read/Edit/Write) in the session Cwd/Env and folds `functionResponse` turns back (the raw REST API returns `functionCall`s expecting the caller to execute them — unlike the CLI-wrapping providers whose tools run inside the vendor binary). Reasoning effort maps to `thinkingConfig` (`thinking_level` for 3.x model IDs, `thinkingBudget` for 2.5). `MaxTurns` enforced as a hard round-trip ceiling. **MCP-server specs are honored** (`acceptsMcpServerSpec=true`) by the shipped in-process bridge in `mcp.go`: it uses `runtime/mcp` to connect and discover tools, projects them as Gemini `functionDeclarations`, and routes calls back to the originating MCP server. Stability tier: `beta`.
 
 Provider construction (`buildAgentRunRegistry`, `donmai/afcli/agent_run.go:387`) is best-effort — each ctor probes fail-fast and the daemon logs WARN per failure but only ERRORs when zero providers register. This means an operator without Ollama installed sees the registry skip Ollama silently (visible in the WARN log), while sessions resolved to `provider="ollama"` then fail at `runner.Resolve` with `agent.ErrNoProvider` — the correct loud failure when the requested local runtime is missing.
 
@@ -514,7 +514,7 @@ The runtime warns when an `unstable` provider is selected for production work an
 | `codex` | `stable` | |
 | `stub` | `stable` (test-only) | |
 | `ollama` | `beta` | |
-| `gemini` | `beta` | Promoted to first-class 2026-06-02; tool-use now `beta` (native function-calling + in-provider tool executor for Bash/Read/Edit/Write). MCP-server support deferred (`acceptsMcpServerSpec=false`) |
+| `gemini` | `beta` | Promoted to first-class 2026-06-02; tool-use is `beta` (native function-calling + in-provider tool executor for Bash/Read/Edit/Write); shipped in-process MCP bridge honors `Spec.MCPServers` (`acceptsMcpServerSpec=true`) |
 | `amp` | `registration-only` (Sourcegraph public stable HTTP API not shipped) | |
 | `opencode` | `registration-only` (SST pre-1.0; per-minor breakage) | |
 
@@ -575,7 +575,7 @@ Capability declarations must reflect reality, not aspiration. The runner enforce
 | `claude` | true | true | true | claude | `tools[]` from `AllowedTools`; MCP via `--mcp-config <tmpfile>` |
 | `codex` | true | false | true | codex | MCP supported via `config/batchWrite mcpServers`; flat `AllowedTools` list not honored (per-tool permission flows through the approval-bridge grammar in `Spec.PermissionConfig`) |
 | `ollama` | false | false | false | claude | future: openai-compat tools on supported models (llama3.1, gemma3) |
-| `gemini` | true | true | false | gemini | native `functionDeclarations` in `generateContent` `tools` array; `AllowedTools` honored by filtering the declaration set; native tools executed by a session-local in-provider executor. `acceptsMcpServerSpec=false` — no in-box MCP client yet (the runner therefore strips `Spec.MCPServers` for gemini); MCP→functionDeclaration bridge is a follow-up. `ToolPermissionFormat=gemini` (gating via `functionCallingConfig.mode`, not the Claude allow-list grammar) |
+| `gemini` | true | true | true | gemini | native `functionDeclarations` in the `generateContent` `tools` array; `AllowedTools` honored by filtering the declaration set; native tools executed by a session-local in-provider executor. The in-process bridge in `provider/harness/gemini/mcp.go` uses `runtime/mcp` to honor `Spec.MCPServers`, discover server tools, declare them to Gemini, and route resulting calls. `ToolPermissionFormat=gemini` (gating via `functionCallingConfig.mode`, not the Claude allow-list grammar) |
 | `stub` | true | true | true | claude | test affordance only — fields observed by the runner gating layer; the scripted handler does not consume them |
 | `amp` | false | false | false | claude | registration-only (Sourcegraph stable HTTP API not shipped) |
 | `opencode` | false | false | false | claude | registration-only (SST pre-1.0; per-minor breakage) |
