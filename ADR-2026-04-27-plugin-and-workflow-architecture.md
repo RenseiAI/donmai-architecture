@@ -5,6 +5,8 @@
 **Boundary:** shared (OSS-canonical; mirrored as a stub in `rensei-architecture` per `BOUNDARY.md` § "Cross-cutting ADR dual-publish")
 **Authors:** Mark Kropf (Rensei) + Claude Opus 4.7 (1M context) — synthesized from architectural conversation 2026-04-27
 
+> **Amended 2026-08-05 by `ADR-2026-08-05-versioned-execution-cell-and-session-reference.md`.** Child decomposition may use a harness-native primitive or an independently admitted child session through platform dispatch, A2A, or a host CLI. Both are session-graph work with a child `SessionRef`; native support is an optimization, not the eligibility gate.
+
 ## Context
 
 The initial architectural corpus (`001`–`009`, `011`) defined seven plugin families (Sandbox, Workarea, VCS, IssueTracker, Deployment, AgentRegistry, Kit) with a unified Provider base contract. Two pieces of context emerged late in the architectural conversation that require a corpus-level reframe before further docs can land coherently:
@@ -70,7 +72,9 @@ The codebase's `AgentProvider` (claude/codex/amp/spring-ai/a2a) is renamed in th
 
 Capabilities include the existing `supportsMessageInjection`, `supportsSessionResume`, `supportsToolPlugins`, `toolPermissionFormat`, plus new flags discovered during the conversation:
 
-- `emitsSubagentEvents: boolean` — does this runtime emit events when it spawns sub-agents (Claude's Task tool: yes; Codex: no)? Drives Topology view sub-agent visibility per provider.
+- `emitsSubagentEvents: boolean` — does this runtime emit events when it spawns native children? Drives operator-surface child visibility but does not determine whether the harness can be a child.
+- `canSpawnNativeChildren: boolean` — the harness exposes a native child primitive whose events/lifecycle have an adapter.
+- `canRunHeadlessly: boolean` — the runtime can start, observe, cancel, and obtain a terminal result without a human control lease. Together with an admitted delegation transport, this is the universal child-eligibility gate.
 - `humanLabel: string` — paired with each capability flag for TUI rendering ("billed continuously while running" rather than `'wall-clock'`).
 
 The codebase's existing `AgentProvider` is the implementation; the corpus name is `AgentRuntimeProvider`. Migration is rename-only.
@@ -92,13 +96,13 @@ Workflows compose Plugin verbs; the engine is a runtime substrate the orchestrat
 
 To resolve the sub-issue / coordination friction, the corpus adopts three principles, recorded in `001` and enforced by templates and orchestrator behavior:
 
-**Principle 1 — Issues are human intent. Sessions are agent work. Sub-agents are intra-session optimization. Linear sub-issues are reserved for human use.**
+**Principle 1 — Issues are human intent. Sessions are agent work. Child delegation is session-graph work. Linear sub-issues are reserved for human use.**
 
-The system MUST NOT create Linear sub-issues for cost-efficiency decomposition. Cost-efficiency decomposition uses sub-agents within a session (Task tool on Claude provider; equivalent on others where supported). Linear sub-issues are created only when a human (or an agent acting on a human's explicit refinement instruction) decides the work merits separate intent tracking.
+The system MUST NOT create Linear sub-issues for cost-efficiency decomposition. A coordinator may use a harness-native child primitive or launch an independently admitted child through the orchestrator, A2A, or the host CLI. Both forms carry a typed parent/child edge and child `SessionRef`. Linear sub-issues are created only when a human (or an agent acting on a human's explicit refinement instruction) decides the work merits separate intent tracking.
 
-**Principle 2 — Decomposition is a session-internal concern, not a workflow-level fork.**
+**Principle 2 — Decomposition is a session-graph concern, not a workflow-level fork.**
 
-The current `-coordination` work types (`development-coordination`, `inflight-coordination`, `qa-coordination`, `acceptance-coordination`) are deprecated. Coordinators are agents using sub-agents heavily; they're not a different work type. Work types collapse from eight to five: `development`, `qa`, `acceptance`, `refinement`, `research`. Backlog-writer is elevated to a first-class agent (separate from work types) and is documented in [`rensei-architecture/012-product-management-agents.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/012-product-management-agents.md).
+The current `-coordination` work types (`development-coordination`, `inflight-coordination`, `qa-coordination`, `acceptance-coordination`) are deprecated. Coordinators are agents using child delegation heavily; they're not a different work type. A native child may share a process; an orchestrated/A2A/host-CLI child may own a separate session and execution cell. Both remain under the parent session graph rather than becoming a hidden workflow fork. Work types collapse from eight to five: `development`, `qa`, `acceptance`, `refinement`, `research`. Backlog-writer is elevated to a first-class agent (separate from work types) and is documented in [`rensei-architecture/012-product-management-agents.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/012-product-management-agents.md).
 
 **Principle 3 — Quality must compound, not decay.**
 

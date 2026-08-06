@@ -317,6 +317,49 @@ A2A dispatch surface — routing an accepted external request back out the dispa
 treating an outbound A2A peer as if it could accept inbound requests, because both speak
 `'a2a' | 'mcp' | 'http'`.
 
+## Seam 13 — Dispatch intent → admission → claim → spawn, with delegation on the edge
+
+**Problem:** Harness/endpoint compatibility is necessary but insufficient to
+identify an executable run. If auth, placement, session mode, capabilities, or
+fallback are resolved later and implicitly, the process that spawns may execute
+a different cell from the one the scheduler evaluated. Child dispatch adds a
+second ambiguity: native, orchestrated, A2A, and host-CLI launch are transports,
+not child identities.
+
+**Cooperation:** Per
+`ADR-2026-08-05-versioned-execution-cell-and-session-reference.md`, admission
+is a durable seam across Provider Base, Harness, ModelEndpoint, Sandbox,
+Workarea, and orchestration:
+
+```text
+DispatchIntent
+  → validate closed contract
+  → intersect declared cell × live inventory × auth × placement × capability × evidence
+  → persist immutable AdmissionReceipt
+  → enqueue + return SessionRef
+  → [claim-bound only] host narrow-only gate + immutable ClaimReceipt
+  → deliver secrets
+  → spawn exact admitted cell
+```
+
+No credential delivery or spawn occurs before the applicable receipt and
+claim-time gate. A claim-bound host may only narrow the pre-enqueue ceiling; it
+cannot mutate or broaden the admission receipt. Every fallback, default, and
+inheritance decision is named in the receipt.
+
+For child work, the parent/child edge records `native_harness`,
+`platform_dispatch`, `a2a`, or `host_cli`; the child independently follows the
+same pipeline and receives a normal `SessionRef`. A native child may explicitly
+reuse parent resources, but process sharing does not imply auth, model,
+placement, workarea, or capability inheritance. Any headlessly drivable harness
+with one reachable transport is child-eligible even when it has no native child
+primitive.
+
+**Bug class prevented:** scheduler/spawner split-brain, ambient endpoint or
+credential fallback, silent capability stripping, receipt mutation after host
+claim, and treating transport-specific child telemetry as a second session
+identity.
+
 ## How to add a new seam to this doc
 
 When implementation experience reveals a cross-layer cooperation that isn't captured here:

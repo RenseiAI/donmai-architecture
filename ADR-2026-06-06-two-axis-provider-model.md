@@ -15,6 +15,8 @@ split: synchronized-mirror
 
 > Canonical synthesis. The authoritative design is `runs/2026-06-06-provider-plugin-architecture/02-two-axis-architecture.md` (the contract), `03-capability-matrix-spec.md` (the SoT descriptor), and `04-per-machine-narrowing.md` (the fail-closed daemon-side narrow-only gate). This ADR codifies their decisions; it does not re-derive them. Where this ADR and those docs disagree, the run docs win until this ADR is `Accepted`, at which point this ADR plus the amended corpus docs become authoritative.
 
+> **Amended 2026-08-05 by `ADR-2026-08-05-versioned-execution-cell-and-session-reference.md`.** The harness × model-endpoint matrix remains the declared compatibility ceiling, not the complete run identity or live-availability proof. Admission additionally binds auth, placement, session mode, capabilities, and evidence in an immutable pre-enqueue receipt. A claim-bound host still narrows at claim under D5 and writes a linked claim receipt rather than mutating the admission receipt.
+
 ## Context
 
 The OSS execution layer ships seven fused agent-runtime providers (`claude`, `codex`, `gemini`, `agy-cli`, `ollama`, `opencode`, `amp`). Each one **fuses three independent facts into a single opaque id**: *which agent loop drives the turn* (the harness), *which company's model answers* (the endpoint), and *over which wire protocol / serving host / auth mode* it runs (the transport). That fusion has three concrete costs:
@@ -41,6 +43,13 @@ The AuthMode vocabulary is the canonical **5-mode** set (`byok | metered | share
 ### D2 — Binding + validity rule
 
 A **RUN** is the product of **one HARNESS cell × one MODEL-ENDPOINT cell + the peer families** (sandbox, issue-tracker, version-control), with **every choice resolved from config**. A `(harness × endpoint-host)` pair is **valid iff `harness.Drives ∩ {endpoint host's Protocol} ≠ ∅` AND `host ∈ harness.DrivesHosts`** — the harness natively speaks the host's wire protocol, with **no implicit translation**. **Only same-protocol cells are valid.** A cross-protocol pairing (e.g. OpenCode's `openai-chat` against an Anthropic `anthropic-messages` host) is not emitted, because such a translation has no declared owner, host, or cost; therefore `anthropic-messages` is **not** in OpenCode's `Drives`. Cross-protocol gateways are a **future first-class ModelEndpoint host kind** (a translating-gateway host that owns the shim + its own serving host + cost attribution); until one ships, no cell crosses protocols. Validity is asserted twice (defense-in-depth, mirroring today's double `enforceAccessPolicyGate`): the platform scheduler pre-filters candidates from the matrix (fail-fast UX), and the OSS runner re-asserts `assertValid` at bind time (OSS-standalone correctness).
+
+The two-axis product above is the compatibility core of the broader
+`ResolvedExecutionCell`; it is not sufficient to enqueue. The versioned
+admission contract additionally proves the exact auth binding, placement,
+session mode, required capabilities, live inventory, and evidence tier. It
+records every config/default/fallback decision before enqueue. No matrix row may
+be interpreted as live or production-eligible solely because it exists.
 
 ### D3 — The capability matrix is the set of valid cells, generated from one SoT
 
