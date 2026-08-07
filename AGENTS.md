@@ -26,7 +26,7 @@ The boundary discipline — verbatim from `001-layered-execution-model.md` § "T
 
 **Operational implication for agents working in this repo:** never let platform-specific (closed-source) content land here. Concretely:
 
-- No Linear issue IDs (`REN-XXXX`) inline in doc bodies. Cross-references to platform tracker IDs belong in `rensei-architecture`'s extension docs. (Migration-context call-outs in commit messages are fine; doc bodies stay tracker-agnostic.)
+- No internal tracker issue IDs — **any** team prefix the org issues, not just the platform team's, and in **any** case. That includes the uppercase form in prose, the lowercase form that branch names, worktree directories and task-list IDs carry, and tracker deep links. Cross-references to platform tracker IDs belong in `rensei-architecture`'s extension docs. **This applies to commit messages too**: they are published with the repo, and a file scan cannot see them — run `scripts/guard-b-lint.sh --commits origin/main..HEAD` before pushing. (A prior carve-out here declared "migration-context call-outs in commit messages are fine"; it was never enforceable and is withdrawn — see `scripts/guard-b-lint.sh` § rule table.)
 - No references to platform-resident endpoints (`/api/cli/capacity`, `/api/cli/whoami`, etc.) as if they were OSS-shipped. Daemon endpoints (`/api/daemon/*`) are OSS; platform CLI endpoints (`/api/cli/*`) are not.
 - No SaaS-dashboard parity claims. The dual-surface discipline ("every dashboard panel ships a TUI counterpart") is a platform commitment; it lives in `rensei-architecture`.
 - No multi-tenant policy hooks (Cedar, RLS, org allowlists) presented as OSS-shipped. The OSS layer ships single-tenant; the platform ships multi-tenant on top.
@@ -129,10 +129,16 @@ Direct edits without an ADR are fine for clarifications, examples, typo fixes, a
 ## Gates — run before pushing corpus changes
 
 ```bash
-bash scripts/guard-b-lint.sh --all          # closed-source content guard (CI: secret-scan.yml)
+bash scripts/guard-b-lint-selftest.sh                    # proves every guard-b rule still fires (CI: secret-scan.yml)
+bash scripts/guard-b-lint.sh --all                       # closed-source content guard, tracked files (CI: secret-scan.yml)
+bash scripts/guard-b-lint.sh --commits origin/main..HEAD # same guard over the commit messages you are about to push
 bash scripts/adr-status-lint.sh --all       # ADR status frontmatter + README index drift (CI: adr-lint.yml)
 bash scripts/check-boundary-sync.sh         # BOUNDARY-SYNC regions byte-identical with the sibling corpus (CI: boundary-sync.yml)
 ```
+
+A green `guard-b-lint.sh --all` is only evidence if the self-test is green too:
+the guard's rules used to be narrow enough that whole classes of leak passed it
+silently, and the file scan cannot see commit messages at all.
 
 `check-boundary-sync.sh` assumes the sibling at `../rensei-architecture/`; override with `DONMAI_ARCH_PATH=/abs/path`. A red boundary-sync after landing one side of a paired edit is the reminder to land the other side — never bypass it.
 

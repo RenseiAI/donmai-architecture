@@ -1,91 +1,117 @@
-# Allowlist: extended-regex per line. Add legitimate parent-brand or sibling-corpus refs here.
+# guard-b allowlist — one grep -E pattern per line, matched against the full
+# ANNOTATED violation string:
+#
+#     <file>:<line>:<content>  [rule: <RULE_ID> — <description>]
+#
+# so an entry can be scoped to a file AND a rule AND the specific content.
+#
+# RULES FOR THIS FILE (adopted 2026-08-07):
+#   1. No blanket `<file>:.*` entries. A whole-file exemption in a leak guard
+#      disables the guard for that file — six of them were live before this
+#      date and hid every rule, including the tracker-ID rules, in six ADRs.
+#   2. Anchor with ^, name the file, and scope to a rule with `\[rule: ID`.
+#   3. Where the exemption exists for specific identifiers, list them
+#      explicitly so a *new* one is not silently inherited.
+#   4. Say what the entry protects and why, in a comment above it.
 
-# --- ADR author attribution: "Mark Kropf (Rensei)" is legitimate parent-company attribution ---
-ADR-.*\.md:.*Authors:.*Mark Kropf \(Rensei\)
+# --- guard-b's own rule table -------------------------------------------------
+# The RULES array literally contains the strings it scans for. Scoped to the
+# rule-definition line shape ("  'RULE_ID|flags|…'"), so prose, comments and
+# any other line in the script are still scanned.
+^scripts/guard-b-lint\.sh:[0-9]+:  '[A-Z_]+\|[-i]\|
 
-# --- RENSEI_ARCH_PATH renamed to DONMAI_ARCH_PATH in check-boundary-sync.sh ---
-# No longer needed; entry kept as a comment for historical context.
+# --- guard-b's self-test samples ---------------------------------------------
+# The self-test asserts each rule fires, so it must contain one real sample of
+# each banned shape. Scoped to the sample-invocation lines only; the rest of
+# the file (comments, harness code) is still scanned.
+^scripts/guard-b-lint-selftest\.sh:[0-9]+:expect_(flagged|clean)
 
-# --- guard-b-lint.sh self-references: the linter defines rule patterns containing the strings it checks ---
-# The script's own RULES array contains the exact patterns it scans for; these are definitional, not violations.
-scripts/guard-b-lint\.sh:.*RENSEI_BRAND
-scripts/guard-b-lint\.sh:.*RENSEI_TUI
-scripts/guard-b-lint\.sh:.*RENSEI_PLATFORM
-scripts/guard-b-lint\.sh:.*RENSEI_AI_DOMAIN
-scripts/guard-b-lint\.sh:.*RENSEI_ENV_VAR
-scripts/guard-b-lint\.sh:.*PLATFORM_PATH
-scripts/guard-b-lint\.sh:.*DEV_ABS_PATH
+# --- ADR author attribution ---------------------------------------------------
+# "Mark Kropf (Rensei)" on an ADR Authors: line is parent-company attribution.
+^ADR-.*\.md:[0-9]+:\*\*Authors:\*\*.*Mark Kropf \(Rensei\)
 
-# --- secret-scan.yml self-references: the CI workflow doc-comment describes the rules it enforces ---
-# Comment lines in the CI workflow enumerate rule names (RENSEI_BRAND, RENSEI_TUI, etc.) for documentation.
-# These are definitional references, not content violations.
-\.github/workflows/secret-scan\.yml:.*RENSEI_BRAND
-\.github/workflows/secret-scan\.yml:.*RENSEI_TUI
-\.github/workflows/secret-scan\.yml:.*RENSEI_PLATFORM
-\.github/workflows/secret-scan\.yml:.*RENSEI_AI_DOMAIN
-\.github/workflows/secret-scan\.yml:.*RENSEI_ENV_VAR
+# --- BOUNDARY-SYNC marker id --------------------------------------------------
+# The synchronized-section marker id encodes the boundary concept name and must
+# be globally unique across both corpora; renaming it requires a paired commit
+# in the sibling corpus. It is an identifier, not a brand reference.
+^001-layered-execution-model\.md:[0-9]+:.*001-donmai-rensei-platform-contract
+^BOUNDARY\.md:[0-9]+:.*001-donmai-rensei-platform-contract
+^scripts/check-boundary-sync\.sh:[0-9]+:.*001-donmai-rensei-platform-contract
 
-# --- .guard-allowlist self-references: the allowlist file itself contains the patterns it exceptions ---
-# Every comment and rule line in this file may contain the very strings it's whitelisting.
-\.guard-allowlist:.*
+# --- The "donmai <-> Rensei Platform contract" section heading + cross-refs ----
+# The load-bearing boundary section heading names the enterprise product.
+# Renaming it requires a paired commit to the sibling corpus (BOUNDARY-SYNC).
+^001-layered-execution-model\.md:[0-9]+:.*(agentfactory|donmai).*Rensei Platform contract
+^BOUNDARY\.md:[0-9]+:.*(agentfactory|donmai).*Rensei Platform contract
+^AGENTS\.md:[0-9]+:.*(agentfactory|donmai).*Rensei Platform contract
+^README\.md:[0-9]+:.*(agentfactory|donmai).*Rensei Platform contract
+^ADR-template\.md:[0-9]+:.*(agentfactory|donmai).*Rensei Platform contract
 
-# --- BOUNDARY-SYNC marker IDs: the synchronized section marker ID contains "rensei-platform-contract"
-# This is a load-bearing corpus convention (marker IDs must be globally unique across both corpora).
-# The marker ID is NOT a brand reference; it encodes the boundary concept name.
-# Renaming this ID requires a paired-commit update to rensei-architecture as well.
-001-layered-execution-model\.md:.*001-donmai-rensei-platform-contract
-BOUNDARY\.md:.*001-donmai-rensei-platform-contract
-scripts/check-boundary-sync\.sh:.*001-donmai-rensei-platform-contract
+# --- Parent-brand attribution in the boundary//meta docs ----------------------
+# These describe the OSS<->enterprise seam and legitimately name the enterprise
+# product. Scoped to the brand rule and to the specific noun phrases used.
+^BOUNDARY\.md:[0-9]+:.*Rensei(-| SaaS| team| org| Platform| runs).*\[rule: BRAND_NAME
+^README\.md:[0-9]+:.*Rensei(-| SaaS| team| Platform| Architecture).*\[rule: BRAND_NAME
+^ADR-template\.md:[0-9]+:.*Rensei(-| team| org).*\[rule: BRAND_NAME
+^001-layered-execution-model\.md:[0-9]+:.*Rensei(-| team| org| Platform).*\[rule: BRAND_NAME
+^AGENTS\.md:[0-9]+:.*Rensei(-| team| org| Platform).*\[rule: BRAND_NAME
 
-# --- "The donmai ↔ Rensei Platform contract" section heading and cross-references
-# This is the load-bearing boundary section heading that names the enterprise product (Rensei).
-# "Rensei Platform" here is legitimate parent-brand attribution for the OSS↔enterprise seam.
-# Renaming this heading requires a paired commit to rensei-architecture (BOUNDARY-SYNC).
-# Pattern covers both the pre-rename (agentfactory) and post-rename (donmai) form during transition.
-001-layered-execution-model\.md:.*(agentfactory|donmai).*Rensei Platform contract
-BOUNDARY\.md:.*(agentfactory|donmai).*Rensei Platform contract
-AGENTS\.md:.*(agentfactory|donmai).*Rensei Platform contract
-ADR-template\.md:.*(agentfactory|donmai).*Rensei Platform contract
+# --- Sibling closed corpus is named as a path, which contains "rensei-platform"
+# `rensei-architecture/…-platform-extensions.md` cross-refs are explicitly
+# allowed in this corpus; the CLOSED_PLATFORM rule matches the substring.
+^(001-layered-execution-model|BOUNDARY)\.md:[0-9]+:.*rensei-architecture.*\[rule: CLOSED_PLATFORM
 
-# --- BOUNDARY.md enterprise-brand attribution (parent-brand refs describing the OSS↔Rensei seam)
-# "Rensei SaaS dashboard", "Rensei team's backlog", "Rensei org", "Rensei-platform-specific",
-# "Rensei-team-specific", "Rensei-specific" — all legitimate enterprise-product attribution.
-BOUNDARY\.md:.*Rensei([-]| SaaS| team| org| Platform| runs)
-BOUNDARY\.md:.*no Rensei-specific tools
-BOUNDARY\.md:.*Rensei-specific override
-BOUNDARY\.md:.*runs directory
+# --- ADR-2026-06-02-oss-brand-neutral-runtime-contract.md ---------------------
+# WAS: whole-file `.*`.
+# PROTECTS: the de-brand ADR enumerates, by necessity, the exact closed-source
+# names it is removing — the RENSEI_* env vars, the parent domain, the closed
+# TUI repo, the internal monorepo path, and the brand itself.
+# NARROWED TO: those five rules. Tracker IDs, tracker URLs, tracker slugs and
+# developer absolute paths in this file are NOT exempt and now fail the guard.
+^ADR-2026-06-02-oss-brand-neutral-runtime-contract\.md:[0-9]+:.*\[rule: (BRAND_NAME|CLOSED_TUI_REPO|PARENT_DOMAIN|CLOSED_ENV_VAR|PLATFORM_PATH)
 
-# --- README.md enterprise-brand attribution (OSS↔Rensei platform seam descriptions)
-README\.md:.*Rensei([-]| SaaS| team| Platform| Architecture)
-README\.md:.*(agentfactory|donmai).*Rensei Platform contract
+# --- ADR-2026-06-03-injectable-state-dir.md -----------------------------------
+# WAS: whole-file `.*`.
+# PROTECTS: documents the OSS<->closed composition seam for the daemon state
+# dir; names the closed TUI repo and the brand to state which side owns what.
+# NARROWED TO: those two rules only.
+^ADR-2026-06-03-injectable-state-dir\.md:[0-9]+:.*\[rule: (BRAND_NAME|CLOSED_TUI_REPO)
 
-# --- ADR-template.md enterprise-brand attribution (boundary definitions)
-ADR-template\.md:.*Rensei([-]| team| org)
+# --- ADR-2026-06-01-code-survival-pool-execution.md ---------------------------
+# WAS: whole-file `.*`.
+# PROTECTS: two tracker lane IDs the design doc cites, plus one closed-side
+# contract path it is replacing.
+# NARROWED TO: those exact two IDs and that exact path. A new tracker ID in
+# this file now fails the guard.
+^ADR-2026-06-01-code-survival-pool-execution\.md:[0-9]+:.*\bREN-(1247|1554)\b.*\[rule: TRACKER_ID
+^ADR-2026-06-01-code-survival-pool-execution\.md:[0-9]+:.*platform/src/lib/factory/code-survival-scan-contract\.ts.*\[rule: PLATFORM_PATH
 
+# --- ADR-2026-06-02-interactive-agent-run-mode.md -----------------------------
+# WAS: whole-file `.*`.
+# PROTECTS: two tracker lane IDs and two parent-brand mentions naming the
+# closed product whose interview lane motivates the ADR.
+# NARROWED TO: those exact two IDs and those two brand phrases.
+^ADR-2026-06-02-interactive-agent-run-mode\.md:[0-9]+:.*\bREN-(1563|1570)\b.*\[rule: TRACKER_ID
+^ADR-2026-06-02-interactive-agent-run-mode\.md:[0-9]+:.*Rensei('s| lane).*\[rule: BRAND_NAME
 
-# --- De-brand ADR enumerates the leaked closed-brand names by necessity ---
-# ADR-2026-06-02-oss-brand-neutral-runtime-contract.md documents the RENSEI_* env
-# vars, rensei.dev URLs, and platform/src paths being removed; the whole file is
-# definitional, not a content leak.
-ADR-2026-06-02-oss-brand-neutral-runtime-contract\.md:.*
+# --- ADR-2026-06-03-batch-work-type-category.md -------------------------------
+# WAS: whole-file `.*`.
+# PROTECTS: two tracker lane IDs naming the workloads that motivate the
+# batch generalization.
+# NARROWED TO: those exact two IDs.
+^ADR-2026-06-03-batch-work-type-category\.md:[0-9]+:.*\bREN-(1166|1265)\b.*\[rule: TRACKER_ID
 
-# --- Sibling ADR (parallel agent): parent-brand + Linear-ID context in a design doc ---
-# ADR-2026-06-02-interactive-agent-run-mode.md discusses the Rensei interview
-# product + its Linear lane; parent-brand/tracker context in an ADR is allowed.
-ADR-2026-06-02-interactive-agent-run-mode\.md:.*
+# --- Parent-brand attribution in individual ADRs ------------------------------
+# Each names the enterprise product once, to state which side of the boundary
+# owns the behaviour. Scoped per file to the brand rule.
+^ADR-2026-05-12-cli-linear-proxy\.md:[0-9]+:.*\[rule: BRAND_NAME
+^ADR-2026-05-12-cross-process-hook-bus-bridge\.md:[0-9]+:.*\[rule: BRAND_NAME
 
-# --- Code-survival ADR references its Linear lane + platform scan path by necessity ---
-# ADR-2026-06-01-code-survival-pool-execution.md is a design doc that names the
-# code-survival Linear lane and the platform-side scan-contract path it replaces;
-# tracker/platform context in an ADR is allowed (see 06-02 precedent).
-ADR-2026-06-01-code-survival-pool-execution\.md:.*
-
-# --- Batch work-type ADR references the KG / code-survival Linear lanes by necessity ---
-# ADR-2026-06-03-batch-work-type-category.md names the Linear lanes that motivate
-# the batch generalization; tracker context in an ADR is allowed.
-ADR-2026-06-03-batch-work-type-category\.md:.*
-
-# --- Injectable-state-dir ADR documents the OSS<->closed-composition boundary by necessity ---
-# ADR-2026-06-03-injectable-state-dir.md names rensei-tui and the parent brand to
-# document the composition-layer state-dir seam; the whole file is definitional.
-ADR-2026-06-03-injectable-state-dir\.md:.*
+# --- This file's own pattern lines --------------------------------------------
+# Every entry above quotes the string it exempts, so the allowlist trips its own
+# rules. Scoped to lines that are a pattern (start with ^) or a comment (start
+# with #), AND to the three rules those quotes actually involve. A tracker ID, a
+# tracker URL, a tracker slug or a developer absolute path in this file is still
+# a violation — which is why the ADR entries above factor issue numbers as
+# `REN-(1247|1554)` rather than writing the IDs literally.
+^\.guard-allowlist:[0-9]+:[#^].*\[rule: (BRAND_NAME|CLOSED_PLATFORM|PLATFORM_PATH)
