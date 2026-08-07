@@ -157,7 +157,7 @@ The architecture splits these. AgentRuntime support belongs on `AgentRuntimeProv
 Two modes per `004` and `011`:
 
 - **Foreground mode** (legacy): worker spawned per VSCode session, lifetime tied to that editor. Anti-pattern at fleet scale; deprecated as default.
-- **Daemon mode** (recommended): one long-running daemon per machine, registers as a worker pool, multi-project allowlist, auto-update. Detail in `011`.
+- **Daemon mode** (recommended): one long-running daemon per machine, **registers as a host** and offers execution contexts, multi-project allowlist, auto-update. Detail in `011`. *(It does not register "as a worker pool" — a pool is an org-owned, single-provider source of execution contexts, per `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` D2.2.)*
 
 The daemon and the worker are not the same process. The daemon is a long-running supervisor that:
 - Registers the *machine's* capacity once at boot

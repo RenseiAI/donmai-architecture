@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-07
 boundary: shared
 split: inline-addenda
@@ -7,18 +7,23 @@ split: inline-addenda
 
 # ADR-2026-08-07 — Execution context, pool, and placement: one noun per referent, and where unlike capacity composes
 
-**Status:** Proposed
-**Date:** 2026-08-07
+**Status:** Accepted 2026-08-07 — the reference-doc edits enumerated in § "What
+the accepting commit carried" landed in the accepting commit, as this corpus
+requires.
+**Date:** 2026-08-07 (proposed and accepted same day; three product-owner
+acceptance rulings **R-A–R-C** arrived between the two, recorded in § "What the
+accepting commit carried")
 **Boundary:** shared
 **Authors:** mark, agent:claude
 
 **Amended 2026-08-07, same day, after first draft:** five product-owner rulings
 arrived after this ADR was first written and PR'd. They are folded in below as
 **R1–R5**, and they answer four of the five questions the first draft deferred.
-The status is **deliberately still `Proposed`** — this corpus requires the
+The status stayed `Proposed` through that amendment — this corpus requires the
 affected reference-doc edits to land in the *same commit* that flips an ADR to
-`Accepted`, and those edits are not in this commit. See § "To accept this ADR"
-for exactly what the accepting commit must carry.
+`Accepted`, and they were not in that commit. They are in the accepting commit;
+see § "What the accepting commit carried" for exactly what it carried and for
+the three acceptance rulings that shaped it.
 
 Where a ruling contradicts the first draft's stated default, **the ruling wins
 and the draft text has been rewritten**, not annotated. Specifically: the first
@@ -92,6 +97,12 @@ Recorded plainly, because two documents in this area assert things the code
 contradicts, and because several recent ADRs in this corpus already carry honest
 non-implementation checkpoints that a reader should not mistake for shipped
 behaviour.
+
+> **Read this subsection as of authoring.** It describes the corpus on
+> 2026-08-07 *before* acceptance. The `004` defects it catalogues were fixed by
+> the accepting commit — see § "What the accepting commit carried". It is
+> retained unedited because it is the evidence the decisions rest on, and
+> rewriting it to past tense would erase why they were made.
 
 - **`004-sandbox-capability-matrix.md` has not been touched since this repo's
   initial public release** (`a22bd3d`, 2026-05-24). Its header still reads
@@ -355,11 +366,17 @@ Applying `ADR-2026-08-03` D4 rule 1 to the word it was never applied to.
    `ADR-2026-08-03` D5.4: the old paths and flag ship as aliases that **declare
    their removal version at creation**, and a release gate fails the build when
    an alias outlives its declared version. An alias with no removal version is a
-   defect.
+   defect. **The declared removal version for every alias this ADR creates is
+   `v0.59.0`** — one minor after the release that creates them, matching the
+   cadence the `daemon`→`host` aliases already set.
 4. **Rename referent 4 (local disk envelope).** `capacity.poolMaxDiskGb` becomes
-   `capacity.workareaMaxDiskGb`, same alias discipline. Note this key also
-   compounds the `capacity` collision — it reads as an org concept on a
-   machine-local setting; the rename resolves both.
+   `capacity.workareaMaxDiskGb`, same alias discipline and the same `v0.59.0`
+   removal version. Note this key also compounds the `capacity` collision — it
+   reads as an org concept on a machine-local setting; the rename resolves both.
+   **The alias here must be a config-struct read alias, not a CLI allowlist
+   entry**: the daemon's YAML loader is non-strict, so an unrecognised key is
+   silently dropped, and `0` on this field means *no limit* — a CLI-only alias
+   would silently disable eviction on an operator's existing config.
 
 `ADR-2026-06-01:31`'s "capacity pool / sandbox" phrase is corrected to name one
 noun.
@@ -484,7 +501,7 @@ as such. Today's object is a per-project singleton auto-minted at the org
 default and edited through a per-project `show`/`set`/`test` surface. A profile
 is a reusable object with list/create/update/delete semantics analogous to
 pools, plus a grant edge to projects. Anyone sizing this as "wording only" has
-mis-sized it (see § "To accept this ADR" and the rename-vs-behaviour table).
+mis-sized it (see § "What the accepting commit carried" and the rename-vs-behaviour table).
 
 Two invariants the promotion must preserve, both already true today:
 
@@ -754,38 +771,96 @@ substrate capability kinds; provider-honoured serving; and whether the OSS
 daemon may ever advertise capability — that last needs its own OSS-canonical
 ADR and is not pre-approved by anything here.
 
-## To accept this ADR
+## What the accepting commit carried
 
-**This ADR stays `Proposed` until a single commit carries both the status flip
+**This ADR stayed `Proposed` until a single commit carried both the status flip
 and every reference-doc edit below.** That is this corpus's rule, and it is why
-the status was not flipped when the rulings landed: the rulings settle the
-*decisions*, not the *documents*.
+the status was not flipped when R1–R5 landed: those rulings settled the
+*decisions*, not the *documents*. This section is now the **record** of what the
+accepting commit carried, retained in the shape of the original checklist so a
+reader can audit the acceptance against it.
 
-The accepting commit must edit, in this corpus:
+### The three acceptance rulings (R-A, R-B, R-C)
 
-| Document | Edit required |
+Three further product-owner rulings arrived at acceptance time and shaped what
+the accepting commit did. They are recorded here for the same reason R1–R5 are:
+so a later reader inherits the reasoning, not just the outcome.
+
+- **R-A — the platform-side ADR on org-provisions/project-consumes is accepted,
+  in the D6.2/D8 shape.** The capacity profile (D6.2) is the grantable object it
+  was waiting for; the grant edge exists but is **advisory, not enforced** (D8).
+  Accepting records that as the intended end state rather than leaving the ADR
+  `Proposed` for a fourth month by default. Platform-side; the edit is
+  enumerated in the mirrored stub.
+- **R-B — `004`'s cross-provider scheduler section is RECONCILED, not stamped
+  historical and not deleted.** It is rewritten to describe routing via capacity
+  profiles (composition one level up, pools single-provider). **The reasoning for
+  why per-session cross-provider routing was rejected must survive the rewrite** —
+  deleting it invites someone to re-propose it. It survives as § "Why routing does
+  not pick a provider per session".
+- **R-C — `011`'s wire break ships doc-and-code together.** The accepting commit
+  lands alongside the real rename and its aliases in `donmai` and the composing
+  binary, so the corpus never describes something the code does not do. That
+  makes acceptance a coordinated multi-repo change, not a docs commit; the
+  corpus PR merges in lock-step with the code PRs.
+
+### The reference-doc edits, as landed
+
+| Document | Edit carried |
 |---|---|
-| `004-sandbox-capability-matrix.md` | **Largest single edit.** Remove the `Capacity-aware burst routing` row and the "cloud-burst" premise at `:9` (D7); reconcile or explicitly mark historical the cross-provider scheduler section, which specifies per-session cross-provider routing the accepted model rejects; rename the "worker pool" usages at `:350`, `:444`, `:471` (D2.2); refresh the stale `Last updated:` header. |
-| `003-workarea-provider.md` | § "The local-pool implementation" → **workarea cache**; member/eviction vocabulary (D2.3). |
-| `011-local-daemon-fleet.md` | `:419-420` daemon control paths → `/api/daemon/workarea/*`; `:510` `--pool` flag → `--workarea`; `:513` `capacity.poolMaxDiskGb` → `capacity.workareaMaxDiskGb` — **each with an alias carrying a declared removal version** per `ADR-2026-08-03` D5.4. This is the only genuine OSS wire break in the ADR. |
-| `013-orchestrator-and-governor.md` | `:160` "registers as a worker pool" → registers as a **host** (D2.2). |
-| `001-layered-execution-model.md` | Add the building blocks (R1) to the noun table: the unit word, the sandbox-is-a-kind statement, the pool-is-a-source definition, and **capacity profile** as a new noun. Refresh the stale `Last updated:` header. |
-| `ADR-2026-06-01-code-survival-pool-execution.md` | `:31` "the user-configured capacity pool / sandbox" → name one noun. |
-| `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` | Record `pool` and `sandbox` as the **third and fourth** applications of its own D4 rule 1. Also refresh its status prose: it still says the OSS `host` factory "is not yet merged" and the downstream capacity migration is "in progress", both of which are stale. |
-| `README.md` / `AGENTS.md` | Update this ADR's index entry — the current text says "nothing to implement until Q1–Q5 are answered", which is no longer true. |
+| `004-sandbox-capability-matrix.md` | **Largest single edit.** Removed the `Capacity-aware burst routing` row and corrected the "cloud-burst" premise at § "Why this exists" (D7); **reconciled** the cross-provider scheduler section per R-B — it now describes capacity-profile routing over single-provider pools and retains the rejection reasoning; renamed the "worker pool" usages (D2.2); refreshed the stale `Last updated:` header. |
+| `003-workarea-provider.md` | § "The local-pool implementation" → § "**The workarea cache**"; member/eviction vocabulary swept to cache vocabulary (D2.3). Its unrelated § "Capability profile by sandbox" is per-sandbox capability data, **not** this ADR's `capacity profile` noun, and was correctly left alone. |
+| `011-local-daemon-fleet.md` | Daemon control paths → `/api/daemon/workarea/*`; `--pool` flag → `--workarea`; `capacity.poolMaxDiskGb` → `capacity.workareaMaxDiskGb` — **each with an alias carrying the declared removal version `v0.59.0`** per `ADR-2026-08-03` D5.4. This is the only genuine OSS wire break in the ADR, and per R-C the doc landed in lock-step with the code. |
+| `013-orchestrator-and-governor.md` | "registers as a worker pool" → registers as a **host** (D2.2). |
+| `001-layered-execution-model.md` | Added the building blocks (R1) to § "Layer 3 — Execution": the unit word, the sandbox-is-a-kind statement, the pool-is-a-source definition, and **capacity profile** as a new noun. Refreshed the stale `Last updated:` header. *(`001` carries no standalone noun table; Layer 3 is where the execution nouns are already defined, so that is where they landed.)* |
+| `ADR-2026-06-01-code-survival-pool-execution.md` | "the user-configured capacity pool / sandbox" → names one noun. A clarification to an `Accepted` ADR that changes no decision, so it lands as a direct edit under this corpus's clarification carve-out. |
+| `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` | Recorded `pool` and `sandbox` as the **third and fourth** applications of its own D4 rule 1. Refreshed its status prose: the OSS `host` factory **has** merged and shipped, so "not yet merged" was stale. |
+| `README.md` / `AGENTS.md` | Updated this ADR's index entry to `Accepted`. The generated `ADR-INDEX` block was regenerated with `scripts/gen-adr-index.sh`, not hand-edited. |
 
 Not touched by this ADR, confirmed: `002`, `005`, `006`, `007`, `008`, `014`,
 `015`, `016`.
 
-**No `BOUNDARY-SYNC` region is touched** by the decisions as written — verified
-against the currently tracked marker pairs. If a later amendment reaches
-`ADR-2026-06-06-two-axis-provider-model.md` (which does carry a live
-synchronized marker and names the sandbox axis), the paired byte-identical
-commit rule applies, OSS side first, verified with
-`scripts/check-boundary-sync.sh`.
+**No `BOUNDARY-SYNC` region was touched.** Verified at acceptance against all
+four currently tracked marker pairs — the boundary-contract region in `001`
+(lines 254-270, safely below this ADR's Layer 3 insertion), plus
+`adr-2026-06-06-narrow-only-invariant`,
+`adr-2026-07-12-interactive-outbound-mandate`, and
+`adr-2026-07-18-terminal-claim-clock`. None of the edited regions falls inside a
+pair; `scripts/check-boundary-sync.sh` was green before and after. If a later
+amendment reaches `ADR-2026-06-06-two-axis-provider-model.md` (which does carry a
+live synchronized marker and names the sandbox axis), the paired byte-identical
+commit rule applies, OSS side first.
 
-Platform-side documents the accepting commit must edit are enumerated in the
-mirrored stub, and the paired-commit rule applies: **OSS side first.**
+Platform-side documents are enumerated in the mirrored stub, and the
+paired-commit rule applies: **OSS side first.**
+
+### Two things the accepting commit deliberately did NOT do
+
+Recorded so their absence reads as a decision rather than an omission.
+
+- **It did not correct `011`'s unrelated 2026-08-03 "Command surface note".**
+  That note asserts the OSS binary exposes no `host` command, which shipped code
+  has since falsified. It is `ADR-2026-08-03`'s own cleanup debt, not this ADR's,
+  and folding it in would have put an unauthorized edit inside an accepting
+  commit whose whole discipline is that its edit list is closed. *(This ADR does
+  correct the same staleness where `ADR-2026-08-03` itself asserts it, because
+  that document is on this ADR's own edit list.)*
+- **It did not begin the D10 naming refactor.** D10.3 gates every rename —
+  prose included — on the wording-only / schema-or-wire separation existing on
+  paper. The D2 renames landed because they are enumerated here with named
+  targets and an alias discipline, not because the D10 gate opened.
+
+### One risk carried forward, named rather than resolved
+
+`/api/daemon/workarea/stats` (singular) lands one character away from the
+already-shipped `/api/daemon/workareas` (plural), which addresses **individual**
+workareas and their archives rather than the cache. That is uncomfortably close
+to the two-referents-one-noun defect D4 rule 1 exists to prevent, in the very
+ADR that claims to be that rule's third and fourth applications. It is carried
+as specified because the target is what this ADR decided and the code ships in
+lock-step with it (R-C) — but if a follow-up prefers an unambiguous spelling,
+`/api/daemon/workarea-cache/*` is the shape to take, and it must move under the
+same declared-removal-version alias discipline.
 
 ## Consequences
 
@@ -843,7 +918,8 @@ mirrored stub, and the paired-commit rule applies: **OSS side first.**
 - **D6.2 could be mis-sized as a rename.** "Route → capacity profile" reads like
   wording and is not: it changes CRUD shape, adds a grant edge, and touches the
   surfaces that name it. Mitigation: it is flagged as a **shape change** in the
-  rename-vs-behaviour table, in D6.2 itself, and again in § "To accept this ADR".
+  rename-vs-behaviour table, in D6.2 itself, and again in § "What the
+  accepting commit carried".
 - **D10's refactor could start before it is sized.** The stated preference to
   pay the cost now is easy to read as authorization to begin. It is not:
   D10 gates on the wording-only / schema-or-wire separation existing on paper
@@ -913,20 +989,23 @@ mirrored stub, and the paired-commit rule applies: **OSS side first.**
 
 ## Affected documents
 
-Enumerated once, in § "To accept this ADR" above, with the exact edit each
-document needs. Per corpus convention those edits land **in the accepting
-commit**, not in this proposal. Platform-side amendments are enumerated in the
-mirrored stub.
+Enumerated once, in § "What the accepting commit carried" above, with the exact
+edit each document received. Per corpus convention those edits landed **in the
+accepting commit**, not in the proposal. Platform-side amendments are enumerated
+in the mirrored stub and land in the paired platform commit — **OSS side
+first**.
 
 ## Affected work items
 
-None yet — this ADR is still `Proposed` and no issue should be moved against it
-until the accepting commit lands. On acceptance, the tracker work splits into
-five deliberately independent lanes:
+The corpus edits are done. The remaining tracker work splits into five
+deliberately independent lanes:
 
 1. **Corpus renames and the `004` amendment** — the reference-doc edits above.
+   **Done in the accepting commit.**
 2. **The OSS daemon workarea-surface alias cycle** (D2.3/D2.4), each alias
-   declaring its removal version.
+   declaring `v0.59.0` as its removal version. Per R-C this ships in lock-step
+   with the accepting commit, not after it — `011` describes the aliased end
+   state, so the code must carry it before the corpus is true.
 3. **Platform-side vocabulary unification** and the stale burst help-string
    deletion (D7).
 4. **Harness as an authoring input** (D5) — delivery of `ADR-2026-06-06` /
