@@ -46,6 +46,28 @@ Net end state — clean separation both directions:
 | OSS `donmai` (standalone) | `~/.donmai/` | `~/Library/Logs/donmai/` | `dev.donmai.daemon` |
 | closed `rensei` (composing) | `~/.rensei/` | `~/Library/Logs/rensei/` | `dev.rensei.daemon` |
 
+### Amended by ADR-2026-08-07 — the host-identity record lives on this seam
+
+D1 of [`ADR-2026-08-07-onboarding-is-the-only-user-action.md`](ADR-2026-08-07-onboarding-is-the-only-user-action.md)
+(Accepted 2026-08-07) requires a host's durable identity to be **opaque, minted
+once at onboarding, and held in exactly one record** that every per-scope
+configuration references rather than re-derives. `StateDir` is where that record
+lands: one `host-identity` artifact per state home, written at onboarding and
+read by every scope's configuration thereafter.
+
+Two constraints this places on the seam:
+
+- **One record per state home, not one per config file.** A machine that keeps
+  several per-scope config files under the same state home reads the same
+  identity from all of them. Re-deriving it per file — from `os.Hostname()` or
+  any other mutable environment state — is exactly what D1 forbids, and it forks
+  a single machine into two identities that no longer share operator state.
+- **A state-home change is not an identity change.** An embedder that sets a
+  different state home migrates the identity record along with `daemon.jwt` /
+  `daemon.yaml` / `worktrees/` (Decision 4 above). Identity-keyed operator state —
+  pool pins, deletion tombstones, host↔scope bindings — must survive that move,
+  or the migration silently rotates the machine's identity and reverts them.
+
 ## Consequences
 
 ### Positive

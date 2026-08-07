@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-07
 boundary: shared
 split: inline-addenda
@@ -7,7 +7,7 @@ split: inline-addenda
 
 # ADR-2026-08-07 — Onboarding is the only moment a user is required to act
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-07
 **Boundary:** shared
 **Authors:** mark, agent:claude
@@ -28,7 +28,7 @@ re-registration, version drift, reconnection, machine re-identification — is t
 system's job, and must be invisible and self-healing.
 
 The statement is a product principle. It has never been an architectural
-invariant, and nothing enforces it. This ADR proposes making it one.
+invariant, and nothing enforced it. This ADR makes it one.
 
 ### What prompted it
 
@@ -420,41 +420,71 @@ Even a legitimate ask obeys delivery rules:
 
 ## Affected documents
 
-Listed for the accepting commit; **not edited by this proposal.**
+**Amended in the accepting commit** — this ADR reached `Accepted` in the same
+commit that landed every edit below, per the corpus rule that a bare status flip
+produces an accepted decision the corpus does not reflect.
 
 - `011-local-daemon-fleet.md`
-  - § "First-run setup" — the wizard's `[1/5] Machine identity` step shows a
-    hostname-shaped auto-generated id. D1 requires an opaque durable identity
-    minted once into one record and referenced by every per-scope config.
-  - § "Config file walkthrough" — D3 makes "which keys are hot-reloadable" part of
-    the contract rather than commentary; today only the primary config's project
-    list reloads, and the reload replaces rather than merges.
-  - § "Drain semantics" / § "Recovery from crash" — D3's corollary: a
-    platform-initiated restart drains, and a scope change never costs in-flight
-    work.
+  - § "First-run setup" — the wizard's `[1/5] Machine identity` step showed a
+    hostname-shaped auto-generated id; it now mints an opaque id with a separate
+    mutable display name. Two new subsections state D1 (identity minted once into
+    one record and referenced by every per-scope config, rotation deliberate, and
+    identity-keyed operator state survives it) and D6 ("setup complete" is a
+    verified post-condition; a step skipped because its post-condition already
+    holds is complete, and readiness derives from live state).
+  - § "Config file walkthrough" — new "Which keys are hot-reloadable" subsection
+    makes runtime-mutability contract rather than commentary, names the
+    deliberate process-scoped exceptions, and states the two watcher constraints
+    (watch the directory, merge per scope) that the current one-file,
+    replace-shaped reload violates.
+  - § "Drain semantics" / § "Recovery from crash" — a scope change is excluded
+    from the restart list outright and the remaining restarts drain first; every
+    remediation string is re-framed as a D4 work item, with the
+    registered-command assertion and the D7 obligation to ride the status signal
+    instead of the log file.
 - `013-orchestrator-and-governor.md`
-  - § "Worker registration (the dial-out flow)" — D3 and D9: registration claims
-    must be renegotiable at runtime, and the host's enabled-scope set must be
-    reported on the beat, not only at register time.
-  - § "Completion contracts and backstop" — D5: a fail-closed pre-spawn NACKs
-    rather than aborting, and an abandoned attach leg terminates or signals rather
-    than holding capacity indefinitely.
-  - § "OSS vs SaaS responsibilities" — D8's one-operation rule.
+  - § "Worker registration (the dial-out flow)" — registration claims are
+    renegotiable, the enabled-scope set rides the beat rather than the
+    registration wire alone, D9's both-directions convergence and the
+    unknown-op-is-a-failure rule, and the report-before-you-unfreeze sequencing
+    constraint.
+  - § "Completion contracts and backstop" — D5: a fail-closed pre-spawn NACKs the
+    claim and reports rather than aborting silently or looping, and an
+    unreachable session terminates or signals under a bounded budget rather than
+    holding capacity indefinitely.
+  - § "OSS vs SaaS responsibilities" — D8's one-operation-per-intent rule (the
+    table governs who implements, never who can reach), plus a table row for the
+    runtime scope-change operation.
 - `014-tui-operator-surfaces.md`
-  - § "Open registries (status, work type, activity)" — D7: host-health conditions
-    are registry entries surfaced in every client.
-  - § "OSS vs SaaS responsibilities" — D6: readiness derived from live state.
+  - § "Open registries (status, work type, activity)" — D7: host conditions are
+    registry entries that ride the status signal into every client, and every
+    condition declares how it clears, so no entry reports a high-water mark.
+  - § "OSS vs SaaS responsibilities" — D6: readiness derived from live
+    predicates rather than a setup journal, plus a table row for the
+    host-condition registry.
 - `ADR-2026-08-03-daemon-host-status-signal-completion.md` — extended, not
-  superseded. D7 makes host-level self-diagnosed conditions first-class on the
-  signal that ADR completed.
-- `ADR-2026-07-12-interactive-pty-session-host.md` — D5 and D6 applied to attach: a
-  retryable close code is retried, a terminal one is re-minted and re-dialed under
-  a bounded budget, and exhausting the budget emits a signal rather than leaving an
-  unreachable session holding capacity.
+  superseded. D7 makes host-level self-diagnosed conditions first-class payload
+  on the signal that ADR put on the wire; D9 adds the enabled-scope set beside
+  `status`. Claim gating and the fail-open posture are unchanged.
+- `ADR-2026-07-12-interactive-pty-session-host.md` — D5 and D6 applied to attach:
+  the peer's `retryable` flag is consulted before the close-code branch, a
+  terminal close is re-minted and re-dialed under a bounded budget, exhausting
+  the budget emits a condition instead of leaving an unreachable session holding
+  capacity, and a kill counts as delivered only when a live peer leg received the
+  frame.
 - `ADR-2026-06-03-injectable-state-dir.md` — D1's host-identity record is a
-  state-dir-resident artifact; that seam is where it lands.
+  state-dir-resident artifact: one record per state home (never one per config
+  file), migrated with the rest of the state so a state-home change is not an
+  identity change.
 
-No `BOUNDARY-SYNC` region is amended.
+No `BOUNDARY-SYNC` region is amended — including in
+`ADR-2026-07-12-interactive-pty-session-host.md`, whose § 4 synchronized region
+(`adr-2026-07-12-interactive-outbound-mandate`) is untouched by the note added
+above it.
+
+Platform-side, the same acceptance landed the corresponding edits to the
+`011`, `013`, and `014` platform-extensions docs; they are listed in the mirrored
+stub because they name closed-side surfaces.
 
 ## Affected work items
 
