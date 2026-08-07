@@ -12,6 +12,20 @@ split: inline-addenda
 **Boundary:** shared
 **Authors:** mark, agent:claude
 
+**Amended 2026-08-07, same day, after first draft:** five product-owner rulings
+arrived after this ADR was first written and PR'd. They are folded in below as
+**R1–R5**, and they answer four of the five questions the first draft deferred.
+The status is **deliberately still `Proposed`** — this corpus requires the
+affected reference-doc edits to land in the *same commit* that flips an ADR to
+`Accepted`, and those edits are not in this commit. See § "To accept this ADR"
+for exactly what the accepting commit must carry.
+
+Where a ruling contradicts the first draft's stated default, **the ruling wins
+and the draft text has been rewritten**, not annotated. Specifically: the first
+draft's Q2 default was "keep the route as-is and fix only the vocabulary"; the
+ruling promotes it to a named **capacity profile**. Do not read the earlier
+default anywhere in this file — it has been removed.
+
 ## Context
 
 ### The question that prompted it
@@ -154,41 +168,154 @@ The distinction matters for what this ADR is allowed to assert.
   `SessionRef` (`ADR-2026-08-05` states it "accepts the architecture only");
   harness connections and live inventory; harness as a composition output field;
   the harness adaptation plan and applied receipt. These need delivery.
-- **Never decided:** one-provider-per-pool; bursting/overflow in any form; the
-  composition-schema deprecation of the sandbox field. Only this third group
-  needs judgement, and this ADR proposes positions on two of the three and
-  explicitly defers the rest.
+- **Never decided:** one-provider-per-pool; bursting/overflow in any form;
+  whether the composition point is a named object; whether the per-pool project
+  grant is enforced; whether an author may name a machine; the
+  composition-schema deprecation of the sandbox field. This third group is the
+  only one that needed judgement, and the product-owner rulings folded in as
+  R1–R5 supply it — see D6 through D10. The one item still without a position is
+  *predictive* burst, deferred with cause in D7.
 
 ## Decision
 
-**The unit of execution is an *execution context*. A *pool* is a named source of
-execution contexts, not a kind of one. *Placement* is the single axis that says
-where a run happens, and the difference between naming a pool and naming a
-context is a difference of *time*, not of *kind*: a pool is a placement resolved
-at claim (`claim_bound`), a context is a placement resolved exactly. Unlike
-capacity does not compose inside a pool; it composes one level up, in the
-ordered list of pools a project draws on. Harness is an authoring input on the
-same footing as model, never derived from it.**
+**The unit of execution is an *execution context*. A *sandbox* is one KIND of
+execution context, not a synonym for it. A *pool* is a single-provider named
+SOURCE of execution contexts, not a kind of one and not a container of unlike
+ones. A *capacity profile* is a named policy over an ordered list of pools, and
+it is the one place unlike capacity composes. *Placement* is the single axis
+that says where a run happens, and the difference between naming a pool and
+naming a context is a difference of *time*, not of *kind*: a pool is a placement
+resolved at claim (`claim_bound`), a context is a placement resolved exactly.
+Harness is an authoring input on the same footing as model, never derived from
+it.**
 
 Everything below is either a **rename** of an existing referent or a
-**reconciliation** of two accepted texts, except D6 and D7, which record
-positions on things never previously decided. Nothing here changes admission,
-routing, or scheduling behaviour. The rename/behaviour split is tabulated
-explicitly after D7.
+**reconciliation** of two accepted texts, except D6–D10, which record positions
+on things never previously decided. Nothing in D1–D5 changes admission, routing,
+or scheduling behaviour; D6 promotes an existing object to a named one. The
+rename/behaviour split is tabulated explicitly after D10.
+
+### The building blocks, stated explicitly (R1)
+
+**R1 (product-owner ruling):** *a sandbox is a TYPE of execution context; pools
+group execution contexts. Document the building blocks explicitly.* This section
+is that documentation, and it is the part of this ADR most likely to be quoted
+on its own.
+
+Four blocks, from the runtime unit outward to the authoring policy:
+
+```
+capacity profile   named policy: an ordered list of pools + how to choose among them
+      │                                                  (org-authored, project-granted)
+      ├── pool      a SOURCE of execution contexts from ONE provider
+      │   ├── pool  another source, possibly a different provider
+      │   └── …     ordering and fallback live in the profile, never inside a pool
+      │
+      └── each pool yields ▸ execution context   the unit — one concrete place one session runs
+                              ├── kind: persistent host slot   (long-lived, enrolled)
+                              └── kind: sandbox                (ephemeral, provider-minted)
+```
+
+1. **Execution context — the unit.** One concrete place one session runs. It is
+   the only thing that can actually realise a capability, and it is what a
+   `ResolvedExecutionCell` names as its exact placement. On the operator wire and
+   in the CLI the noun is **`instance`**.
+2. **Sandbox — one kind of execution context.** The ephemeral, provider-minted
+   kind. `sandbox` is *not* the generic word for the unit; using it that way is
+   what makes `sandbox` and `pool` read as competing composition inputs. The
+   other kind is a slot on a persistently enrolled host. This is already the
+   shipped discrimination: `instanceKind: persistent_host | on_demand_sandbox`.
+3. **Pool — a single-provider source of execution contexts.** One substrate
+   provider plus its credential and configuration, owned by the org and named by
+   a human. It enrolls persistent hosts, or mints ephemeral sandboxes on demand.
+4. **Capacity profile — a named policy over pools.** An ordered list of pools
+   plus the rules for choosing among them (ordering, fallback, constraints).
+   Org-authored, granted to projects. This is where unlike capacity composes.
+
+**What a pool is NOT** — stated negatively because every one of these readings
+has been made in this program, and each produces a different wrong design:
+
+- **A pool is not a bag of heterogeneous sandboxes.** It is a *source*, not a
+  container of unlike things. Mixing substrate providers inside a pool is
+  explicitly rejected in D6.
+- **A pool is not an execution context, and not a kind of one.** It is a
+  scheduling-time concept with no runtime existence of its own. Nothing ever
+  runs "on a pool"; a run happens in an execution context the pool produced.
+- **A pool has no size.** There is no ceiling attribute on a pool. What capacity
+  accounting exists lives on enrolled *machines*, so a pool whose membership is
+  a provider configuration rather than enrolled hosts has no ceiling at all
+  (D4).
+- **A pool is not a host, and not a set of hosts named individually.** Authors
+  name pools; they never name hosts (D9).
+- **A pool is not the policy over pools.** Ordering, fallback and constraints
+  live one level up, in the capacity profile (D6). A pool that carried its own
+  fallback would be a second truth source for the same decision.
 
 ### The nouns, one sentence each
 
 | Noun | Definition |
 |---|---|
-| **Execution context** | The single concrete place one session runs — a slot on an enrolled host, or one provider-minted ephemeral box; the only thing that can actually realise a capability, and the exact placement a `ResolvedExecutionCell` must carry. |
-| **Sandbox** | An execution context of the ephemeral, provider-minted kind; **not** the generic word for the unit. |
-| **Host** | A machine whose daemon persistently offers execution contexts to an org, enrolled once and referenced thereafter. |
-| **Pool** | An org-owned, named **source** of execution contexts — one substrate provider plus its credential and configuration — that enrolls hosts or mints ephemeral contexts on demand; a scheduling-time concept with no runtime existence of its own. |
-| **Route** | The ordered list of pools a project may draw on, plus the policy that orders them; the only place unlike capacity composes today. |
+| **Execution context** | The unit. The single concrete place one session runs — a slot on an enrolled host, or one provider-minted ephemeral box; the only thing that can actually realise a capability, and the exact placement a `ResolvedExecutionCell` must carry. Wire/CLI noun: `instance`. |
+| **Sandbox** | An execution context of the ephemeral, provider-minted kind. One *kind* of the unit; **not** the generic word for it. |
+| **Host** | A machine whose daemon persistently offers execution contexts to an org, enrolled once and referenced thereafter. Operators name hosts; authors do not (D9). |
+| **Pool** | An org-owned, named **source** of execution contexts — exactly one substrate provider plus its credential and configuration — that enrolls hosts or mints ephemeral contexts on demand; a scheduling-time concept with no runtime existence, no size, and no policy of its own. |
+| **Capacity profile** | A named, org-authored, project-granted **policy over pools**: an ordered list plus how to choose among them. The one place unlike capacity composes. Today's per-project execution route is this object, unnamed (D6). |
 | **Capacity** | The org's aggregate, observed ability to run sessions — a rollup you read, never an object you configure. |
 | **Placement** | The one axis of the executable unit that answers "where does this run", with `kind` naming what was requested and `resolution` naming whether it is a promise or a fact. |
-| **Harness** | The agent program that drives a session and determines how capabilities are wired into it; an axis of the executable unit, co-equal with model and independent of it. |
+| **Harness** | The agent program that drives a session and determines how capabilities are wired into it; an axis of the executable unit, co-equal with model and independent of it. Retained deliberately — see § "Harness is retained". |
 | **Substrate provider** | A driver that can mint or attach execution contexts of one kind; never the model vendor, and never to share a field with it. |
+
+### Reconciliation with what the corpus already Accepted
+
+Stated up front, before any decision, because **the two things this ADR is most
+likely to be mistaken for proposing are already Accepted**, and the divergence
+is in the code, not in the corpus. Nothing in D1–D10 asks for a contract change
+on either point.
+
+**1. `ADR-2026-08-05-versioned-execution-cell-and-session-reference.md` D2 —
+"Independent reference types" — already dissolved the sandbox-vs-pool false
+choice.** It defines five independent reference types (`HarnessRef`, `ModelRef`,
+`ServingEndpointRef`, `AuthBindingRef`, `PlacementRef`), of which placement is
+**one axis**:
+
+```ts
+PlacementRef { id: string; kind: 'host' | 'pool' | 'sandbox' | 'remote_peer';
+               resolution: 'exact' | 'claim_bound' }
+```
+
+`pool` and `sandbox` are two `kind` values on one axis, and `resolution`
+separates promise from fact. So "is the realisation surface
+`(harness, model, sandbox)` or `(harness, model, pool)`?" was never a real
+choice — it was one axis read twice. D3 below explains the two *times* that make
+both readings feel correct; it changes nothing in the type. `PlacementRef` stays
+a closed enum under `additionalProperties: false`, unchanged.
+
+**2. Harness as a first-class, independently-selected composition axis is also
+already Accepted** — as an axis of the executable unit (`ADR-2026-06-06` D1;
+`ADR-2026-08-05` D2/D3/D4; `001-layered-execution-model.md` § "The executable
+unit"), and as a *composition input* in the platform corpus's
+`ADR-2026-08-06-platform-service-composition-and-harness-injection.md` D1, whose
+`AgentComposerOutput` carries `harnessConnectionRef` and `capacityPoolRef` as
+separate fields **and carries no `sandbox` field at all**.
+
+> **Citation trap — two ADRs share the 2026-08-06 date.** The composition-output
+> decision is in the platform corpus's *service-composition-and-harness-injection*
+> ADR. It is **not** in this corpus's
+> `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`, whose own D1 is
+> "layered instruction authority" and which contains no `AgentComposerOutput`.
+> A reader citing "ADR-2026-08-06" without the slug will land on the wrong file
+> and wrongly conclude the claim is unverified.
+
+**The divergence is in the CODE, not the corpus.** The closed implementation
+resolves harness *out of* the resolved model profile and offers no authoring
+node for it — the code's own comment states "a harness alone is meaningless — it
+is a 1:1 projection of the profile", and it hard-errors if a harness is picked
+without a profile. The service-composition ADR's own implementation checkpoint
+says the same thing about itself: platform main carries no `AgentComposerOutput`
+contract. So the observation that opened this ADR — "harness is not a
+composition input" — is **true of the code and false of the corpus.** It needs
+delivery, not deliberation, and D5 records it as delivery rather than as new
+scope.
 
 ### D1 — The unit is an *execution context*; `sandbox` narrows to one kind of it
 
@@ -244,8 +371,8 @@ correct, about different moments, and neither is amended:
 
 - A **`DispatchIntent`** may carry `placement.kind='pool'` with
   `resolution='claim_bound'` — a *promise* that some execution context will
-  exist, with the concrete one unknown until claim. This is what an author or a
-  project route names.
+  exist, with the concrete one unknown until claim. This is what an author, or
+  the capacity profile a project is granted, names.
 - A **`ResolvedExecutionCell`** carries an exact placement. At claim time the
   claiming host re-runs the narrow-only gate and writes a separate immutable
   `ClaimReceipt` naming the concrete host and effective cell, exactly as
@@ -279,14 +406,16 @@ that D7 depends on.
 ### D5 — The authoring surface names sources and intent; the realisation surface is the execution cell
 
 - **Authoring** (composition graph, trigger parameters) names: a **harness**
-  (via a harness connection), a **model**, and a **capacity intent** — a pool or
-  the project's route. It does not name a machine.
+  (via a harness connection), a **model**, and a **capacity intent** — a pool,
+  or the capacity profile the project is granted. It does not name a machine
+  (D9).
 - **Realisation** is the `ResolvedExecutionCell`: harness, model, endpoint, auth
   binding, and an **exact** placement, plus session mode and granted
   capabilities. Authors never author this; the resolver produces it.
 - **Exact placement is not an authoring default.** It is legitimate at the
   connections layer — a host-bound subscription must pin an exact host — and for
-  operators. Whether an author may ever pin one deliberately is deferred (Q4).
+  operators. An author may **never** pin one deliberately — D9 settles this:
+  authors name pools, and pool naming is the targeting mechanism.
 
 **Harness is an authoring input, and inferring it from model or provider
 identity remains a defect.** This restates `ADR-2026-06-06` D1/D4 and
@@ -302,10 +431,19 @@ the typed pre-spawn denial when a requested harness has no admissible cell for
 the resolved model, endpoint, and auth binding. That denial already exists on
 the OSS runner side.
 
-### D6 — A pool is single-provider; unlike capacity composes one level up
+### D6 — A pool is single-provider; unlike capacity composes one level up, in a named **capacity profile**
+
+**Product-owner ruling (the answer to what the first draft deferred as Q2):**
+*the unlike-capacity object is a named capacity profile. Pools stay
+single-provider; today's per-project execution route is promoted to a nameable,
+org-authored, project-granted object.*
+
+Two halves, taken in order.
+
+#### D6.1 — Pools stay single-provider
 
 The premise in the framing is factually correct — a pool carries exactly one
-substrate provider — and this ADR proposes **keeping** it, for three reasons:
+substrate provider — and this ADR **keeps** it, for three reasons:
 
 1. **The composition point already exists.** A project's route is already an
    ordered, heterogeneous set of homogeneous pools with a policy over them. That
@@ -321,14 +459,47 @@ substrate provider — and this ADR proposes **keeping** it, for three reasons:
    truth sources that can conflict silently. A mixed-provider pool re-introduces
    exactly that conflict, inside the pool.
 
-What is **wrong** today is not the single-provider pool; it is that the place
-where unlike capacity composes is invisible. The route has no name, no operator
-surface of its own, and is not experienced as an object at all — so the concept
-the framing is reaching for genuinely has no word. Whether that object gets
-promoted and named is deferred (Q2), because it carries a permission change and
-a migration.
+#### D6.2 — The route is promoted to a named **capacity profile**
 
-### D7 — There is no burst; the two artifacts that say otherwise are corrected now, and the design is deferred
+What is **wrong** today is not the single-provider pool; it is that the place
+where unlike capacity composes is invisible. The per-project execution route has
+no name, no object identity, and no operator surface of its own — so the concept
+the framing was reaching for genuinely had no word. It now has one.
+
+A **capacity profile** is:
+
+- **Named.** A human-authored label, not a derived per-project singleton. The
+  same naming discipline as pools (D9): profiles are named after the *intent*
+  they encode, not after the machines behind them.
+- **Org-authored.** Created and edited where capacity is onboarded, by the role
+  that onboards capacity — which is usually not the role that authors workflows.
+- **Project-granted.** Handed out to projects, and reusable across them. A
+  project references a profile; it does not own one.
+- **A policy over pools:** an ordered list of pools plus how to choose among
+  them — ordering, fallback, and constraints. Nothing else. It holds no capacity
+  of its own and mints nothing.
+
+This is a **shape change, not a rename**, and the accepting work must treat it
+as such. Today's object is a per-project singleton auto-minted at the org
+default and edited through a per-project `show`/`set`/`test` surface. A profile
+is a reusable object with list/create/update/delete semantics analogous to
+pools, plus a grant edge to projects. Anyone sizing this as "wording only" has
+mis-sized it (see § "To accept this ADR" and the rename-vs-behaviour table).
+
+Two invariants the promotion must preserve, both already true today:
+
+- **A project is never *required* to configure capacity.** A default profile is
+  granted at the org system default, exactly as a route is auto-minted today.
+  This is the standing rule that availability governs enablement — a project
+  must never be *required* to have any resource.
+- **Naming is at the profile and pool level only.** A profile names pools; a
+  pool is a source; neither names a host (D9).
+
+Sequencing note: D6.2 and D8 (grant enforcement) share a migration and must be
+planned together, but they are **not** the same decision — D6.2 creates the
+grantable object; D8 deliberately does not enforce grants yet.
+
+### D7 — There is no burst; the two artifacts that say otherwise are corrected now, and the first iteration is failure-triggered routing-around
 
 **Recorded as fact:** no accepted overflow policy, no local-exhaustion trigger,
 no schema, and no ADR anywhere describes when or how a pool spills to another.
@@ -347,21 +518,169 @@ role.
   against a column that was dropped server-side and is pinned-absent by an
   existing test. It is deleted. (Platform-side; see the mirrored stub.)
 
-**Deferred (Q3):** what a burst is. Four candidate exhaustion signals exist and
-are not interchangeable — host slots full, daemon offline, token/credit
-exhaustion, queue latency. **Token exhaustion, named explicitly in the framing,
-has no representation in the capacity model at all**: nothing on a pool, a host,
-or a route reads a token or credit budget, so choosing it commissions a meter
-that does not exist. And because overflow to metered capacity spends money
-unattended, a burst design is coupled to a spend-authorization decision. This
-ADR does not invent either.
+**Deferred, with the reason and the first iteration both named (R2).**
 
-One clarification, because it is the kind of true statement that would be the
-wrong mechanism to cite: **within the persistent lane the scheduler already
-falls through from a full host to a lower-ranked pool's host.** That is
-host-level overflow inside one lane; every candidate must still be
-persistent-capable, so it can never cross into an ephemeral cloud pool. It is
-not burst.
+**R2 (product-owner ruling):** *burst-to-cloud requires telemetry we do not
+collect. Deferred. The first iteration is failure-triggered routing-around, not
+predictive burst.*
+
+Recorded in full so this is not re-litigated:
+
+- **Why deferred — the meter does not exist.** Four candidate trigger signals
+  are available in principle and are not interchangeable: host slots full,
+  daemon offline, token/credit exhaustion, queue latency. **Token and credit
+  exhaustion — the trigger named explicitly in the original framing — has no
+  representation anywhere in the capacity model.** Nothing on a pool, a host, or
+  a route reads a token or credit budget. Choosing that trigger does not
+  configure a feature; it commissions a meter that does not exist, on a schedule
+  nobody has estimated. That is the whole of the deferral: not doubt about
+  whether burst is wanted, but absence of the telemetry any predictive form of
+  it would consume.
+- **Why not "defer everything".** Routing around a *failure* needs no meter. A
+  dispatch that fails on one pool is an observed fact, not a prediction.
+- **So the first iteration is failure-triggered routing-around.** When a
+  dispatch fails against the chosen pool, the capacity profile (D6.2) is
+  permitted to route around the failure to the next pool in its order. This is
+  reactive, bounded by the profile the org already authored, and requires no
+  new telemetry — the profile *is* the fallback policy, so the mechanism is
+  "honour the order on failure", not "invent a new lever".
+- **What is still not decided:** what a *predictive* burst is — which
+  exhaustion signal fires it, against which budget, and under whose spend
+  authorization. Overflow to metered capacity spends money unattended, so a
+  predictive burst design is coupled to a spend-authorization decision. This ADR
+  invents neither, and a later ADR authoring predictive burst is expected and is
+  not blocked by this one.
+
+Two traps for whoever implements failure-triggered routing-around, both of which
+have already misled a reader in this program:
+
+- **Do not treat host-level fall-through as the mechanism.** Within the
+  persistent lane the scheduler already skips a full host and falls through to a
+  lower-ranked pool's host — but every candidate must still be
+  persistent-capable, so it can never cross into an ephemeral cloud pool. It is
+  overflow *within* one lane and is not the routing-around this decision names.
+- **A load-ratio ordering policy is currently the inverse of what is wanted.**
+  Because pool capacity is derived by summing over enrolled machines, a pool
+  with no enrolled machines scores as maximally idle and would be ranked
+  **first, always** — not on failure. Any profile policy that orders by load
+  must fix that before it is offered, or failure-triggered routing-around
+  becomes unconditional routing-to-metered-capacity.
+
+### D8 — Per-pool permission restrictions are NOT enforced yet, deliberately
+
+**R3 (product-owner ruling):** *per-pool permission restrictions are deferred
+until the policy engine and the org-admin interface mature — today they would
+only add friction for new users.*
+
+The facts this rests on:
+
+- The mechanism **already exists** in the closed schema: a pool carries an
+  allowed-project list, and the resolver already consults it (null =
+  unrestricted, empty = quarantined, list = whitelist). It is exactly the
+  "onboarded at org, granted per project" shape the framing asked for.
+- It is set on **zero** live pools in production. So the org→project grant is
+  advisory today, and a project member can re-point their project's work at any
+  pool in the org.
+
+**Decision: leave it advisory. Do not turn the grant into an enforced
+permission in the accepting work.** The reasoning, recorded so it is not
+mistaken for an oversight:
+
+1. **Enforcement without a mature admin surface is pure friction.** Turning the
+   grant on means every new pool starts unusable until someone finds the screen
+   that grants it. The org-admin interface that would make that a two-click
+   operation is not mature. The net effect on a new user is a capacity model
+   that fails closed for reasons they cannot see or fix — the exact class of
+   interruption the onboarding invariant
+   (`ADR-2026-08-07-onboarding-is-the-only-user-action.md`) rules out.
+2. **The policy engine is where this belongs.** A per-pool restriction is a
+   policy statement, and the policy engine is the thing that will eventually own
+   policy statements. Hard-coding enforcement into the resolver now builds a
+   second policy site that would have to be dismantled.
+3. **Nothing is lost by waiting.** The field stays, the resolver keeps
+   consulting it, and D6.2 creates the grantable object. When the policy engine
+   and the admin surface mature, enforcement is a switch plus a backfill, not a
+   redesign.
+
+**Revisit trigger, stated so this has an exit condition rather than drifting:**
+when *both* the policy engine and the org-admin interface are mature enough that
+granting a pool to a project is a first-class, discoverable operation. Enforcing
+before then is out of order, not merely early.
+
+The backfill that a future enforcement must perform is already knowable: every
+live pool is set to its current *effective* grant (i.e. what it can serve today)
+so that flipping enforcement on changes nothing observable, and only then is the
+default for new pools tightened.
+
+### D9 — Authors name pools, never hosts; pools ARE the placement mechanism
+
+**R4 (product-owner ruling):** *authors name pools, never hosts. Real usage
+already proves it — pools named after individual machines today, and geographic
+pool names at scale so execution lands on geo-local machines.*
+
+This closes what the first draft deferred as Q4 ("may an author ever pin an
+exact placement?"). The answer is **no, and the reason is not restriction — it
+is that the pool is already the right instrument.**
+
+- **A capacity node in a composition is a requirement/lane selector, not an
+  exact-host pin.** It says *what kind of place this work needs*, and the
+  resolver picks the concrete execution context at claim time. In `PlacementRef`
+  terms an author writes `kind: 'pool'`, `resolution: 'claim_bound'`.
+- **Pool naming is the targeting mechanism, and it already works.** Pools named
+  after specific machines direct work at those machines today. At scale the same
+  mechanism expresses geography — one pool per office, so execution lands on
+  geo-local machines — with no new axis, no new node, and no host-pinning
+  vocabulary. This is why D6.2 insists profiles and pools are *named*: naming is
+  the affordance that makes lane selection expressive.
+- **Exact placement stays real, and stays out of authoring.** It remains
+  legitimate at the connections layer (a host-bound subscription must pin an
+  exact host) and for operators. What is ruled out is an *authoring* surface that
+  names a machine.
+
+The practical consequence for the accepting work: no "pin a host" authoring
+affordance is to be built, and any existing surface that lets an author reach a
+machine directly is a defect to be routed through a pool instead. The
+corresponding gap to close is the reverse one — a pool must be nameable and
+renameable well enough to carry this weight, since it is now load-bearing for
+targeting.
+
+### D10 — "Sandbox provider" is the ambiguity R5 names; the refactor is authorized in principle and gated on sizing
+
+**R5 (product-owner ruling):** *"sandbox provider" today means the flavor of the
+sandbox instance. Paying the refactor cost now is preferred to paying it later —
+but only once it is SIZED.*
+
+The ambiguity is real and this ADR names it precisely: the phrase **"sandbox
+provider"** is used for the *substrate flavor* of an execution context, while
+D1 narrows `sandbox` to the *ephemeral kind* of execution context. Those are two
+different things wearing one phrase, and the same value vocabulary appears under
+several different field names across surfaces — which is why the axis reads as
+several axes.
+
+**Decided now:**
+
+1. **The ambiguity is acknowledged as a defect, not as acceptable shorthand.**
+   Under D1, "sandbox provider" applied to a persistently-enrolled machine is
+   simply wrong: that machine is an execution context of the *other* kind.
+2. **A refactor is authorized in principle, and deliberately not scheduled
+   here.** The stated preference is to pay the cost now rather than later, and
+   the cost curve supports it — the execution-cell and harness-connection tables
+   hold no production rows, so shape changes today rewrite nothing, and that
+   window closes the moment the first admission receipt is written.
+3. **It is gated on a sizing pass, which is a separate deliverable.** The sizing
+   must separate what is *wording-only* (prose, help text, docs — cheap) from
+   what needs a *schema or wire change* (lock-step, needs a plan and a migration).
+   No renaming work starts before that separation exists on paper.
+4. **The OSS contract's `PlacementRef.kind: 'sandbox'` literal is the CORRECT
+   usage and is explicitly excluded from any such refactor.** It is precisely
+   D1's ephemeral-kind meaning. A rename sweep that catches it has caught the
+   one place the word is already right.
+5. **The `SandboxProvider` family name is not renamed by this ADR** (D1), and
+   any deeper sandbox-vocabulary work waits for the SDK axis freeze.
+6. **Any surface rename ships under the declared-removal-version alias
+   discipline** of `ADR-2026-08-03` D5.4 — an alias with no removal version is a
+   defect, and that rule exists because an earlier alias generation outlived its
+   promise by 84 releases.
 
 ### Rename versus behaviour change — explicit
 
@@ -374,41 +693,99 @@ not burst.
 | D3 placement as one axis, two times | **Reconciliation** | Documentation only. `PlacementRef` unchanged; no new kind. |
 | D4 configured vs observed membership | **Clarification** | Documentation only. Names a gap (no ceiling on provider-configured pools); does not fill it. |
 | D5 harness as authoring input | **Delivery of an accepted decision** | Behaviour change in the closed implementation only; the OSS contract already says this. |
-| D6 pools stay single-provider | **Records an undecided given as a decision** | No change. Closes the question. |
-| D7 burst | **Removal of false claims + deferral** | Two documents and one help string corrected. No mechanism added. |
+| D6.1 pools stay single-provider | **Records an undecided given as a decision** | No change. Closes the question. |
+| D6.2 route → named capacity profile | **Shape change** | A new named, org-authored, project-granted object with list/create/update/delete + a grant edge, replacing a per-project singleton. Migration + surface work. **Not wording-only.** |
+| D7 burst | **Removal of false claims + a scoped first iteration** | Two documents and one help string corrected; failure-triggered routing-around named as the first form; predictive burst still undesigned. |
+| D8 grant enforcement | **Explicit non-change, with an exit condition** | Nothing. The field stays advisory; the revisit trigger is recorded. |
+| D9 authors name pools, never hosts | **Closes a question; forbids a surface** | No host-pinning authoring affordance is to be built. Raises the bar on pool naming/renaming. |
+| D10 "sandbox provider" ambiguity | **Names a defect; authorizes a refactor gated on sizing** | Nothing yet. The sizing pass is the next artifact; `PlacementRef.kind: 'sandbox'` is excluded from any sweep. |
+
+### Harness is retained — deliberately, and this is not reopenable
+
+`harness` stays the word for the agent program that drives a session. It is
+**convergent with where the industry is going**, not divergent from it: the
+prevailing pattern is a product presented as "an agent" whose own documentation
+describes it as an agent harness, and that pattern holds across several
+independent coding-agent projects.
+
+Recorded here because an earlier assessment *in this same program* claimed
+`harness` was largely eval-tooling vocabulary and carried divergence risk. **That
+assessment was based on stale usage, was wrong, and has been formally
+withdrawn.** Do not propose renaming `harness`, and do not treat the withdrawn
+assessment as an open question if it resurfaces in an older document — it is
+closed.
+
+This matters beyond vocabulary: `harness` is a load-bearing axis of the
+executable unit (`ADR-2026-08-05` D2), the subject of the adaptation contract
+(`ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`), and the axis that
+determines whether a capability is real machinery or a prompt partial. Renaming
+it would churn an accepted, contract-bearing noun for no gain.
 
 ## What this ADR does not decide
 
-Deliberately deferred. Each carries the default this ADR would take absent a
-preference, so a decision to say nothing is still a decision with a known
-outcome.
+The first draft deferred five questions (Q1–Q5). **Four are now answered by the
+product-owner rulings and have moved into the decisions above.** For anyone
+returning with the old list:
 
-1. **Q1 — the unit noun in user-facing surfaces.** `execution context` /
-   `instance` (D1's proposal, matching shipped wire) versus `sandbox`
-   everywhere (which requires renaming the wire vocabulary and calling an
-   enrolled machine a sandbox). **Default: D1 as written.**
-2. **Q2 — whether the route is promoted to a named, org-authored,
-   project-granted object.** This is where unlike capacity visibly composes. It
-   carries a permission change and a grant backfill. **Default: keep the route
-   as-is and fix only the vocabulary**, since the composition already works.
-3. **Q3 — what triggers a burst, and against which budget.** No default is
-   safe here: a burst design that can spill to metered capacity without an
-   authorized ceiling converts a failed dispatch into unattended spend.
-   **Default: no burst; keep failing, but fix the failure so it converges and
-   addresses the operator rather than the author.**
-4. **Q4 — whether an author may ever pin an exact placement**, or whether exact
-   placement stays operator- and connection-layer-only. **Default:
-   operator-only.**
-5. **Q5 — whether capacity provisioning becomes an enforced permission.** The
-   org→project grant mechanism exists in the closed schema and is set on zero
-   pools in production, so the org-side grant is advisory today. **Default:
-   record the gap, change nothing until Q2 is answered**, since the two share a
-   migration.
+| First draft | Now |
+|---|---|
+| Q1 — the unit noun | **Answered.** `execution context`, wire noun `instance` (D1). |
+| Q2 — promote the route? | **Answered: yes**, to a named capacity profile (D6.2). The draft's "keep it as-is" default is void. |
+| Q3 — what triggers a burst | **Still open**, but scoped: failure-triggered routing-around is the first iteration (D7/R2); *predictive* burst remains undesigned. |
+| Q4 — may an author pin an exact placement? | **Answered: no.** Authors name pools; pools are the placement mechanism (D9). |
+| Q5 — enforce the grant as a permission? | **Answered: not yet**, with a recorded exit condition (D8). |
+
+What genuinely remains open:
+
+1. **What a predictive burst is** — which exhaustion signal fires it, against
+   which budget, under whose spend authorization. Deferred with cause (D7): the
+   named candidate trigger has no meter anywhere in the model, and overflow to
+   metered capacity spends money unattended. A later ADR is expected.
+2. **The sizing of the naming refactor** (D10). Authorized in principle,
+   unscheduled until the wording-only work and the schema/wire work have been
+   separated on paper. That separation is a deliverable, not a decision.
+3. **The shape of the capacity-profile surface** (D6.2) — what the object's
+   fields and verbs are exactly, and how the migration preserves the
+   never-required invariant. The decision to promote is made; the design is
+   accepting-commit work.
 
 Also explicitly out of scope and unchanged: cross-org pool sharing; open-ended
 substrate capability kinds; provider-honoured serving; and whether the OSS
 daemon may ever advertise capability — that last needs its own OSS-canonical
 ADR and is not pre-approved by anything here.
+
+## To accept this ADR
+
+**This ADR stays `Proposed` until a single commit carries both the status flip
+and every reference-doc edit below.** That is this corpus's rule, and it is why
+the status was not flipped when the rulings landed: the rulings settle the
+*decisions*, not the *documents*.
+
+The accepting commit must edit, in this corpus:
+
+| Document | Edit required |
+|---|---|
+| `004-sandbox-capability-matrix.md` | **Largest single edit.** Remove the `Capacity-aware burst routing` row and the "cloud-burst" premise at `:9` (D7); reconcile or explicitly mark historical the cross-provider scheduler section, which specifies per-session cross-provider routing the accepted model rejects; rename the "worker pool" usages at `:350`, `:444`, `:471` (D2.2); refresh the stale `Last updated:` header. |
+| `003-workarea-provider.md` | § "The local-pool implementation" → **workarea cache**; member/eviction vocabulary (D2.3). |
+| `011-local-daemon-fleet.md` | `:419-420` daemon control paths → `/api/daemon/workarea/*`; `:510` `--pool` flag → `--workarea`; `:513` `capacity.poolMaxDiskGb` → `capacity.workareaMaxDiskGb` — **each with an alias carrying a declared removal version** per `ADR-2026-08-03` D5.4. This is the only genuine OSS wire break in the ADR. |
+| `013-orchestrator-and-governor.md` | `:160` "registers as a worker pool" → registers as a **host** (D2.2). |
+| `001-layered-execution-model.md` | Add the building blocks (R1) to the noun table: the unit word, the sandbox-is-a-kind statement, the pool-is-a-source definition, and **capacity profile** as a new noun. Refresh the stale `Last updated:` header. |
+| `ADR-2026-06-01-code-survival-pool-execution.md` | `:31` "the user-configured capacity pool / sandbox" → name one noun. |
+| `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` | Record `pool` and `sandbox` as the **third and fourth** applications of its own D4 rule 1. Also refresh its status prose: it still says the OSS `host` factory "is not yet merged" and the downstream capacity migration is "in progress", both of which are stale. |
+| `README.md` / `AGENTS.md` | Update this ADR's index entry — the current text says "nothing to implement until Q1–Q5 are answered", which is no longer true. |
+
+Not touched by this ADR, confirmed: `002`, `005`, `006`, `007`, `008`, `014`,
+`015`, `016`.
+
+**No `BOUNDARY-SYNC` region is touched** by the decisions as written — verified
+against the currently tracked marker pairs. If a later amendment reaches
+`ADR-2026-06-06-two-axis-provider-model.md` (which does carry a live
+synchronized marker and names the sandbox axis), the paired byte-identical
+commit rule applies, OSS side first, verified with
+`scripts/check-boundary-sync.sh`.
+
+Platform-side documents the accepting commit must edit are enumerated in the
+mirrored stub, and the paired-commit rule applies: **OSS side first.**
 
 ## Consequences
 
@@ -423,6 +800,16 @@ ADR and is not pre-approved by anything here.
   supplied); a pool really is a collection (of sources, observed as contexts);
   bursting really is missing (and now recorded as missing rather than advertised
   as present).
+- **The building blocks are written down** (R1), negatively as well as
+  positively. The five wrong readings of "pool" that this program produced are
+  each named and refuted in one place, so the next reader does not rediscover
+  them.
+- **The concept that had no word now has one.** The place where unlike capacity
+  composes is a named **capacity profile** (D6.2), not an invisible per-project
+  singleton.
+- **Four deferred questions are closed with reasons, not with silence.** D8 and
+  D9 in particular record *why* a deferral is a deferral and, for D8, what would
+  end it — so neither reads as an oversight later.
 - **The false-choice question is closed.** Nobody has to relitigate
   `(harness, model, sandbox)` versus `(harness, model, pool)`.
 - **Two documents stop lying.** A reader of `004` today would conclude cloud
@@ -441,18 +828,29 @@ ADR and is not pre-approved by anything here.
   version and a release-gate check.
 - **The renames are broad in documents even where they are narrow in code** —
   a corpus sweep, a docs sweep on the platform side, and one CLI alias cycle.
-- **The genuinely missing capability is still missing.** Deferring burst means
-  local exhaustion continues to end dispatches. This ADR reduces that from a
-  silent contradiction to an open question, which is progress but not a fix.
+- **Predictive burst is still missing.** Deferring it means local exhaustion
+  continues to end dispatches until failure-triggered routing-around ships. This
+  ADR reduces that from a silent contradiction to a scoped first iteration plus
+  a named open question, which is progress but not a fix.
+- **D6.2 adds an object.** The capacity profile is a new named entity with a
+  grant edge and a migration. This is the one place this ADR is genuinely more
+  expensive than a rename, and the accepting work must budget for it.
 - **`004` needs real work, not a header bump.** Marking it historical is the
   cheap move; amending it properly is a separate piece of authorship.
 
 ### Risks
 
-- **Renaming without promoting the route leaves the founder's concept still
-  unnamed.** If Q2 comes back "yes, promote it", part of this vocabulary lands
-  twice. Mitigation: D6 deliberately names the route as the composition point,
-  so promotion is an addition rather than a correction.
+- **D6.2 could be mis-sized as a rename.** "Route → capacity profile" reads like
+  wording and is not: it changes CRUD shape, adds a grant edge, and touches the
+  surfaces that name it. Mitigation: it is flagged as a **shape change** in the
+  rename-vs-behaviour table, in D6.2 itself, and again in § "To accept this ADR".
+- **D10's refactor could start before it is sized.** The stated preference to
+  pay the cost now is easy to read as authorization to begin. It is not:
+  D10 gates on the wording-only / schema-or-wire separation existing on paper
+  first. Mitigation: stated as a numbered condition rather than as advice.
+- **A rename sweep could catch the one correct use of `sandbox`.** The OSS
+  contract's `PlacementRef.kind: 'sandbox'` literal is exactly D1's ephemeral
+  kind and must be excluded. Mitigation: D10.4 names it explicitly.
 - **The `sandbox` narrowing is being applied to an axis whose SDK contract is
   explicitly not frozen** (`ADR-2026-06-14`: sandbox is NEXT pending the W3
   loader bridge). D1 touches the unit noun only and leaves the family name
@@ -469,11 +867,30 @@ ADR and is not pre-approved by anything here.
 
 ## Alternatives considered
 
-- **Make pools heterogeneous (multi-provider).** Rejected for now (D6): it
-  rewrites the lane split rather than relaxing a field; it re-creates inside the
-  pool the two-truth-source conflict that the platform corpus already rejected
-  at org level; and the existing route already composes unlike capacity. Worth
-  revisiting only if Q2 comes back "the route is not the right object."
+- **Make pools heterogeneous (multi-provider).** Rejected (D6.1): it rewrites
+  the lane split rather than relaxing a field; it re-creates inside the pool the
+  two-truth-source conflict that the platform corpus already rejected at org
+  level; and the composition point exists one level up, now named (D6.2). A pool
+  that mixed providers would also contradict R1 directly — it would be the "bag
+  of heterogeneous sandboxes" a pool explicitly is not.
+- **Name hosts in a composition instead of pools.** Rejected (D9): pool naming
+  already carries targeting — machine-specific pools today, geographic pools at
+  scale — so host-pinning would add an authoring axis to express something the
+  existing one expresses better, and would bind an author to a machine that can
+  go away.
+- **Enforce the per-pool project grant now, since the mechanism already
+  exists.** Rejected (D8): the mechanism existing is not the same as the admin
+  surface existing. Enforcing today makes every new pool unusable until someone
+  finds a screen that is not mature, which is friction aimed squarely at new
+  users, and it builds a second policy site the policy engine would later have
+  to absorb.
+- **Rename `harness`.** Rejected: it is convergent with the industry, it is a
+  contract-bearing axis in two Accepted ADRs, and the earlier assessment that
+  suggested divergence has been withdrawn. See § "Harness is retained".
+- **Start the naming refactor immediately, since the cheap window is now.**
+  Rejected (D10): the cost curve argument is accepted, the unsized start is not.
+  A refactor that has not separated prose from schema is how a wording sweep
+  becomes an unplanned migration.
 - **Add a fifth placement kind, or split placement into pool-vs-context axes.**
   Rejected: it would break a closed enum whose generated artifacts are digest-
   pinned across three repositories, to express something `resolution:
@@ -496,43 +913,33 @@ ADR and is not pre-approved by anything here.
 
 ## Affected documents
 
-Per corpus convention these edits land **in the accepting commit**, not in this
-proposal.
-
-- `004-sandbox-capability-matrix.md` — remove the `Capacity-aware burst routing`
-  row and the "cloud-burst" premise at `:9`; reconcile or mark historical the
-  cross-provider scheduler section; rename the "worker pool" usages at `:350`,
-  `:444`, `:471`; refresh the `Last updated:` header. Largest single edit.
-- `003-workarea-provider.md` — § "The local-pool implementation" → workarea
-  cache; member/eviction vocabulary.
-- `011-local-daemon-fleet.md` — `:419-420` daemon control paths, `:510`
-  `--pool` flag, `:513` `capacity.poolMaxDiskGb`, each with its alias and
-  declared removal version.
-- `013-orchestrator-and-governor.md` — `:160` "registers as a worker pool".
-- `001-layered-execution-model.md` — the noun table: state the unit word and
-  the pool definition alongside the existing execution-cell paragraph. Refresh
-  the stale `Last updated:` header.
-- `ADR-2026-06-01-code-survival-pool-execution.md` — `:31` "capacity pool /
-  sandbox".
-- `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` — record `pool` and
-  `sandbox` as the third and fourth applications of D4 rule 1.
-- No `BOUNDARY-SYNC` region is touched by the decisions as written. If a later
-  amendment reaches `ADR-2026-06-06-two-axis-provider-model.md` (which carries
-  synchronized markers and names the sandbox axis), the paired byte-identical
-  commit rule applies, OSS side first, verified with
-  `scripts/check-boundary-sync.sh`.
-
-Platform-side amendments are enumerated in the mirrored stub.
+Enumerated once, in § "To accept this ADR" above, with the exact edit each
+document needs. Per corpus convention those edits land **in the accepting
+commit**, not in this proposal. Platform-side amendments are enumerated in the
+mirrored stub.
 
 ## Affected work items
 
-None yet — this ADR is Proposed and no issue should be moved against it until
-Q1–Q5 are answered. On acceptance, the tracker work splits into four lanes,
-which are deliberately independent: (1) corpus renames and the `004` amendment;
-(2) the OSS daemon workarea-surface alias cycle; (3) platform-side vocabulary
-unification and the stale help-string deletion; (4) harness as an authoring
-input — which is delivery of `ADR-2026-06-06` / `ADR-2026-08-05`, not new scope,
-and should be tracked against those.
+None yet — this ADR is still `Proposed` and no issue should be moved against it
+until the accepting commit lands. On acceptance, the tracker work splits into
+five deliberately independent lanes:
+
+1. **Corpus renames and the `004` amendment** — the reference-doc edits above.
+2. **The OSS daemon workarea-surface alias cycle** (D2.3/D2.4), each alias
+   declaring its removal version.
+3. **Platform-side vocabulary unification** and the stale burst help-string
+   deletion (D7).
+4. **Harness as an authoring input** (D5) — delivery of `ADR-2026-06-06` /
+   `ADR-2026-08-05` and the platform corpus's 2026-08-06 service-composition
+   ADR, not new scope, and should be tracked against those.
+5. **The capacity-profile promotion** (D6.2) — the one lane that is a shape
+   change: a named, org-authored, project-granted object with its own verbs, a
+   grant edge, and a migration that preserves the never-required invariant.
+   Plan it with D8's future enforcement in mind (shared migration) but do not
+   bundle enforcement into it.
+
+The D10 sizing pass is a prerequisite artifact for any renaming work in lanes 1
+and 3 that reaches a schema or a wire, and is not itself a lane.
 
 ## Implementation notes
 
@@ -548,4 +955,9 @@ and should be tracked against those.
   the current daemon surface against the shipped binary, not against `011`,
   given the header-staleness pattern recorded above.
 - **Do not treat "the scheduler already falls through when a host is full" as
-  burst** — see D7's clarification. It is host-level overflow within one lane.
+  the routing-around mechanism** — see D7's traps. It is host-level overflow
+  within one lane and can never cross into an ephemeral pool.
+- **Do not re-open R2–R5.** Each is recorded with its rationale precisely so a
+  later reader inherits the reasoning rather than the conclusion. If one is to
+  change, it changes by a superseding ADR that engages the recorded rationale,
+  not by a fresh round of the same question.
