@@ -72,7 +72,7 @@ repo files stay short. Rules are procedures, not advice — follow them literall
   unknowns. Label every claim `VERIFIED` (with its command), `ASSUMPTION`, or
   `UNVERIFIED` — a reader must never have to guess which is which.
 
-Before sending any completion report, answer these five to yourself; any "no"
+Before sending any completion report, answer these six to yourself; any "no"
 sends you back to work, not to the send button:
 
 1. Did the gates run AFTER my last edit, and did I quote their output?
@@ -80,6 +80,7 @@ sends you back to work, not to the send button:
 3. What is the strongest reason this is wrong — and did I check it?
 4. Did I solve what was actually asked, or only what was literally written?
 5. What breaks first downstream (CI, prod, a consumer repo) — did I say so?
+6. If I claim coverage: have I SEEN this test fail without my change (V16)?
 
 ### Review depth and cadence (R7, adopted 2026-07-23)
 
@@ -117,6 +118,53 @@ protocol scopes.
   package publishes, and any other gate a program doc names founder-owned)
   are unchanged by this policy — it governs everything below them.
 
+### Coverage claims — the unfalsifiable-test gate (adopted 2026-08-07)
+
+Standing protocol org-wide since 2026-08-07. A test that cannot fail reports
+coverage while proving nothing, and is strictly worse than no test: it stops
+the next reader from looking. Nine of these shipped green on a single program
+and every one was found the same way — by reverting the production change and
+watching for a red that never came. Running the test catches none of them.
+
+- V16. **The red is the evidence.** Before writing that a behavior is covered,
+  revert the production change (edit it back, or `git stash` it), run the
+  test, and confirm it goes RED for the right reason; then restore and confirm
+  GREEN. Quote BOTH outputs in the completion report. Without the red you may
+  write `EDITED-UNVERIFIED` or `COVERAGE-UNPROVEN: <behavior>` — you may not
+  write "covered", "pinned", "regression-protected", or "I added a test".
+- V17. **A green suite is not evidence your change is covered.** It is evidence
+  that whatever did run, passed. The two are unrelated until V16 links them.
+  Never cite a passing pipeline as coverage for a specific change.
+- V18. **Prove the file executes.** A test file must be registered with a
+  runner AND observed running: confirm the suite name appears in the run
+  output, or that the reported test count rose. `0 tests ran`, a file absent
+  from the report, and a silently-skipped suite are all verification failures
+  (V3), not passes. Verify — never assume the runner globs picked it up.
+- V19. **Know the seven shapes.** Each of these produced a green pipeline and
+  zero protection; recognize your own case:
+
+  | Shape | What it looks like |
+  |---|---|
+  | Unregistered suite | The file is not matched by any runner config, or is gated behind a tag/env var no job supplies. It never runs and never reports. |
+  | Stubbed dependency | The test replaces the subject with a stub (`async () => ({ ok: true })`) and then asserts the stub's return value. |
+  | Self-asserting fixture | A hand-written expectation table checked against itself (or against a copy of the same constants) rather than against behavior. |
+  | Lifecycle ordering | A subtest that can never run or never pass — teardown fires before it, a sibling's cleanup tears down its state, or a parallel subtest resumes after its parent's `defer`. |
+  | Deletable seam | The registration/wiring the change exists to add can be deleted whole and the suite stays green. Nothing asserts the seam is reachable. |
+  | Argument-discarding mock | A fake whose method bodies ignore the arguments they receive — so the filter, scope, or predicate under test can be removed with nothing failing. |
+  | Re-implemented subject | The test declares its own copy of the logic (often with a comment saying "mirrors X" or "extracted from X") and asserts the copy. The real code is never imported. |
+
+- V20. **Untestable is a reportable outcome; untested-but-claimed is not.** If
+  the behavior genuinely cannot be pinned (needs a live service, a DOM the
+  harness lacks, a provider account), say so explicitly — name what is
+  uncovered and why — instead of substituting a test of something adjacent
+  that happens to be easy. A test that had to be written around the subject is
+  a signal the subject needs a seam, not a reason to lower the claim.
+- V21. **Where a repo mechanizes a shape, its gate is mandatory, not
+  advisory.** Registration/coverage guards listed in a repo's Gates section run
+  with the rest; they exist because these shapes already shipped past review.
+  Never satisfy one by adding an exemption entry without the justification the
+  guard asks for.
+
 ## D — When something fails
 
 - D1. Reproduce first: run the exact failing command and quote the line showing
@@ -147,6 +195,8 @@ protocol scopes.
 | "quick fix for now" | write the CAUSE line (D2) first, then decide |
 | "must be a caching issue" | prove the executed code is the edited code, rerun with caches cleared, then claim |
 | "easiest to just rewrite this" | state the root cause first — never rewrite to escape a bug you don't understand |
+| "I added a test" / "that's covered now" | revert the production change, run the test, paste the red (V16) — a test you have never seen fail is not evidence |
+| "the suite is green, so it's covered" | green proves what ran, passed — not that your change ran (V17); confirm the file executed and the count rose |
 
 ## W — Worktrees and parallel work
 

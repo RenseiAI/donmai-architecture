@@ -93,7 +93,7 @@ Humans and fleet agents alike should consume in this order:
 
 **Agents (operating protocol + archetypes):**
 
-- **`agents/PROTOCOL.md`** — the shared Agent Operating Protocol. Every sibling repo's `AGENTS.md` routes here for the cross-repo procedures: plan-before-edit, reference sweeps, verification evidence, debugging escalation, worktree/sub-agent discipline, release rules. Platform deltas extend it in `rensei-architecture/agents/PROTOCOL-platform-extensions.md`.
+- **`agents/PROTOCOL.md`** — the shared Agent Operating Protocol. Every sibling repo's `AGENTS.md` routes here for the cross-repo procedures: plan-before-edit, reference sweeps, verification evidence, the § V unfailable-test gate (V16–V21 — never claim coverage you have not watched go red), debugging escalation, worktree/sub-agent discipline, release rules. Platform deltas extend it in `rensei-architecture/agents/PROTOCOL-platform-extensions.md`.
 - **`agents/pm/backlog-writer.yaml`** — PM-archetype: refine/groom/author modes, no-sub-issue rule, haiku-executable scope discipline.
 - **`agents/pm/outcome-auditor.yaml`** — Outcome auditor archetype.
 - **`agents/pm/improvement-loop.yaml`** — Improvement-loop archetype.
