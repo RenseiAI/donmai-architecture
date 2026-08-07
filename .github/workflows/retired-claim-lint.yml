@@ -1,0 +1,48 @@
+# Retired-claim guard for the donmai-architecture corpus.
+#
+# Fails the build when a claim this corpus has formally retired reappears as a
+# live assertion — an ownership cell that says a capability ships when no ADR,
+# schema, or line of code backs it, or a noun an ADR renamed still naming its
+# old referent.
+#
+# Why it exists: ADR-2026-08-07 deleted the "cloud-burst" claim from 004 and
+# left the identical claim standing in 013 — in a file the same commit had
+# already edited for an unrelated rename. It survived a full review cycle.
+# Prose has no compiler; this is the compiler.
+#
+# Quoting a retired claim is always allowed — wrap it in `backticks` and the
+# linter reads it as a citation rather than an assertion. See
+# scripts/retired-claim-lint.sh for the rule table and the allowlist rules
+# (blanket per-file exemptions are refused by design).
+
+name: Retired-claim guard
+
+on:
+  pull_request:
+    paths:
+      - '**/*.md'
+      - 'scripts/retired-claim-lint.sh'
+      - '.retired-claim-allowlist'
+      - '.github/workflows/retired-claim-lint.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.md'
+      - 'scripts/retired-claim-lint.sh'
+      - '.retired-claim-allowlist'
+      - '.github/workflows/retired-claim-lint.yml'
+  workflow_dispatch:
+
+jobs:
+  retired-claim:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Print the rule table
+        run: ./scripts/retired-claim-lint.sh --list-rules
+
+      - name: Run retired-claim-lint (all files)
+        run: ./scripts/retired-claim-lint.sh --all

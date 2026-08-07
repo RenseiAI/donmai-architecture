@@ -132,9 +132,12 @@ Direct edits without an ADR are fine for clarifications, examples, typo fixes, a
 bash scripts/guard-b-lint.sh --all          # closed-source content guard (CI: secret-scan.yml)
 bash scripts/adr-status-lint.sh --all       # ADR status frontmatter + README index drift (CI: adr-lint.yml)
 bash scripts/check-boundary-sync.sh         # BOUNDARY-SYNC regions byte-identical with the sibling corpus (CI: boundary-sync.yml)
+bash scripts/retired-claim-lint.sh --all    # retired capability claims re-asserted (CI: retired-claim-lint.yml)
 ```
 
 `check-boundary-sync.sh` assumes the sibling at `../rensei-architecture/`; override with `DONMAI_ARCH_PATH=/abs/path`. A red boundary-sync after landing one side of a paired edit is the reminder to land the other side — never bypass it.
+
+`retired-claim-lint.sh` exists because an ADR only deletes the false claims its author happened to find: `ADR-2026-08-07` removed the `cloud-burst` capability claim from `004` and left the identical claim standing in `013`, in a file the same commit had already edited. **Quoting a retired claim is always allowed** — put it in `backticks` and the linter reads it as a citation rather than an assertion, which is also how an epitaph or a renamed-from banner should read. `--list-rules` prints what is currently retired and by which ADR. Retiring a claim in a new ADR means adding a rule; the allowlist deliberately **refuses** whole-file exemptions.
 
 ## Status
 

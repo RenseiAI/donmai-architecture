@@ -238,7 +238,7 @@ suppress the descriptor or the lease state machine.
 
 ## The workarea cache (OSS-shipped reference)
 
-> **Renamed 2026-08-07** from "the local-pool implementation", per
+> **Renamed 2026-08-07** from `the local-pool implementation`, per
 > `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` D2.3. The
 > word `pool` now names exactly one thing — the org-owned capacity pool, a
 > single-provider *source of execution contexts*. This section describes

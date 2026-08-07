@@ -463,10 +463,14 @@ Any future binary added to the OSS distribution channel inherits this rule. Its 
 | TUI fleet view | ✅ ships | extended |
 | Multi-tenant orchestrator | ❌ | ✅ owns |
 | Routing Intelligence panel | ❌ | ✅ owns |
-| Cross-machine fleet aggregation | partial (LAN) | ✅ owns (cloud-burst) |
+| Cross-machine fleet aggregation | partial (LAN) | ✅ owns (multi-tenant) |
 | macOS signing rule | ✅ ships (architectural commitment) | extends with operational state |
 
-OSS users get a fully working orchestrator + governor + worker fleet on their Mac Studio. The SaaS extensions (Topology view, Routing Intelligence panel, multi-tenant orchestration, cloud-burst aggregation, the platform-merge-queue specifics) live in the platform-extensions doc.
+The `Cross-machine fleet aggregation` row read `✅ owns (cloud-burst)` until 2026-08-07, and the paragraph below it listed `cloud-burst aggregation` among the hosted extensions. **Aggregation is real; the burst qualifier was not, and never was.** The hosted control plane does aggregate hosts across machines, and does so per tenant — that half stands. What it does not do is spill work from one pool to another: there is no overflow policy, no exhaustion trigger, and no schema for either. `ADR-2026-08-07` D7 records the absence as fact, and an independent audit of the hosted plane's dispatch history confirmed it in the strongest available form — **zero fall-back events across 1,262,827 audit records, and not one dispatch ever re-placed after its initial binding.** What does exist is a static capability-mismatch filter: it reads a provider's declared flags, and takes no capacity or availability input at all, so it cannot detect the exhaustion a burst would respond to. The same qualifier was deleted from `004-sandbox-capability-matrix.md`'s equivalent row in this ADR's accepting commit, with the epitaph *"neither side ships burst routing, and neither ever did."* This row is the second half of that deletion.
+
+Failure-triggered routing-around — honouring a capacity profile's existing order when a dispatch *fails* — is D7's named first iteration and is not yet built. Predictive burst is undesigned and needs its own ADR.
+
+OSS users get a fully working orchestrator + governor + worker fleet on their Mac Studio. The SaaS extensions (Topology view, Routing Intelligence panel, multi-tenant orchestration, multi-tenant fleet aggregation, the platform-merge-queue specifics) live in the platform-extensions doc.
 
 **One server-side operation per user intent.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D8, this table is about *who implements* a concern — never about *who can reach it*. Each state-changing intent ("this host serves this scope", "stop this session", "drain this host") is expressed once, server-side, and every client calls that same operation. Clients carry no machine-facing concepts and no client-specific write path. Two consequences bind reviewers: a capability reachable from only one client is not shipped, and physical presence at a machine is never a requirement for anything except installing the host service.
 

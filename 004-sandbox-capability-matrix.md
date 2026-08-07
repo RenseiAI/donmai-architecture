@@ -18,7 +18,7 @@
 
 Donmai needs to scale from ~10 concurrent agents (a single Mac Studio's local capacity) to ~1000+ without the user or the agent caring where compute physically runs. We have six platform-shipped sandbox implementations today (`Local`, `Docker`, `K8s`, `Daytona`, `E2B`, `Modal`) plus a Vercel implementation in scope for SaaS turnkey, and a likely seventh (`Atomic` or other agent-native VCS-bundled compute) on the horizon.
 
-That scale comes from **an org running many pools and granting capacity profiles over them** — not from bursting. There is no burst mechanism: no accepted overflow policy, no exhaustion trigger, and no schema for one. An earlier revision of this doc opened by promising "cloud-burst across multiple providers"; that promise was never implemented and the routing column that carried the intent was subsequently deleted. `ADR-2026-08-07` D7 records the absence as fact and names **failure-triggered routing-around** — honouring the capacity profile's existing order when a dispatch *fails* — as the first iteration. Predictive burst remains undesigned and needs its own ADR.
+That scale comes from **an org running many pools and granting capacity profiles over them** — not from bursting. There is no burst mechanism: no accepted overflow policy, no exhaustion trigger, and no schema for one. An earlier revision of this doc opened by promising `cloud-burst across multiple providers`; that promise was never implemented and the routing column that carried the intent was subsequently deleted. `ADR-2026-08-07` D7 records the absence as fact and names **failure-triggered routing-around** — honouring the capacity profile's existing order when a dispatch *fails* — as the first iteration. Predictive burst remains undesigned and needs its own ADR.
 
 Each provider has different lifecycle primitives, different cost shapes, different network topologies, and different snapshot/pause-resume support. A router that knows about each by name doesn't scale: every new provider would force router edits. The fix is **capability declaration**: each provider declares typed flags; the router reasons about flags; new providers slot in by declaring their shape.
 
@@ -87,8 +87,10 @@ interface SandboxProvider extends Provider<'sandbox'> {
   streamLogs?(handle: SandboxHandle): AsyncIterable<LogEvent>
 
   /**
-   * Optional: query current capacity. Used by the scheduler to decide
-   * whether to dispatch locally or burst to cloud.
+   * Optional: query current capacity. Feeds routing's health-and-headroom
+   * filter (see "Routing: capability filtering, then the capacity profile").
+   * It does NOT trigger an overflow to another provider: there is no burst
+   * mechanism (ADR-2026-08-07 D7).
    */
   capacity?(): Promise<CapacitySnapshot>
 }
@@ -229,11 +231,13 @@ The capability flags above are the *declared* shape — what a provider/host adv
 
 The matrix above tells the router what's *possible*; the table below tells operators what's *appropriate* when authoring a capacity profile's pool order. Operators pick the regime; routing filters and falls through within the order they authored.
 
+**The Primary/Fallback cells name providers, not pools.** A pool is a source over exactly one provider (`ADR-2026-08-07` D6.1), so picking a regime is picking which provider the profile's next pool should carry — the pool itself is named by its author (D9). The cells read as bare provider names for that reason; a cell reading `Local pool` here until 2026-08-07 was the only one that did not, and it invited the pool-vs-provider conflation this table exists to avoid.
+
 | Workload regime | Primary | Fallback | Why |
 |---|---|---|---|
-| **OSS local dev** | Local pool | — | Mac Studio fleet, no cloud spend, no auth ceremony |
+| **OSS local dev** | Local | — | Mac Studio fleet, no cloud spend, no auth ceremony |
 | **SaaS turnkey, NA, active-burst** | Vercel | E2B | Same Vercel account/auth/billing as the SaaS app, active-CPU billing wins for I/O-heavy agent work |
-| **Cross-region, long-idle, paused pools** | E2B | Modal | $0 paused tier, multi-region, mid-process pause/resume the killer feature for bursty queues |
+| **Cross-region, long-idle, paused sandboxes** | E2B | Modal | $0 paused tier, multi-region, mid-process pause/resume the killer feature for bursty queues |
 | **Enterprise self-hosted** | K8s | Docker | Already production-grade in the platform's existing impl, fits VPC/private-network requirements |
 | **Devcontainer-style long-lived workspaces** | Daytona | Local | Days-long workspaces, FS archive, dev-environment ergonomics |
 | **GPU-bound agent work (rare today)** | Modal | E2B+GPU | Modal is the only one with first-class GPU billing |
@@ -454,7 +458,7 @@ Concretely:
 │                       Mac Studio (one machine)                   │
 │                                                                  │
 │  ┌────────────────────────────────────────────────────────┐    │
-│  │  rensei-daemon (system service)                        │    │
+│  │  donmai daemon (system service)                        │    │
 │  │                                                        │    │
 │  │  - registers capacity: 16 vCPU, 64GB, projects: [*]   │    │
 │  │  - subscribes to work queue                           │    │
@@ -468,12 +472,19 @@ Concretely:
 │  └────────────────────────────────────────────────────────┘    │
 │                          ↓ acquires                             │
 │  ┌────────────────────────────────────────────────────────┐    │
-│  │  WorkareaProvider local pool                          │    │
-│  │  - warm pool members per (repo, toolchain) key       │    │
+│  │  WorkareaProvider workarea cache                      │    │
+│  │  - warm cache entries per (repo, toolchain) key      │    │
 │  │  - cold-path: clone + install on first project use   │    │
 │  └────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+> **Renamed 2026-08-07** — the bottom box read `WorkareaProvider local pool` /
+> `warm pool members` until this ADR. It is the machine-local **workarea cache**,
+> not a pool: `pool` names the org-owned capacity pool and nothing else
+> (`ADR-2026-08-07` D2.3). `003-workarea-provider.md` § "The workarea cache" is
+> the contract; its state names (`warming` / `ready` / `acquired` / `invalid` /
+> `retired`) are the canonical labels for the entries drawn here.
 
 ### Daemon lifecycle
 

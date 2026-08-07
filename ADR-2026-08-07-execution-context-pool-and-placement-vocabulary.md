@@ -112,9 +112,11 @@ behaviour.
   `DispatchIntent`, `ResolvedExecutionCell`, `AdmissionReceipt`, or
   `PlacementRef`. Two specific claims in it are now counterfactual:
   - **It advertises burst routing that does not exist.** `004` § "OSS vs SaaS
-    division of labor" carries the row `Capacity-aware burst routing | ✅ ships
-    local-only | ✅ ships hybrid (local + cloud)`, and its opening premise (`:9`)
-    is scaling "cloud-burst across multiple providers." The platform corpus
+    division of labor" carried the row
+    `Capacity-aware burst routing | ✅ ships local-only | ✅ ships hybrid (local + cloud)`,
+    and its opening premise (`:9`) was scaling `cloud-burst across multiple providers`.
+    `013` § "OSS vs SaaS responsibilities" carried the same qualifier a second
+    time, in its `Cross-machine fleet aggregation` row. The platform corpus
     records the opposite: the routing column that carried burst intent was hard
     deleted as one of seven behaviourally-dead knobs, and its own Consequences
     section names the loss — the *names* documented an intent that now has no
@@ -516,7 +518,7 @@ Sequencing note: D6.2 and D8 (grant enforcement) share a migration and must be
 planned together, but they are **not** the same decision — D6.2 creates the
 grantable object; D8 deliberately does not enforce grants yet.
 
-### D7 — There is no burst; the two artifacts that say otherwise are corrected now, and the first iteration is failure-triggered routing-around
+### D7 — There is no burst; the three artifacts that say otherwise are corrected now, and the first iteration is failure-triggered routing-around
 
 **Recorded as fact:** no accepted overflow policy, no local-exhaustion trigger,
 no schema, and no ADR anywhere describes when or how a pool spills to another.
@@ -531,9 +533,26 @@ role.
 
 - `004`'s `Capacity-aware burst routing` row and its "cloud-burst" premise are
   removed or explicitly marked historical.
+- **`013`'s `Cross-machine fleet aggregation` row and its extension list carry
+  the same qualifier and are corrected the same way.** The row read
+  `✅ owns (cloud-burst)` and the paragraph below it listed `cloud-burst aggregation`.
+  Aggregation is real and stays; the burst qualifier goes. This
+  was missed in the first pass of the accepting commit — which edited `013` at
+  `:160` for the D2.2 noun rename without sweeping the file for D7 — and is
+  corrected before merge. *(Heading amended 2026-08-07: this decision covers
+  **three** artifacts, not two.)*
 - The composing CLI's route help text still advertises a `cloud-burst` selector
   against a column that was dropped server-side and is pinned-absent by an
   existing test. It is deleted. (Platform-side; see the mirrored stub.)
+
+**The absence is now measured, not merely unfound.** An independent audit of the
+hosted plane's dispatch history returned **zero fall-back events across
+1,262,827 audit records** and **zero dispatches re-placed after initial
+binding**. The mechanism that does exist is a static capability-mismatch filter
+over declared provider flags with **no capacity or availability input**, so it
+is structurally incapable of detecting the exhaustion a burst would react to.
+This is stronger than "no design exists": no design exists *and* nothing in
+production has ever behaved as if one did.
 
 **Deferred, with the reason and the first iteration both named (R2).**
 
@@ -698,6 +717,15 @@ several axes.
    discipline** of `ADR-2026-08-03` D5.4 — an alias with no removal version is a
    defect, and that rule exists because an earlier alias generation outlived its
    promise by 84 releases.
+7. **The sizing pass inherits a written inventory, not a fresh search.** D2.3
+   renamed referent 3 in `003`, `004`, `011` and `013`; it left the same
+   referent standing in `005`, `006`, `007`, `008` and `014`. Those sites are
+   enumerated by line and phrase in § "Not edited — and exactly how far that
+   goes", already split into the two buckets the sizing pass must produce:
+   prose (`005`, `006`, `007`, `008`, plus `014:14`) versus surface (`014`'s
+   `WorkareaPoolPanel` primitive and its `"Warming pool"` rendered label). The
+   sizing pass starts from that table. Whoever runs it should re-scan rather
+   than trust the line numbers, which drift.
 
 ### Rename versus behaviour change — explicit
 
@@ -808,17 +836,59 @@ so a later reader inherits the reasoning, not just the outcome.
 
 | Document | Edit carried |
 |---|---|
-| `004-sandbox-capability-matrix.md` | **Largest single edit.** Removed the `Capacity-aware burst routing` row and corrected the "cloud-burst" premise at § "Why this exists" (D7); **reconciled** the cross-provider scheduler section per R-B — it now describes capacity-profile routing over single-provider pools and retains the rejection reasoning; renamed the "worker pool" usages (D2.2); refreshed the stale `Last updated:` header. |
-| `003-workarea-provider.md` | § "The local-pool implementation" → § "**The workarea cache**"; member/eviction vocabulary swept to cache vocabulary (D2.3). Its unrelated § "Capability profile by sandbox" is per-sandbox capability data, **not** this ADR's `capacity profile` noun, and was correctly left alone. |
+| `004-sandbox-capability-matrix.md` | **Largest single edit.** Removed the `Capacity-aware burst routing` row and corrected the "cloud-burst" premise at § "Why this exists" (D7); **reconciled** the cross-provider scheduler section per R-B — it now describes capacity-profile routing over single-provider pools and retains the rejection reasoning; renamed the "worker pool" usages (D2.2); refreshed the stale `Last updated:` header. Second pass: the referent-3 usages the first pass left behind — the daemon-mode diagram's `WorkareaProvider local pool` / `warm pool members` box (now the **workarea cache**, with a renamed-from banner) — plus two regime-table cells that read `pool` for something that is not one (`Local pool` → `Local`, since that column names *providers*; "paused pools" → "paused **sandboxes**", since pause/resume is a sandbox primitive). One stray `rensei-daemon` label inside the same diagram — the corpus's only occurrence — corrected to `donmai daemon`. |
+| `003-workarea-provider.md` | § `The local-pool implementation` → § "**The workarea cache**"; member/eviction vocabulary swept to cache vocabulary (D2.3). Its unrelated § "Capability profile by sandbox" is per-sandbox capability data, **not** this ADR's `capacity profile` noun, and was correctly left alone. |
 | `011-local-daemon-fleet.md` | Daemon control paths → `/api/daemon/workarea/*`; `--pool` flag → `--workarea`; `capacity.poolMaxDiskGb` → `capacity.workareaMaxDiskGb` — **each with an alias carrying the declared removal version `v0.59.0`** per `ADR-2026-08-03` D5.4. This is the only genuine OSS wire break in the ADR, and per R-C the doc landed in lock-step with the code. |
-| `013-orchestrator-and-governor.md` | "registers as a worker pool" → registers as a **host** (D2.2). |
+| `013-orchestrator-and-governor.md` | "registers as a worker pool" → registers as a **host** (D2.2). Second pass: the `Cross-machine fleet aggregation` row's `(cloud-burst)` qualifier and the `cloud-burst aggregation` extension-list item removed (D7), with the measured-absence evidence recorded inline. The first pass edited this file for D2.2 and did **not** sweep it for D7 — a same-file miss, and the reason the D7 bullet list now enumerates its artifacts by name. |
 | `001-layered-execution-model.md` | Added the building blocks (R1) to § "Layer 3 — Execution": the unit word, the sandbox-is-a-kind statement, the pool-is-a-source definition, and **capacity profile** as a new noun. Refreshed the stale `Last updated:` header. *(`001` carries no standalone noun table; Layer 3 is where the execution nouns are already defined, so that is where they landed.)* |
 | `ADR-2026-06-01-code-survival-pool-execution.md` | "the user-configured capacity pool / sandbox" → names one noun. A clarification to an `Accepted` ADR that changes no decision, so it lands as a direct edit under this corpus's clarification carve-out. |
 | `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` | Recorded `pool` and `sandbox` as the **third and fourth** applications of its own D4 rule 1. Refreshed its status prose: the OSS `host` factory **has** merged and shipped, so "not yet merged" was stale. |
 | `README.md` / `AGENTS.md` | Updated this ADR's index entry to `Accepted`. The generated `ADR-INDEX` block was regenerated with `scripts/gen-adr-index.sh`, not hand-edited. |
 
-Not touched by this ADR, confirmed: `002`, `005`, `006`, `007`, `008`, `014`,
-`015`, `016`.
+### Not edited — and exactly how far that goes
+
+An earlier revision of this section read *"Not touched by this ADR, confirmed:
+`002`, `005`, `006`, `007`, `008`, `014`, `015`, `016`."* **That certification
+was false, and not narrowly so.** Re-run at acceptance review as a full scan of
+all eight for the *renamed* referent — referent 3, the warm workarea cache —
+five of the eight carry it. A certification's only value is that a reader can
+trust it, so it is replaced here with the scan's actual output.
+
+**Genuinely clean — no `pool` token for any renamed referent:**
+
+| Document | Finding |
+|---|---|
+| `002-provider-base-contract.md` | Four occurrences, none renamed. `:662` "claim-bound pool" and `:692` "binds the pool/reservation" are **referent 1** and are correct as written. `:633` and `:750` say "HTTP keep-alive pools" / "HTTP client pools" — the ordinary connection-pool term, a referent this ADR does not claim and should not. |
+| `015-plugin-spec.md` | Zero occurrences. |
+| `016-workflow-engine.md` | Zero occurrences. |
+
+**Still carrying referent 3 — enumerated, and deliberately not edited here:**
+
+| Document | Sites (line numbers as of this commit) |
+|---|---|
+| `005-kit-manifest-spec.md` | `:198` "not pre-warmed in the pool". `:195`'s `# cache that survives release-to-pool` paraphrases the unchanged `ReleaseMode` literal. |
+| `006-cross-provider-interactions.md` | `:38` "the same pool member", `:41` "cross-session leakage in pool reuse", `:63` "should have been pool-warmed", `:211` "wasted-warm-pool members", `:229` "during pool clean". Its `:18` `release(return-to-pool)` is the unchanged type literal, and `:14`/`:130` `pool_cost_events` is referent 1. `:217` "a transient detect-sandbox pool" is a fourth thing again — a short-lived set of detection sandboxes, neither referent 1 nor referent 3. |
+| `007-intelligence-services.md` | `:16` "running on a local pool", `:114` and `:116` "pool reuse", `:169` "what makes the OSS local pool fast", `:170` "locally-pooled workareas". |
+| `008-version-control-providers.md` | `:325` "the local-pool warm cache … pool members are keyed on `(vcsProviderId, repository, toolchain)`" — the clearest single case in the corpus, since the sentence uses *pool* and *cache* for the same object in the same breath. |
+| `014-tui-operator-surfaces.md` | `:14` "local workarea pool" (prose). `:74`'s `WorkareaPoolPanel` and `:19`'s reference to it are **typed primitive names**, and `:169`'s `Label: "Warming pool"` is a **rendered UI string** — both are surfaces, not prose. `:15`'s "pools, live instances … project→pool routing" is referent 1 and correct. |
+
+**Why they are not edited in this commit, stated as a decision.** These are not
+on this ADR's edit checklist, and adding them would widen the edit list of the
+very commit whose discipline is that its list is closed and enumerated. More to
+the point, D10.3 gates renaming — **prose included** — on the sizing pass, and
+`014`'s three sites are not prose at all: `WorkareaPoolPanel` is a typed
+primitive and `"Warming pool"` is a string a user reads, which puts them on the
+schema-and-wire side of exactly the line D10 exists to draw. The D2 renames
+landed because D2 enumerates them individually with named targets and an alias
+discipline; this residue has neither.
+
+**What that costs, said plainly.** Until the sizing pass, a reader moving
+between `003`'s cache vocabulary and `007`/`008`'s pool vocabulary cannot tell
+from the text alone that they are the same object. `003` § "The workarea cache"
+carries the renamed-from banner that resolves it, and `004`'s diagram now
+carries one too — those two are the entry points a reader is most likely to
+arrive through. The remaining five documents are recorded here so the debt has
+a name and an inventory rather than being discovered a third time.
 
 **No `BOUNDARY-SYNC` region was touched.** Verified at acceptance against all
 four currently tracked marker pairs — the boundary-contract region in `001`
@@ -1001,7 +1071,11 @@ The corpus edits are done. The remaining tracker work splits into five
 deliberately independent lanes:
 
 1. **Corpus renames and the `004` amendment** — the reference-doc edits above.
-   **Done in the accepting commit.**
+   **Done in the accepting commit, for the documents on the checklist.** Five
+   documents off it still carry referent 3; they are inventoried in § "Not
+   edited — and exactly how far that goes" and are D10-gated (D10.7), not
+   forgotten. "Done" here means *the checklist is discharged*, which is a
+   narrower claim than *the corpus is uniform*.
 2. **The OSS daemon workarea-surface alias cycle** (D2.3/D2.4), each alias
    declaring `v0.59.0` as its removal version. Per R-C this ships in lock-step
    with the accepting commit, not after it — `011` describes the aliased end
@@ -1040,3 +1114,17 @@ and 3 that reaches a schema or a wire, and is not itself a lane.
   later reader inherits the reasoning rather than the conclusion. If one is to
   change, it changes by a superseding ADR that engages the recorded rationale,
   not by a fresh round of the same question.
+- **D7 now has a build gate; D2.3's residue deliberately does not.**
+  `scripts/retired-claim-lint.sh` (CI: `retired-claim-lint.yml`) fails the build
+  when a retired claim is re-asserted. It exists because the first pass of this
+  ADR's accepting commit deleted the `cloud-burst` claim from `004` and left the
+  identical claim in `013` — in a file that same commit had already edited for
+  D2.2 — where it survived review. **A `✅ owns` cell is a capability assertion,
+  and nothing in this corpus was checking them.** Quoting a retired claim stays
+  legal: a string inside `backticks` is read as a citation, which is what an
+  epitaph or a renamed-from banner is. The D2.3 sites listed in § "Not edited"
+  are intentionally *not* rules yet — a gate that fires on documents nobody is
+  authorized to edit until the D10 sizing pass is a gate that gets bypassed, and
+  a bypassed gate is worse than an absent one. Add those rules in the commit
+  that does the sweep. This gate is **not** the D5.4 alias-expiry gate, which
+  remains unbuilt and is a separate deliverable.
