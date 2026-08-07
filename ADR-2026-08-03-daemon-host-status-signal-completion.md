@@ -143,6 +143,22 @@ source of truth pollable from tests without a running daemon.
   daemon-heartbeat implementations so future readers don't conflate them the
   way the outbound wire gap this ADR fixes went unnoticed.
 
+### Extended by ADR-2026-08-07
+
+[`ADR-2026-08-07-onboarding-is-the-only-user-action.md`](ADR-2026-08-07-onboarding-is-the-only-user-action.md)
+(Accepted 2026-08-07) **extends** this decision; it does not supersede it. Its D7
+makes host-level self-diagnosed conditions — a failed scope registration, an
+unresolvable allowlist entry, a dead credential socket, an abandoned attach leg —
+first-class payload on the outbound signal this ADR put on the wire, rather than
+warnings that live only in the daemon's log file. The inbound claim-gating
+direction and the unrecognized-status fail-open posture are unchanged.
+
+Two of that ADR's rules land directly on top of this one. D9 requires the beat to
+carry the host's **enabled-scope set** alongside `status`, so the orchestrator's
+admission mirror stops being movable only by re-registration; and D5 requires
+that a host which cannot serve says so on this same signal rather than warning
+locally and continuing.
+
 ## Affected work items
 
 - W1 capacity consolidation, lane **W1-E** (daemon-side host-status

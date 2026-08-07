@@ -30,6 +30,21 @@ split: synchronized-mirror
 > outbound-stream mandate in § 4 (marker `adr-2026-07-12-interactive-outbound-mandate`)
 > is unchanged by this flip.
 
+> **Amended by ADR-2026-08-07 (Accepted 2026-08-07) — attach reconnect is
+> bounded-retry, not best-effort.** D5 and D6 of
+> [`ADR-2026-08-07-onboarding-is-the-only-user-action.md`](ADR-2026-08-07-onboarding-is-the-only-user-action.md)
+> apply to the attach leg. A close the peer marks **retryable** is retried: the
+> client consults that flag *before* branching on the close code, never after —
+> a stale-epoch close is the peer's documented way of saying "the prior leg has
+> not been collapsed yet, come back", and treating it as terminal turns a
+> transient handover into a permanent disconnect. A genuinely terminal close is
+> re-minted and re-dialed under a bounded budget; exhausting the budget emits a
+> condition (D7) and terminates or releases the session rather than leaving it
+> alive, holding a capacity slot, accruing wall-clock, and unreachable from every
+> client. D6 governs the kill path in the same breath: a kill is reported
+> delivered only when a live peer leg received the frame — the room existing is
+> not the frame arriving. None of this touches the synchronized region in § 4.
+
 ## Context
 
 The OSS `donmai` runtime is **headless by design**. A session clones a repo, spawns

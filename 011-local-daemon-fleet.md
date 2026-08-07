@@ -96,7 +96,8 @@ $ donmai daemon setup
 Welcome to Donmai. Let's get your machine working.
 
 [1/5] Machine identity
-  Machine ID (auto-generated): mac-studio-marks-office
+  Machine ID (minted once, opaque): hst_01J9Z4T7Q2K8V3RB
+  Display name (yours to change):   Mac Studio — office
   Region (helps the scheduler with latency): home-network
   Continue? [Y/n]
 
@@ -142,6 +143,18 @@ Welcome to Donmai. Let's get your machine working.
 The wizard writes `~/.donmai/daemon.yaml` matching the schema in `004`. Idempotent: re-running re-prompts for changed values without resetting unchanged ones.
 
 The Step 3 "Donmai Platform (SaaS)" choice walks through registration with `donmai.dev/dashboard`; that branch is documented in the platform-extensions doc.
+
+### Machine identity is minted once and referenced, never derived
+
+Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D1, the identity Step 1 captures is **opaque, minted once at onboarding, and held in exactly one record**. It is never derived from mutable environment state — `os.Hostname()`, the DHCP-assigned name, the network the machine happens to be on — and it is never re-derived per config file or per served scope. A machine that keeps several per-scope configs reads the same identity from all of them; a host carrying two identities for two scopes is a defect, not a supported layout. The human-readable display name is separate, freely mutable, and carries no keying weight.
+
+Rotation is an explicit, deliberately-initiated operation, never a side effect of the environment changing. Every piece of state keyed on the identity — operator pins, deletion tombstones, host↔scope bindings — survives a rotation, or the identity is not durable and D1 is not met. The record itself is a state-dir-resident artifact; see `ADR-2026-06-03-injectable-state-dir.md`.
+
+### "Setup complete" is a post-condition, not a step count
+
+Per the same ADR's D6, the wizard may print a readiness claim only when the end state it claims is verified: the identity record exists, a credential for every consented scope exists *and authenticates*, and the host is present in the orchestrator's admission set. "The step ran" is not "the step's post-condition holds", and a daemon that answers its own local control API while holding no registration is not ready.
+
+The corollary matters more than the rule, because it is the common path: a step **skipped because its post-condition already holds** is complete, not incomplete. Recording a satisfied-and-skipped step as not-done drops a fully working install back into the wizard on the next bare invocation. Readiness is derived from live state, never from a persisted journal of which prompts were answered.
 
 ## Config file walkthrough
 
@@ -196,6 +209,17 @@ Where the daemon receives work assignments.
 - `https://your-deployed-orchestrator.example.com` — self-hosted orchestrator endpoint.
 - `donmai.dev/dashboard` — the SaaS control plane (platform-extension; see the platform-extensions doc for setup).
 
+### Which keys are hot-reloadable
+
+This is contract, not commentary. Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D3, anything captured at process start that can legitimately change during the process lifetime is a defect. Registration claims, the served-scope set, project→scope routing maps, per-project allowlists, and per-scope credential contexts are all **runtime-mutable**: editing them takes effect on the running daemon with no restart, no re-pairing, and no re-authentication.
+
+Two constraints bind the watcher that implements this:
+
+- **Watch the directory, not one basename.** A multi-scope host keeps one config file per served scope. A watcher bound to the primary file leaves every other scope frozen at boot — which is the frozen-state defect wearing a hot-reload badge.
+- **Merge per scope; never replace globally.** The reload composes each scope's project set into the shared spawner. A replace-shaped reload evicts the other scopes' projects and trades a frozen-state bug for a destructive one.
+
+`capacity.*`, `autoUpdate.*`, and `orchestrator.url` are the deliberate exceptions: they describe the process itself rather than what it serves, so a change to them may require a drain-aware restart. Everything describing *what the host serves* may not.
+
 ## Drain semantics
 
 When the daemon needs to restart (auto-update, manual stop, system reboot scheduled), it drains:
@@ -206,6 +230,8 @@ When the daemon needs to restart (auto-update, manual stop, system reboot schedu
 4. **Restart.** New process boots, re-registers, status returns to `ready`.
 
 For graceful planned restarts (e.g., a reboot), `donmai daemon drain` returns when drain completes. CI scripts or shutdown hooks can wait on it.
+
+**A scope change is not on this list.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D3, adding or removing a project or an organization on a host is a runtime operation, so no user-facing instruction is ever "restart the service." The restarts that remain — auto-update, an operator stop, a reboot — always drain first, because a configuration change must never cost in-flight work.
 
 ## Recovery from crash
 
@@ -223,6 +249,11 @@ If the daemon refuses to start, common causes:
 - **Disk full** in the pool directory. Pool members are scratch FS; running out of disk halts acquires. Default cleanup: warn at 80%, refuse new pool members at 90%.
 
 `donmai daemon doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, pool sane) and prints the failing condition.
+
+Every remediation string above is an admission that the daemon could not heal itself. Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D4 each one is therefore a work item rather than a UX affordance: a hint may not name an action whose inputs the daemon or its orchestrator already holds. Two rules follow, and both are cheap to enforce.
+
+- **A hint naming a command the binary does not register is a gate failure, not a typo.** Assert every user-facing remediation string against the registered command set.
+- **A condition that stops the host from serving does not live only in this log file.** It rides the host-status signal outward so it is visible wherever the user actually is — D7, on the signal completed by `ADR-2026-08-03-daemon-host-status-signal-completion.md`.
 
 ## Terminal workarea lease recovery and reaping (Accepted architecture; implementation and release pending)
 

@@ -126,6 +126,14 @@ The flow:
 
 This is the **dial-out** transport flavor (per `004`). The orchestrator does not initiate connections to workers; workers come to it. This is the right model for K8s pods, Docker containers, and the user's local Mac Studio fleet (over LAN, loopback, or VPN).
 
+**Registration claims are renegotiable, not frozen at step 2.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D3 and D9, the claims established at registration — capacity, capability tags, and above all the scope/project set the worker is authorized to serve — are runtime-mutable for the process lifetime:
+
+- **The host reports its enabled-scope set on every beat**, not only at register time. When that set travels on the registration wire alone, the orchestrator's admission mirror — the set it consults to decide where a work item may be routed — can be moved only by re-registering, which makes every scope change a process-restart event by construction.
+- **Desired state converges in both directions.** A change made on the host reaches the orchestrator's admission mirror; a change made on the orchestrator reaches the host and is ACKed as *applied* or as *failed*. A control channel written by only one of the two sides is a half-built feature: finish it or remove it.
+- **An op a lane cannot apply is a failure, never a silent drop.** A mutation dispatcher that skips past an op it does not recognize — while the sender has already marked the mutation delivered and gates redelivery on undelivered — loses the user's action exactly once, with no error anywhere. Unknown ops fail loudly and stay redeliverable; this is the discipline `ADR-2026-08-03-daemon-host-status-signal-completion.md` applied to `pool.deleted`.
+
+**Sequencing is load-bearing here.** Add the reported field and have the orchestrator consume it *before* any client stops restarting after a scope change. The reverse order yields a host that serves a scope the router will not send to — a silent failure strictly worse than the loud one it replaces.
+
 ### `Capabilities []string` — precedent for typed capability struct
 
 The current worker capability tags (`["claude", "codex", "amp"]`) are a **lightweight precedent** for what `004` formalizes as a typed `SandboxProviderCapabilities` struct. The migration path:
@@ -252,6 +260,10 @@ The orchestrator's session-end backstop (`packages/core/src/orchestrator/session
 - Detects existing PRs not captured in agent output
 
 Fields requiring agent judgment (`work_result`, `comment_posted`) cannot be backstopped — the orchestrator posts a diagnostic comment and blocks status promotion. This contract survives the architecture reframe; it's already provider-agnostic.
+
+**Fail-closed is paired with a signal, never with silence.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D5, a pre-spawn check that refuses to start a session — an unresolvable credential, a scope the worker is not authorized for, a project it cannot route — is right to fail closed, because a wrong answer there crosses a tenant boundary. What it may not do is abort the claim quietly or loop on it. The claim is NACKed back to the queue so another host can take it, and the host reports that it cannot serve, so the condition is visible off the machine (D7). A fail-closed rail with no signal converts a routing problem into an invisible one.
+
+**An unreachable session does not hold capacity indefinitely.** If a session's control or attach transport terminates and cannot be re-established within a bounded retry budget, the session terminates or emits a condition. It does not stay alive, occupy a concurrency slot, and accrue wall-clock while being reachable from nowhere. Supervising a local process is not evidence that the session still serves anyone; bounded-retry-then-signal is the contract (D5 with D7, never D5 alone).
 
 ### The turn-result manifest is the agent-owned half of the contract (ADR-2026-06-15)
 
@@ -441,6 +453,7 @@ Any future binary added to the OSS distribution channel inherits this rule. Its 
 | Worker registration + dial-out | ✅ ships | inherits |
 | Work queue (Redis or in-memory) | ✅ ships | ✅ Redis |
 | Completion contract + backstop | ✅ ships | inherits |
+| Runtime scope-change operation ("this host serves this scope") | ✅ owns (mutation rail + hot reload) | extends with the admission mirror + multi-client fan-out |
 | Execution-cell admission + local receipts | ✅ owns; implementation pending | inherits + aggregates |
 | `SessionRef` lifecycle | ✅ owns; implementation pending | aggregates + extends control |
 | Child delegation transports | ✅ owns contract; implementation pending | governs + extends |
@@ -454,6 +467,8 @@ Any future binary added to the OSS distribution channel inherits this rule. Its 
 | macOS signing rule | ✅ ships (architectural commitment) | extends with operational state |
 
 OSS users get a fully working orchestrator + governor + worker fleet on their Mac Studio. The SaaS extensions (Topology view, Routing Intelligence panel, multi-tenant orchestration, cloud-burst aggregation, the platform-merge-queue specifics) live in the platform-extensions doc.
+
+**One server-side operation per user intent.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D8, this table is about *who implements* a concern — never about *who can reach it*. Each state-changing intent ("this host serves this scope", "stop this session", "drain this host") is expressed once, server-side, and every client calls that same operation. Clients carry no machine-facing concepts and no client-specific write path. Two consequences bind reviewers: a capability reachable from only one client is not shipped, and physical presence at a machine is never a requirement for anything except installing the host service.
 
 ## Open questions
 

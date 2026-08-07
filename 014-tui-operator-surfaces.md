@@ -177,6 +177,12 @@ Generic states ship in `tui-components` core; domain-specific states ship via pl
 
 Same shape for work types and activity types. Closes the drift described in the `tui-components` exploration ("`theme/worktype.go` hardcodes work types in the OSS shared lib, but the architecture treats work-type as orchestrator-internal").
 
+### Host conditions are registry entries, not log lines
+
+Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D7, anything that makes a host unable to serve — a failed scope registration, an unresolvable allowlist entry, a dead credential socket, an abandoned attach leg — registers as a condition and rides the host-status signal outward, so it renders in every client rather than being observable only in a local log file. The registry is what makes that affordable: a new condition is one `RegisterStatus` call, not a switch-statement edit in three surfaces.
+
+Conditions clear when they clear. An entry that latches on first occurrence and never resets records the worst moment a host or session ever had, which is not a health signal — it is noise that teaches operators to ignore the surface. Every registered condition therefore declares how it is cleared (superseded by a later beat, resolved by its own post-condition, or expired), and renderers show current state rather than high-water marks.
+
 ## OSS vs SaaS responsibilities
 
 | Concern | OSS | SaaS |
@@ -187,8 +193,11 @@ Same shape for work types and activity types. Closes the drift described in the 
 | Default + dark + high-contrast themes | ✅ ships | inherits |
 | `donmai` (OSS binary surface) | ✅ ships | consumed via `afcli.RegisterCommands` |
 | Architecture-concept registries (status, worktype, activity) | ✅ ships generic | extends domain-specific |
+| Host-condition registry entries (unable-to-serve conditions) | ✅ ships generic | extends + aggregates cross-machine |
 
 The OSS layer ships a complete TUI for the local-daemon flow (per `011`). The platform extensions doc carries the SaaS-distinct surfaces — multi-tenant brand theme administration, the Live capacity contract, the dual-surface discipline obligation, the routing-intelligence/audit-chain TUI counterparts.
+
+**Readiness is derived from live state.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D6, no surface on either side of this table may render "ready" from a persisted journal of completed setup steps. A daemon answering its own local control API while holding no registration is not ready, and a setup step skipped because its post-condition already held is complete rather than pending. Every surface reads the same live predicates — identity record present, credential authenticating, host present in the orchestrator's admission set — so two surfaces can never disagree about whether a machine is working.
 
 ## Open questions
 
