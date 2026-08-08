@@ -1,7 +1,7 @@
 # 001 — Layered Execution Model
 
-**Status:** Canonical (initial draft)
-**Last updated:** 2026-04-27
+**Status:** Canonical
+**Last updated:** 2026-08-07
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/001-layered-execution-model-platform-extensions.md`)
 
 This is the canonical mental model for the Donmai OSS execution layer. Every other doc in this corpus elaborates one slice of what's described here. If a contributor reads only one doc, it should be this one.
@@ -126,9 +126,59 @@ Detail: **`008-version-control-providers.md`** for VCS specifically. IssueTracke
 Where work physically happens. Four sub-concepts that compose:
 
 - **SandboxProvider** — *where* compute runs. Local Mac Studio fleet, Vercel Sandbox, E2B, Modal, Daytona, Docker, Kubernetes. Owns capacity, billing, network topology.
-- **WorkareaProvider** — *what filesystem state* the worker sees. Acquire-deterministic-state / release-with-disposition lifecycle. Local impl uses a warm pool with scoped clean; snapshot-capable providers (E2B, Vercel) accelerate via filesystem or memory snapshots.
+- **WorkareaProvider** — *what filesystem state* the worker sees. Acquire-deterministic-state / release-with-disposition lifecycle. Local impl uses a warm **workarea cache** with scoped clean; snapshot-capable providers (E2B, Vercel) accelerate via filesystem or memory snapshots.
 - **AgentRuntimeProvider** — *which model + agentic protocol* dispatches the LLM process. Claude (Anthropic), Codex (OpenAI), Amp, Spring AI, OpenCode, Ollama, Gemini, plus A2A as a transport flavor for federated work. Each declares capabilities like `supportsMessageInjection`, `supportsSessionResume`, `supportsToolPlugins`, `canSpawnNativeChildren`, `canRunHeadlessly`, `emitsSubagentEvents` (drives operator-surface child visibility), `streamingTransport` (sse / ndjson / websocket / none), and `humanLabel` companions for capability flags so TUI surfaces don't re-encode semantics. Each also declares a **stability tier** (`stable | beta | unstable | registration-only`); the orchestrator (`013`) consults the tier when placing work, warning on `unstable` and refusing `registration-only` unless the session is explicitly a probe.
 - **Worker** — the agent process itself. Registers with the orchestrator (dial-in or dial-out per `SandboxProvider.capabilities.transportModel`) and consumes work.
+
+#### The building blocks: execution context, sandbox, pool, capacity profile
+
+Those four sub-concepts are *contracts*. These four are the **nouns** — the
+things an operator provisions, an author names, and the resolver places work
+into. They are defined here because using any of them loosely makes the other
+three read wrong. Canonical:
+`ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` (R1/D1/D2).
+
+```
+capacity profile   named policy: an ordered list of pools + how to choose among them
+      │                                                  (org-authored, project-granted)
+      ├── pool      a SOURCE of execution contexts from ONE provider
+      │   ├── pool  another source, possibly a different provider
+      │   └── …     ordering and fallback live in the profile, never inside a pool
+      │
+      └── each pool yields ▸ execution context   the unit — one concrete place one session runs
+                              ├── kind: persistent host slot   (long-lived, enrolled)
+                              └── kind: sandbox                (ephemeral, provider-minted)
+```
+
+- **Execution context — the unit.** One concrete place one session runs. It is
+  the only thing that can actually realise a capability, and it is the exact
+  placement a resolved execution cell carries. On the operator wire and in the
+  CLI the noun is **`instance`**.
+- **Sandbox — one *kind* of execution context**, the ephemeral, provider-minted
+  kind. **Not** the generic word for the unit. The other kind is a slot on a
+  persistently enrolled host; the shipped discrimination is
+  `instanceKind: persistent_host | on_demand_sandbox`. The `SandboxProvider`
+  family above keeps its name deliberately — it provides execution contexts of
+  every kind, and its contract is Accepted and in motion.
+- **Pool — a single-provider *source* of execution contexts.** One substrate
+  provider plus its credential and configuration, owned by the org and named by
+  a human; it enrolls persistent hosts, or mints ephemeral sandboxes on demand.
+  A pool is **not** a bag of heterogeneous sandboxes, **not** a kind of
+  execution context (nothing runs "on a pool"), **not** sized (capacity
+  accounting lives on enrolled machines, so a provider-configured pool has no
+  ceiling at all), and **not** a host or a set of named hosts.
+- **Capacity profile — a named policy over pools.** An ordered list of pools
+  plus the rules for choosing among them. Org-authored, granted to projects,
+  reusable across them. **This is the one place unlike capacity composes** — a
+  pool that carried its own fallback would be a second truth source for the same
+  decision.
+
+Two consequences worth stating once, here, rather than rediscovering them per
+doc: **authors name pools, never hosts** (pool naming *is* the placement
+mechanism — machine-specific pools today, geographic pools at scale), and the
+difference between naming a pool and naming a context is a difference of *time*,
+not of kind — a pool is a placement resolved at claim, a context is a placement
+resolved exactly.
 
 The executable unit is a **resolved execution cell**, not a fused provider id. A versioned `DispatchIntent` keeps harness, model identity, serving endpoint, auth binding, placement, session mode, and requested capabilities independent. Admission intersects declared compatibility with live inventory, auth/placement proof, and evidence tier, then persists an immutable receipt before enqueue. Autonomous and human-controlled sessions return the same `SessionRef`; human control is a capability/lease. Every child is admitted through the same contract, while its delegation transport (`native_harness`, `platform_dispatch`, `a2a`, or `host_cli`) belongs on the graph edge. Full contract: `ADR-2026-08-05-versioned-execution-cell-and-session-reference.md`.
 
@@ -139,8 +189,8 @@ The split between SandboxProvider and WorkareaProvider is critical. They are not
 The codebase's existing `AgentProvider` (`packages/core/src/providers/types.ts`) is the OSS reference implementation of `AgentRuntimeProvider`. The renaming is corpus-only; the type stays the same.
 
 Details:
-- **`003-workarea-provider.md`** — Workarea contract and pool semantics.
-- **`004-sandbox-capability-matrix.md`** — Sandbox capability flags and the cross-provider scheduler.
+- **`003-workarea-provider.md`** — Workarea contract and workarea-cache semantics.
+- **`004-sandbox-capability-matrix.md`** — Sandbox capability flags and capability-filtered routing over capacity profiles.
 - **`013-orchestrator-and-governor.md`** — Worker, AgentRuntime, governor, dispatch loop.
 
 ### Layer 4 — Composition
@@ -152,7 +202,7 @@ A **Kit** declares:
 - **Provide** — contributions to the session: build/test/validate commands, prompt fragments, tool permissions, MCP servers, skills (SKILL.md), agent templates, A2A skill exports, *toolchain demands* (e.g., `java = "17"`).
 - **Composition rules** — ordering, scope, conflict resolution when multiple Kits apply.
 
-The killer architectural mechanic: **a Kit's toolchain demand is a signal to the SandboxProvider+WorkareaProvider scheduler.** Declaring `provide.toolchain = { java = "17" }` causes the scheduler to route to a warm pool member, image, or snapshot that satisfies the demand. Kits never know about sandbox providers; sandbox providers never know about Kits. The toolchain spec is the contract between them.
+The killer architectural mechanic: **a Kit's toolchain demand is a signal to the SandboxProvider+WorkareaProvider scheduler.** Declaring `provide.toolchain = { java = "17" }` causes the scheduler to route to a warm workarea-cache entry, image, or snapshot that satisfies the demand. Kits never know about sandbox providers; sandbox providers never know about Kits. The toolchain spec is the contract between them.
 
 This layer is where the strategic timing call lives: the AI ecosystem is converging on a buildpacks-shaped pattern (MCP Registry, Anthropic Skills, AgentStack, nori-skillsets), but no system today bundles all four required dimensions (manifest + detect + registry + composition) with host-driven introspection. Landing this layer with a real spec is a chance to set the standard rather than adopt one.
 
@@ -190,7 +240,7 @@ Bringing the layers together, here are the ten typed Provider Family contracts. 
 | Family | Layer | OSS-shipped impl | Platform-shipped alternates |
 |---|---|---|---|
 | **SandboxProvider** | Execution | Local (Mac Studio fleet) | Vercel Sandbox · E2B · Modal · Daytona · Docker · K8s |
-| **WorkareaProvider** | Execution | Local-pool (scoped clean) | Snapshot-aware variants per sandbox |
+| **WorkareaProvider** | Execution | Local workarea cache (scoped clean) | Snapshot-aware variants per sandbox |
 | **AgentRuntimeProvider** | Execution | Claude (Anthropic) | Codex · Gemini · Amp · Spring AI · OpenCode · Ollama · A2A |
 | **VersionControlProvider** | Integration | Git (GitHub) | Atomic · S3 · structured-content backends |
 | **IssueTrackerProvider** | Integration | Linear | Jira · Asana · Monday · Sheets/Notion · proxy mode |

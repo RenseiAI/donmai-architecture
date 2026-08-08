@@ -28,7 +28,7 @@ There is currently **no home for scheduled, non-agent, tooling-driven batch work
 
 The forces:
 - Blame requires the **full git history reachable to the merge commit** (shallow clones omitting the merge commit fail). Reachability requires the **full repo tree + language toolchains** (`go`, `node`). These can only run where git + toolchains live — a real sandbox, not a serverless function.
-- The platform must NOT host users' private source on any single personal/founder machine (SaaS-first mandate, 2026-06-01); execution must run in the **user-configured capacity pool / sandbox**.
+- The platform must NOT host users' private source on any single personal/founder machine (SaaS-first mandate, 2026-06-01); execution must run in an execution context sourced from the **user-configured capacity pool**. *(Corrected 2026-08-07: this line read "capacity pool / sandbox", as though the two were interchangeable. They are not — a pool is a single-provider source of execution contexts, and a sandbox is one ephemeral kind of the contexts it sources. `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` D2 names this exact phrase as the correction. The decision is unchanged.)*
 - The OSS layer must ship a working implementation; the contract must be reusable by on-prem and SaaS identically.
 
 A directly analogous pattern already exists and ships: the **in-box git-ops runner** (REN-1554) clones a repo and runs git with per-org injected credentials inside the session sandbox, via the `WorkareaProvider` + `VersionControlProvider` contracts (`003`, `008`). Code-survival is the same shape (clone → run git → return a result), but **scheduled and non-agent**.

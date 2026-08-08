@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-07
 boundary: shared
 split: inline-addenda
@@ -7,18 +7,23 @@ split: inline-addenda
 
 # ADR-2026-08-07 — Execution context, pool, and placement: one noun per referent, and where unlike capacity composes
 
-**Status:** Proposed
-**Date:** 2026-08-07
+**Status:** Accepted 2026-08-07 — the reference-doc edits enumerated in § "What
+the accepting commit carried" landed in the accepting commit, as this corpus
+requires.
+**Date:** 2026-08-07 (proposed and accepted same day; three product-owner
+acceptance rulings **R-A–R-C** arrived between the two, recorded in § "What the
+accepting commit carried")
 **Boundary:** shared
 **Authors:** mark, agent:claude
 
 **Amended 2026-08-07, same day, after first draft:** five product-owner rulings
 arrived after this ADR was first written and PR'd. They are folded in below as
 **R1–R5**, and they answer four of the five questions the first draft deferred.
-The status is **deliberately still `Proposed`** — this corpus requires the
+The status stayed `Proposed` through that amendment — this corpus requires the
 affected reference-doc edits to land in the *same commit* that flips an ADR to
-`Accepted`, and those edits are not in this commit. See § "To accept this ADR"
-for exactly what the accepting commit must carry.
+`Accepted`, and they were not in that commit. They are in the accepting commit;
+see § "What the accepting commit carried" for exactly what it carried and for
+the three acceptance rulings that shaped it.
 
 Where a ruling contradicts the first draft's stated default, **the ruling wins
 and the draft text has been rewritten**, not annotated. Specifically: the first
@@ -93,6 +98,12 @@ contradicts, and because several recent ADRs in this corpus already carry honest
 non-implementation checkpoints that a reader should not mistake for shipped
 behaviour.
 
+> **Read this subsection as of authoring.** It describes the corpus on
+> 2026-08-07 *before* acceptance. The `004` defects it catalogues were fixed by
+> the accepting commit — see § "What the accepting commit carried". It is
+> retained unedited because it is the evidence the decisions rest on, and
+> rewriting it to past tense would erase why they were made.
+
 - **`004-sandbox-capability-matrix.md` has not been touched since this repo's
   initial public release** (`a22bd3d`, 2026-05-24). Its header still reads
   `Last updated: 2026-05-06`. It therefore predates the two-axis provider model
@@ -101,9 +112,11 @@ behaviour.
   `DispatchIntent`, `ResolvedExecutionCell`, `AdmissionReceipt`, or
   `PlacementRef`. Two specific claims in it are now counterfactual:
   - **It advertises burst routing that does not exist.** `004` § "OSS vs SaaS
-    division of labor" carries the row `Capacity-aware burst routing | ✅ ships
-    local-only | ✅ ships hybrid (local + cloud)`, and its opening premise (`:9`)
-    is scaling "cloud-burst across multiple providers." The platform corpus
+    division of labor" carried the row
+    `Capacity-aware burst routing | ✅ ships local-only | ✅ ships hybrid (local + cloud)`,
+    and its opening premise (`:9`) was scaling `cloud-burst across multiple providers`.
+    `013` § "OSS vs SaaS responsibilities" carried the same qualifier a second
+    time, in its `Cross-machine fleet aggregation` row. The platform corpus
     records the opposite: the routing column that carried burst intent was hard
     deleted as one of seven behaviourally-dead knobs, and its own Consequences
     section names the loss — the *names* documented an intent that now has no
@@ -346,20 +359,47 @@ Applying `ADR-2026-08-03` D4 rule 1 to the word it was never applied to.
 2. **Rename referent 2 (one machine).** `013:160` and `004:350`/`:444`/`:471`
    stop saying a daemon "registers as a worker pool." A daemon registers **as a
    host** and offers execution contexts. This is prose only — no wire, no code.
-3. **Rename referent 3 (the warm workarea cache).** `003` § "The local-pool
-   implementation" becomes the **workarea cache**; `011`'s daemon control
-   surface becomes `GET /api/daemon/workarea/stats` and
-   `POST /api/daemon/workarea/evict`, with `donmai daemon stats --workarea`.
-   This one **is** a wire change on the OSS daemon control API, which this
-   corpus owns (`ADR-2026-05-07`), so it takes the deprecation discipline of
-   `ADR-2026-08-03` D5.4: the old paths and flag ship as aliases that **declare
-   their removal version at creation**, and a release gate fails the build when
-   an alias outlives its declared version. An alias with no removal version is a
-   defect.
+3. **Rename referent 3 (the warm workarea cache).** The **prose** rename lands
+   now: `003`'s former § `The local-pool implementation` becomes § "The workarea cache",
+   and every reference doc describes the object as a cache of workareas. The
+   **wire** rename — `GET`/`POST /api/daemon/pool/{stats,evict}` →
+   `/api/daemon/workarea/*`, `GET /api/daemon/stats?pool=true` →
+   `?workarea=true`, the `pool` object in that response, and
+   `<binary> host stats --pool` → `--workarea` — is **authorized here and
+   deliberately not implemented in this accepting commit.** It is a wire change
+   on the OSS daemon control API, which this corpus owns (`ADR-2026-05-07`), so
+   it takes the deprecation discipline of `ADR-2026-08-03` D5.4: the old paths,
+   query parameter, response field and flag ship as aliases that **declare their
+   removal version at creation**, and a release gate fails the build when an
+   alias outlives its declared version. An alias with no removal version is a
+   defect. Two constraints bind whoever implements it: **the query parameter and
+   the response field must be aliased, not just the paths** (an unknown query
+   parameter is ignored rather than rejected, and the response field is
+   `omitempty`, so an un-aliased rename degrades silently), and **the removal
+   version is chosen at implementation time**, from the release that actually
+   creates the aliases, one minor later per the cadence the `daemon`→`host`
+   aliases set. It is not fixed here, because this commit does not create them.
 4. **Rename referent 4 (local disk envelope).** `capacity.poolMaxDiskGb` becomes
-   `capacity.workareaMaxDiskGb`, same alias discipline. Note this key also
-   compounds the `capacity` collision — it reads as an org concept on a
-   machine-local setting; the rename resolves both.
+   `capacity.workareaMaxDiskGb` — **also authorized, also not implemented here**,
+   and it ships in the same lock-step change as referent 3 under the same alias
+   discipline. Note this key also compounds the `capacity` collision — it reads
+   as an org concept on a machine-local setting; the rename resolves both.
+   **The alias here must be a config-struct read alias, not a CLI allowlist
+   entry, and the config writer must keep emitting the old key until the alias
+   is retired**: the daemon's YAML loader is non-strict, so an unrecognised key
+   is silently dropped, and `0` on this field means *no limit* — a one-way
+   migration would silently disable eviction on a version-skewed daemon's
+   existing config.
+
+**Why D2.3 and D2.4 are authorized-not-implemented.** An earlier revision of
+this ADR described the renamed wire surface as the current one and shipped the
+alias table alongside a code change that implemented part of it. That is exactly
+the failure mode the corpus-describes-shipped-code rule exists to prevent, in
+the document asserting the rule. The vocabulary work — which is prose, and which
+is the bulk of this ADR — is decoupled from the wire rename and accepted now;
+the wire rename ships later as one reviewable lock-step doc-and-code change, and
+`011`/`003` describe the **current** `pool`-spelled surface truthfully until it
+does.
 
 `ADR-2026-06-01:31`'s "capacity pool / sandbox" phrase is corrected to name one
 noun.
@@ -484,7 +524,7 @@ as such. Today's object is a per-project singleton auto-minted at the org
 default and edited through a per-project `show`/`set`/`test` surface. A profile
 is a reusable object with list/create/update/delete semantics analogous to
 pools, plus a grant edge to projects. Anyone sizing this as "wording only" has
-mis-sized it (see § "To accept this ADR" and the rename-vs-behaviour table).
+mis-sized it (see § "What the accepting commit carried" and the rename-vs-behaviour table).
 
 Two invariants the promotion must preserve, both already true today:
 
@@ -499,7 +539,7 @@ Sequencing note: D6.2 and D8 (grant enforcement) share a migration and must be
 planned together, but they are **not** the same decision — D6.2 creates the
 grantable object; D8 deliberately does not enforce grants yet.
 
-### D7 — There is no burst; the two artifacts that say otherwise are corrected now, and the first iteration is failure-triggered routing-around
+### D7 — There is no burst; the three artifacts that say otherwise are corrected (two here, one in the paired change), and the first iteration is failure-triggered routing-around
 
 **Recorded as fact:** no accepted overflow policy, no local-exhaustion trigger,
 no schema, and no ADR anywhere describes when or how a pool spills to another.
@@ -510,13 +550,38 @@ which is also a direct violation of `ADR-2026-08-07-onboarding-is-the-only-user-
 D4 (no remediation hint for platform-computable state) delivered to the wrong
 role.
 
-**Decided now (removal of false claims):**
+**Decided now (removal of false claims).** Two of the three artifacts are
+corrected in this accepting commit; the third is platform-side and lands in the
+paired change. Which is which is stated per bullet, because "corrected" is a
+fact a reader should be able to check rather than a claim they have to take.
 
 - `004`'s `Capacity-aware burst routing` row and its "cloud-burst" premise are
   removed or explicitly marked historical.
-- The composing CLI's route help text still advertises a `cloud-burst` selector
-  against a column that was dropped server-side and is pinned-absent by an
-  existing test. It is deleted. (Platform-side; see the mirrored stub.)
+- **`013`'s `Cross-machine fleet aggregation` row and its extension list carry
+  the same qualifier and are corrected the same way — in this commit.** The row
+  read `✅ owns (cloud-burst)` and the paragraph below it listed
+  `cloud-burst aggregation`. Aggregation is real and stays; the burst qualifier
+  goes. This was missed in the first pass of the accepting commit — which edited
+  `013` at `:160` for the D2.2 noun rename without sweeping the file for D7 —
+  and is corrected before merge. *(Heading amended 2026-08-07: this decision
+  covers **three** artifacts, not two.)*
+- **Artifact 3 — the composing CLI's `capacity route` help text — is corrected
+  in the paired change, NOT here.** It advertises a `cloud-burst` selector
+  against a route-document column that was dropped server-side and is now
+  pinned-absent by an existing test, so the help text promises a knob the wire
+  cannot carry. Deleting it is platform-side (see the mirrored stub) and was
+  verified still outstanding at the time this ADR was accepted — the fix is up
+  for review and unmerged. This bullet deliberately does not say "corrected
+  now": a certification a reader cannot check is worth less than no
+  certification.
+
+**The absence is corroborated, not merely unfound.** An audit of the hosted
+plane's dispatch history found **no fall-back events** and **no dispatch ever
+re-placed after its initial binding**. The mechanism that does exist is a static
+capability-mismatch filter over declared provider flags with **no capacity or
+availability input**, so it is structurally incapable of detecting the
+exhaustion a burst would react to. This is stronger than "no design exists": no
+design exists *and* nothing running has ever behaved as if one did.
 
 **Deferred, with the reason and the first iteration both named (R2).**
 
@@ -681,6 +746,15 @@ several axes.
    discipline** of `ADR-2026-08-03` D5.4 — an alias with no removal version is a
    defect, and that rule exists because an earlier alias generation outlived its
    promise by 84 releases.
+7. **The sizing pass inherits a written inventory, not a fresh search.** D2.3
+   renamed referent 3 in `003`, `004`, `011` and `013`; it left the same
+   referent standing in `005`, `006`, `007`, `008` and `014`. Those sites are
+   enumerated by line and phrase in § "Not edited — and exactly how far that
+   goes", already split into the two buckets the sizing pass must produce:
+   prose (`005`, `006`, `007`, `008`, plus `014:14`) versus surface (`014`'s
+   `WorkareaPoolPanel` primitive and its `"Warming pool"` rendered label). The
+   sizing pass starts from that table. Whoever runs it should re-scan rather
+   than trust the line numbers, which drift.
 
 ### Rename versus behaviour change — explicit
 
@@ -688,14 +762,14 @@ several axes.
 |---|---|---|
 | D1 `sandbox` → execution context / instance for the unit | **Rename** | Prose and surface wording. No contract, no schema. `SandboxProvider` family name unchanged. |
 | D2.2 daemon "worker pool" → host | **Rename** | Prose in `013`, `004`. Nothing executable. |
-| D2.3 workarea cache + `/api/daemon/pool/*` | **Rename with a wire break** | OSS daemon control paths and one CLI flag. Aliases with declared removal versions; behaviour identical. |
-| D2.4 `capacity.poolMaxDiskGb` | **Rename with a config-key break** | Alias with declared removal version. |
+| D2.3 workarea cache + `/api/daemon/pool/*` | **Prose rename now; wire break authorized, not implemented** | The docs' *prose* says workarea cache today. The OSS daemon control paths, `?pool=true`, the stats response field and the `--pool` flag are unchanged and still ship as `pool`. Renaming them (aliases with declared removal versions; behaviour identical) is authorized and ships as its own lock-step change. |
+| D2.4 `capacity.poolMaxDiskGb` | **Config-key break authorized, not implemented** | The key still ships as `capacity.poolMaxDiskGb`. The rename needs a struct-level read alias with a declared removal version, and the writer must keep emitting the old key until it retires. Ships with D2.3. |
 | D3 placement as one axis, two times | **Reconciliation** | Documentation only. `PlacementRef` unchanged; no new kind. |
 | D4 configured vs observed membership | **Clarification** | Documentation only. Names a gap (no ceiling on provider-configured pools); does not fill it. |
 | D5 harness as authoring input | **Delivery of an accepted decision** | Behaviour change in the closed implementation only; the OSS contract already says this. |
 | D6.1 pools stay single-provider | **Records an undecided given as a decision** | No change. Closes the question. |
 | D6.2 route → named capacity profile | **Shape change** | A new named, org-authored, project-granted object with list/create/update/delete + a grant edge, replacing a per-project singleton. Migration + surface work. **Not wording-only.** |
-| D7 burst | **Removal of false claims + a scoped first iteration** | Two documents and one help string corrected; failure-triggered routing-around named as the first form; predictive burst still undesigned. |
+| D7 burst | **Removal of false claims + a scoped first iteration** | Two corpus documents corrected here and one help string in the paired platform change; failure-triggered routing-around named as the first form; predictive burst still undesigned. |
 | D8 grant enforcement | **Explicit non-change, with an exit condition** | Nothing. The field stays advisory; the revisit trigger is recorded. |
 | D9 authors name pools, never hosts | **Closes a question; forbids a surface** | No host-pinning authoring affordance is to be built. Raises the bar on pool naming/renaming. |
 | D10 "sandbox provider" ambiguity | **Names a defect; authorizes a refactor gated on sizing** | Nothing yet. The sizing pass is the next artifact; `PlacementRef.kind: 'sandbox'` is excluded from any sweep. |
@@ -754,38 +828,182 @@ substrate capability kinds; provider-honoured serving; and whether the OSS
 daemon may ever advertise capability — that last needs its own OSS-canonical
 ADR and is not pre-approved by anything here.
 
-## To accept this ADR
+## What the accepting commit carried
 
-**This ADR stays `Proposed` until a single commit carries both the status flip
+**This ADR stayed `Proposed` until a single commit carried both the status flip
 and every reference-doc edit below.** That is this corpus's rule, and it is why
-the status was not flipped when the rulings landed: the rulings settle the
-*decisions*, not the *documents*.
+the status was not flipped when R1–R5 landed: those rulings settled the
+*decisions*, not the *documents*. This section is now the **record** of what the
+accepting commit carried, retained in the shape of the original checklist so a
+reader can audit the acceptance against it.
 
-The accepting commit must edit, in this corpus:
+### The three acceptance rulings (R-A, R-B, R-C)
 
-| Document | Edit required |
+Three further product-owner rulings arrived at acceptance time and shaped what
+the accepting commit did. They are recorded here for the same reason R1–R5 are:
+so a later reader inherits the reasoning, not just the outcome.
+
+- **R-A — the platform-side ADR on org-provisions/project-consumes is accepted,
+  in the D6.2/D8 shape.** The capacity profile (D6.2) is the grantable object it
+  was waiting for; the grant edge exists but is **advisory, not enforced** (D8).
+  Accepting records that as the intended end state rather than leaving the ADR
+  `Proposed` for a fourth month by default. Platform-side; the edit is
+  enumerated in the mirrored stub.
+- **R-B — `004`'s cross-provider scheduler section is RECONCILED, not stamped
+  historical and not deleted.** It is rewritten to describe routing via capacity
+  profiles (composition one level up, pools single-provider). **The reasoning for
+  why per-session cross-provider routing was rejected must survive the rewrite** —
+  deleting it invites someone to re-propose it. It survives as § "Why routing does
+  not pick a provider per session".
+- **R-C — `011`'s wire break ships doc-and-code together.** *(Withdrawn for this
+  accepting commit on 2026-08-07; see below. The rule itself stands.)* R-C
+  originally required the accepting commit to land alongside the real rename and
+  its aliases in `donmai` and the composing binary, making acceptance a
+  coordinated multi-repo change rather than a docs commit.
+- **R-C, withdrawn for this commit — the wire rename is DECOUPLED.** Three
+  verification rounds found their defects clustered almost entirely on that
+  coupling: an alias table that scheduled the only field that existed for
+  deletion with no successor, a binding rule the paired code half-implemented,
+  and a one-way config-key migration that silently disabled eviction on a
+  version-skewed daemon. The vocabulary work was comparatively clean. So the
+  accepting commit carries **the vocabulary work and the status flip only**; the
+  wire rename (daemon paths, `--pool`, `capacity.poolMaxDiskGb`, the stats
+  response key) ships **later as its own lock-step change, where R-C is a single
+  reviewable claim**. D2.3/D2.4 above are marked authorized-not-implemented, and
+  `011`/`003` describe the current `pool`-spelled surface truthfully. R-C is not
+  repealed — decoupling is what lets it be honoured rather than asserted.
+
+### The reference-doc edits, as landed
+
+| Document | Edit carried |
 |---|---|
-| `004-sandbox-capability-matrix.md` | **Largest single edit.** Remove the `Capacity-aware burst routing` row and the "cloud-burst" premise at `:9` (D7); reconcile or explicitly mark historical the cross-provider scheduler section, which specifies per-session cross-provider routing the accepted model rejects; rename the "worker pool" usages at `:350`, `:444`, `:471` (D2.2); refresh the stale `Last updated:` header. |
-| `003-workarea-provider.md` | § "The local-pool implementation" → **workarea cache**; member/eviction vocabulary (D2.3). |
-| `011-local-daemon-fleet.md` | `:419-420` daemon control paths → `/api/daemon/workarea/*`; `:510` `--pool` flag → `--workarea`; `:513` `capacity.poolMaxDiskGb` → `capacity.workareaMaxDiskGb` — **each with an alias carrying a declared removal version** per `ADR-2026-08-03` D5.4. This is the only genuine OSS wire break in the ADR. |
-| `013-orchestrator-and-governor.md` | `:160` "registers as a worker pool" → registers as a **host** (D2.2). |
-| `001-layered-execution-model.md` | Add the building blocks (R1) to the noun table: the unit word, the sandbox-is-a-kind statement, the pool-is-a-source definition, and **capacity profile** as a new noun. Refresh the stale `Last updated:` header. |
-| `ADR-2026-06-01-code-survival-pool-execution.md` | `:31` "the user-configured capacity pool / sandbox" → name one noun. |
-| `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` | Record `pool` and `sandbox` as the **third and fourth** applications of its own D4 rule 1. Also refresh its status prose: it still says the OSS `host` factory "is not yet merged" and the downstream capacity migration is "in progress", both of which are stale. |
-| `README.md` / `AGENTS.md` | Update this ADR's index entry — the current text says "nothing to implement until Q1–Q5 are answered", which is no longer true. |
+| `004-sandbox-capability-matrix.md` | **Largest single edit.** Removed the `Capacity-aware burst routing` row and corrected the "cloud-burst" premise at § "Why this exists" (D7); **reconciled** the cross-provider scheduler section per R-B — it now describes capacity-profile routing over single-provider pools and retains the rejection reasoning; renamed the "worker pool" usages (D2.2); refreshed the stale `Last updated:` header. Second pass: the referent-3 usages the first pass left behind — the daemon-mode diagram's `WorkareaProvider local pool` / `warm pool members` box (now the **workarea cache**, with a renamed-from banner) — plus two regime-table cells that read `pool` for something that is not one (`Local pool` → `Local`, since that column names *providers*; "paused pools" → "paused **sandboxes**", since pause/resume is a sandbox primitive). One stray `rensei-daemon` label inside the same diagram — the corpus's only occurrence — corrected to `donmai daemon`. |
+| `003-workarea-provider.md` | § `The local-pool implementation` → § "**The workarea cache**"; member/eviction vocabulary swept to cache vocabulary (D2.3). Its unrelated § "Capability profile by sandbox" is per-sandbox capability data, **not** this ADR's `capacity profile` noun, and was correctly left alone. |
+| `011-local-daemon-fleet.md` | **Prose only.** Referent-3 vocabulary swept to *workarea cache* wherever the doc describes the object rather than a wire surface (the day-in-the-life walkthrough, drain/crash-recovery steps, `doctor`, the stats bullet). The daemon control paths, the `--pool` flag, the `?pool=true` query parameter, the stats response key and `capacity.poolMaxDiskGb` are **described as they currently ship**, and a new § "The `pool` wire spellings on this surface" explains the referent mismatch and records the rename as **authorized by D2.3/D2.4 and not yet implemented**, with the three constraints its implementer inherits. The wire break is the only genuine one in the ADR and is decoupled from this commit — see R-C above. |
+| `013-orchestrator-and-governor.md` | "registers as a worker pool" → registers as a **host** (D2.2). Second pass: the `Cross-machine fleet aggregation` row's `(cloud-burst)` qualifier and the `cloud-burst aggregation` extension-list item removed (D7), with the measured-absence evidence recorded inline. The first pass edited this file for D2.2 and did **not** sweep it for D7 — a same-file miss, and the reason the D7 bullet list now enumerates its artifacts by name. |
+| `001-layered-execution-model.md` | Added the building blocks (R1) to § "Layer 3 — Execution": the unit word, the sandbox-is-a-kind statement, the pool-is-a-source definition, and **capacity profile** as a new noun. Refreshed the stale `Last updated:` header. *(`001` carries no standalone noun table; Layer 3 is where the execution nouns are already defined, so that is where they landed.)* |
+| `ADR-2026-06-01-code-survival-pool-execution.md` | "the user-configured capacity pool / sandbox" → names one noun. A clarification to an `Accepted` ADR that changes no decision, so it lands as a direct edit under this corpus's clarification carve-out. |
+| `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` | Recorded `pool` and `sandbox` as the **third and fourth** applications of its own D4 rule 1. Refreshed its status prose: the OSS `host` factory **has** merged and shipped, so "not yet merged" was stale. |
+| `README.md` / `AGENTS.md` | Updated this ADR's index entry to `Accepted`. The generated `ADR-INDEX` block was regenerated with `scripts/gen-adr-index.sh`, not hand-edited. |
 
-Not touched by this ADR, confirmed: `002`, `005`, `006`, `007`, `008`, `014`,
-`015`, `016`.
+### Not edited — and exactly how far that goes
 
-**No `BOUNDARY-SYNC` region is touched** by the decisions as written — verified
-against the currently tracked marker pairs. If a later amendment reaches
-`ADR-2026-06-06-two-axis-provider-model.md` (which does carry a live
-synchronized marker and names the sandbox axis), the paired byte-identical
-commit rule applies, OSS side first, verified with
-`scripts/check-boundary-sync.sh`.
+An earlier revision of this section read *"Not touched by this ADR, confirmed:
+`002`, `005`, `006`, `007`, `008`, `014`, `015`, `016`."* **That certification
+was false, and not narrowly so.** Re-run at acceptance review as a full scan of
+all eight for the *renamed* referent — referent 3, the warm workarea cache —
+five of the eight carry it. A certification's only value is that a reader can
+trust it, so it is replaced here with the scan's actual output.
 
-Platform-side documents the accepting commit must edit are enumerated in the
-mirrored stub, and the paired-commit rule applies: **OSS side first.**
+**Genuinely clean — no `pool` token for any renamed referent:**
+
+| Document | Finding |
+|---|---|
+| `002-provider-base-contract.md` | Four occurrences, none renamed. `:662` "claim-bound pool" and `:692` "binds the pool/reservation" are **referent 1** and are correct as written. `:633` and `:750` say "HTTP keep-alive pools" / "HTTP client pools" — the ordinary connection-pool term, a referent this ADR does not claim and should not. |
+| `015-plugin-spec.md` | Zero occurrences. |
+| `016-workflow-engine.md` | Zero occurrences. |
+
+**Still carrying referent 3 — enumerated, and deliberately not edited here:**
+
+| Document | Sites (line numbers as of this commit) |
+|---|---|
+| `005-kit-manifest-spec.md` | `:198` "not pre-warmed in the pool". `:195`'s `# cache that survives release-to-pool` paraphrases the unchanged `ReleaseMode` literal. |
+| `006-cross-provider-interactions.md` | `:38` "the same pool member", `:41` "cross-session leakage in pool reuse", `:63` "should have been pool-warmed", `:211` "wasted-warm-pool members", `:229` "during pool clean". Its `:18` `release(return-to-pool)` is the unchanged type literal, and `:14`/`:130` `pool_cost_events` is referent 1. `:217` "a transient detect-sandbox pool" is a fourth thing again — a short-lived set of detection sandboxes, neither referent 1 nor referent 3. |
+| `007-intelligence-services.md` | `:16` "running on a local pool", `:114` and `:116` "pool reuse", `:169` "what makes the OSS local pool fast", `:170` "locally-pooled workareas". |
+| `008-version-control-providers.md` | `:325` "the local-pool warm cache … pool members are keyed on `(vcsProviderId, repository, toolchain)`" — the clearest single case in the corpus, since the sentence uses *pool* and *cache* for the same object in the same breath. |
+| `014-tui-operator-surfaces.md` | `:14` "local workarea pool" (prose). `:74`'s `WorkareaPoolPanel` and `:19`'s reference to it are **typed primitive names**, and `:169`'s `Label: "Warming pool"` is a **rendered UI string** — both are surfaces, not prose. `:15`'s "pools, live instances … project→pool routing" is referent 1 and correct. |
+
+**Why they are not edited in this commit, stated as a decision.** These are not
+on this ADR's edit checklist, and adding them would widen the edit list of the
+very commit whose discipline is that its list is closed and enumerated. More to
+the point, D10.3 gates renaming — **prose included** — on the sizing pass, and
+`014`'s three sites are not prose at all: `WorkareaPoolPanel` is a typed
+primitive and `"Warming pool"` is a string a user reads, which puts them on the
+schema-and-wire side of exactly the line D10 exists to draw. The D2 renames
+landed because D2 enumerates them individually with named targets and an alias
+discipline; this residue has neither.
+
+**Residue *inside* the edited documents — disposed of individually, because a
+document this ADR certifies corrected must not leave a reader guessing.** Each
+of the following is a `pool` or `burst` token that survives in a file on the
+edit checklist. None is an oversight; each falls in one of three buckets.
+
+| Site | Bucket | Disposition |
+|---|---|---|
+| `011` § "Logging and observability" — the `pool-invalidated` log event, and `acquire_path: "pool-warm"` beside it | **Unchanged wire literal** | Both are emitted NDJSON field values consumed by Layer 6 (`006`), not prose. They are referent 3 and they are *wrong*, and they are nonetheless deliberately untouched: renaming an emitted event name or enum value is a wire change on the observability contract, which is D2.3/D2.4's decoupled lock-step lane, not this commit's. `acquire_path`'s values additionally paraphrase `003`'s unchanged `ReleaseMode` / `acquire_path` type literals, which D10 gates. Whoever implements the D2.3 rename should carry these with it. |
+| `011` daemon control paths, `?pool=true`, the stats response field, `--pool`, `capacity.poolMaxDiskGb` | **Current shipped surface** | Described as they ship, with the referent mismatch and the authorized-not-implemented rename recorded in `011` § "The `pool` wire spellings on this surface". See D2.3/D2.4. |
+| `004:239-240` — "SaaS turnkey, NA, **active-burst**" and "the killer feature for **bursty queues**" | **Workload descriptor, not a routing claim** | Both sit in the provider-regime table's *rationale* column and describe the shape of a customer's demand — spiky, I/O-heavy, arrives in bursts — which is a real property of workloads and is orthogonal to D7. D7 retires the claim that *the system performs cloud-burst routing*, not the English word. Left as written, recorded here so a reader who greps `burst` after reading D7 does not have to guess whether these were missed. If they read as a capability claim to a later reviewer, rewording them is a clarification, not an ADR. |
+| `013:133` `pool.deleted`, `013:184` "claim-bound pool", `002`'s "HTTP keep-alive pools" | **Referent 1 or a different referent entirely** | Correct as written; listed so the scan's output is complete rather than filtered. |
+
+`013`'s recovery-order sentence ("… before **pool** admission") *was* referent 3
+and was corrected to *workarea-cache admission* at this review — the second
+same-file miss in `013`, and the reason this table exists.
+
+**What that costs, said plainly.** Until the sizing pass, a reader moving
+between `003`'s cache vocabulary and `007`/`008`'s pool vocabulary cannot tell
+from the text alone that they are the same object. `003` § "The workarea cache"
+carries the renamed-from banner that resolves it, and `004`'s diagram now
+carries one too — those two are the entry points a reader is most likely to
+arrive through. The remaining five documents are recorded here so the debt has
+a name and an inventory rather than being discovered a third time.
+
+**No `BOUNDARY-SYNC` region was touched.** Verified at acceptance against all
+four currently tracked marker pairs, cited by **file and subject** rather than
+by line number — line numbers in a corpus this ADR is actively inserting into
+rot the moment the insert lands, and an earlier revision of this paragraph did
+exactly that, quoting the `001` region's *pre-commit* coordinates as though they
+survived a 50-line insert above them:
+
+| File carrying a marker pair | What the synchronized region is |
+|---|---|
+| `001-layered-execution-model.md` | the five-point OSS↔platform boundary contract |
+| `ADR-2026-06-06-two-axis-provider-model.md` | D5, the narrow-only fail-closed invariant |
+| `ADR-2026-07-12-interactive-pty-session-host.md` | the interactive outbound mandate |
+| `ADR-2026-07-18-bounded-terminal-workarea-leases.md` | the terminal claim clock |
+
+`001` is the only one of the four this ADR edits at all, and its edit is the R1
+building-blocks insert into § "Layer 3 — Execution", which sits **above** the
+synchronized region and crosses neither marker. **Do not cite coordinates from
+this paragraph.** Re-derive them, and the marker ids, with
+`grep -n 'BOUNDARY-SYNC-START\|BOUNDARY-SYNC-END' *.md` — that command, not a
+number in a document, is the authority, and `scripts/check-boundary-sync.sh` is
+what actually enforces it. None of the edited regions falls inside a pair; the
+script was green before and after, and was falsified by changing one word inside
+the `001` region, which reddened it. If a later
+amendment reaches `ADR-2026-06-06-two-axis-provider-model.md` (which does carry a
+live synchronized marker and names the sandbox axis), the paired byte-identical
+commit rule applies, OSS side first.
+
+Platform-side documents are enumerated in the mirrored stub, and the
+paired-commit rule applies: **OSS side first.**
+
+### Two things the accepting commit deliberately did NOT do
+
+Recorded so their absence reads as a decision rather than an omission.
+
+- **It did not correct `011`'s unrelated 2026-08-03 "Command surface note".**
+  That note asserts the OSS binary exposes no `host` command, which shipped code
+  has since falsified. It is `ADR-2026-08-03`'s own cleanup debt, not this ADR's,
+  and folding it in would have put an unauthorized edit inside an accepting
+  commit whose whole discipline is that its edit list is closed. *(This ADR does
+  correct the same staleness where `ADR-2026-08-03` itself asserts it, because
+  that document is on this ADR's own edit list.)*
+- **It did not begin the D10 naming refactor.** D10.3 gates every rename —
+  prose included — on the wording-only / schema-or-wire separation existing on
+  paper. The D2 renames landed because they are enumerated here with named
+  targets and an alias discipline, not because the D10 gate opened.
+
+### One risk carried forward, named rather than resolved
+
+`/api/daemon/workarea/stats` (singular) — the D2.3 target — would land one
+character away from the already-shipped `/api/daemon/workareas` (plural), which
+addresses **individual** workareas and their archives rather than the cache.
+That is uncomfortably close to the two-referents-one-noun defect D4 rule 1
+exists to prevent, in the very ADR that claims to be that rule's third and
+fourth applications. Because D2.3 is now authorized-not-implemented, nothing is
+committed on disk yet and the follow-up that implements it is free to resolve
+this: `/api/daemon/workarea-cache/*` is the unambiguous shape, and whichever is
+chosen must move under the same declared-removal-version alias discipline.
 
 ## Consequences
 
@@ -843,7 +1061,8 @@ mirrored stub, and the paired-commit rule applies: **OSS side first.**
 - **D6.2 could be mis-sized as a rename.** "Route → capacity profile" reads like
   wording and is not: it changes CRUD shape, adds a grant edge, and touches the
   surfaces that name it. Mitigation: it is flagged as a **shape change** in the
-  rename-vs-behaviour table, in D6.2 itself, and again in § "To accept this ADR".
+  rename-vs-behaviour table, in D6.2 itself, and again in § "What the
+  accepting commit carried".
 - **D10's refactor could start before it is sized.** The stated preference to
   pay the cost now is easy to read as authorization to begin. It is not:
   D10 gates on the wording-only / schema-or-wire separation existing on paper
@@ -913,20 +1132,34 @@ mirrored stub, and the paired-commit rule applies: **OSS side first.**
 
 ## Affected documents
 
-Enumerated once, in § "To accept this ADR" above, with the exact edit each
-document needs. Per corpus convention those edits land **in the accepting
-commit**, not in this proposal. Platform-side amendments are enumerated in the
-mirrored stub.
+Enumerated once, in § "What the accepting commit carried" above, with the exact
+edit each document received. Per corpus convention those edits landed **in the
+accepting commit**, not in the proposal. Platform-side amendments are enumerated
+in the mirrored stub and land in the paired platform commit — **OSS side
+first**.
 
 ## Affected work items
 
-None yet — this ADR is still `Proposed` and no issue should be moved against it
-until the accepting commit lands. On acceptance, the tracker work splits into
-five deliberately independent lanes:
+The corpus edits are done. The remaining tracker work splits into five
+deliberately independent lanes:
 
 1. **Corpus renames and the `004` amendment** — the reference-doc edits above.
-2. **The OSS daemon workarea-surface alias cycle** (D2.3/D2.4), each alias
-   declaring its removal version.
+   **Done in the accepting commit, for the documents on the checklist.** Five
+   documents off it still carry referent 3; they are inventoried in § "Not
+   edited — and exactly how far that goes" and are D10-gated (D10.7), not
+   forgotten. "Done" here means *the checklist is discharged*, which is a
+   narrower claim than *the corpus is uniform*.
+2. **The OSS daemon workarea-surface alias cycle** (D2.3/D2.4) — **the one lane
+   this accepting commit deliberately does not carry.** Authorized above, not
+   implemented; `011` and `003` describe the current `pool`-spelled surface, so
+   the corpus is true today and stays true until this lands. When it lands it
+   lands as **one** lock-step doc-and-code change: the `011`/`003` wire prose,
+   the alias table with a removal version chosen from the release that creates
+   the aliases, and the `donmai` + composing-binary code, reviewed together so
+   R-C is a single claim a reviewer can check. Its two known traps — the query
+   parameter and response field must be aliased alongside the paths, and the
+   config key needs a struct-level read alias with the writer still emitting the
+   old key — are recorded in D2.3/D2.4 and in `011`.
 3. **Platform-side vocabulary unification** and the stale burst help-string
    deletion (D7).
 4. **Harness as an authoring input** (D5) — delivery of `ADR-2026-06-06` /
@@ -961,3 +1194,17 @@ and 3 that reaches a schema or a wire, and is not itself a lane.
   later reader inherits the reasoning rather than the conclusion. If one is to
   change, it changes by a superseding ADR that engages the recorded rationale,
   not by a fresh round of the same question.
+- **D7 now has a build gate; D2.3's residue deliberately does not.**
+  `scripts/retired-claim-lint.sh` (CI: `retired-claim-lint.yml`) fails the build
+  when a retired claim is re-asserted. It exists because the first pass of this
+  ADR's accepting commit deleted the `cloud-burst` claim from `004` and left the
+  identical claim in `013` — in a file that same commit had already edited for
+  D2.2 — where it survived review. **A `✅ owns` cell is a capability assertion,
+  and nothing in this corpus was checking them.** Quoting a retired claim stays
+  legal: a string inside `backticks` is read as a citation, which is what an
+  epitaph or a renamed-from banner is. The D2.3 sites listed in § "Not edited"
+  are intentionally *not* rules yet — a gate that fires on documents nobody is
+  authorized to edit until the D10 sizing pass is a gate that gets bypassed, and
+  a bypassed gate is worse than an absent one. Add those rules in the commit
+  that does the sweep. This gate is **not** the D5.4 alias-expiry gate, which
+  remains unbuilt and is a separate deliverable.

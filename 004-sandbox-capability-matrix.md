@@ -1,16 +1,28 @@
 # 004 — Sandbox Capability Matrix
 
-**Status:** Reference (initial draft)
-**Last updated:** 2026-05-06
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `014-tui-operator-surfaces.md`, `ADR-2026-05-06-tui-noun-consolidation.md`
+**Status:** Reference
+**Last updated:** 2026-08-07
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `014-tui-operator-surfaces.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`.
+
+> **Vocabulary note (2026-08-07).** This doc predates
+> `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`, which
+> narrows several nouns it uses loosely. Read it with that ADR's R1 building
+> blocks in hand: the **unit** is an *execution context* (wire noun `instance`);
+> a **sandbox** is one *kind* of execution context — the ephemeral,
+> provider-minted kind — not a synonym for the unit; a **pool** is a
+> single-provider *source* of execution contexts; and a **capacity profile** is
+> a named policy over an ordered list of pools. The `SandboxProvider` family
+> name is deliberately unchanged (that ADR's D1/D10.5).
 
 ## Why this exists
 
-Donmai needs to scale from ~10 concurrent agents (a single Mac Studio's local capacity) to ~1000+ (cloud-burst across multiple providers) without the user or the agent caring where compute physically runs. We have six platform-shipped sandbox implementations today (`Local`, `Docker`, `K8s`, `Daytona`, `E2B`, `Modal`) plus a Vercel implementation in scope for SaaS turnkey, and a likely seventh (`Atomic` or other agent-native VCS-bundled compute) on the horizon.
+Donmai needs to scale from ~10 concurrent agents (a single Mac Studio's local capacity) to ~1000+ without the user or the agent caring where compute physically runs. We have six platform-shipped sandbox implementations today (`Local`, `Docker`, `K8s`, `Daytona`, `E2B`, `Modal`) plus a Vercel implementation in scope for SaaS turnkey, and a likely seventh (`Atomic` or other agent-native VCS-bundled compute) on the horizon.
 
-Each provider has different lifecycle primitives, different cost shapes, different network topologies, and different snapshot/pause-resume support. A scheduler that knows about each by name doesn't scale: every new provider would force scheduler edits. The fix is **capability declaration**: each provider declares typed flags; the scheduler reasons about flags; new providers slot in by declaring their shape.
+That scale comes from **an org running many pools and granting capacity profiles over them** — not from bursting. There is no burst mechanism: no accepted overflow policy, no exhaustion trigger, and no schema for one. An earlier revision of this doc opened by promising `cloud-burst across multiple providers`; that promise was never implemented and the routing column that carried the intent was subsequently deleted. `ADR-2026-08-07` D7 records the absence as fact and names **failure-triggered routing-around** — honouring the capacity profile's existing order when a dispatch *fails* — as the first iteration. Predictive burst remains undesigned and needs its own ADR.
 
-This doc defines the capability struct, profiles each shipped provider against it, and specifies the cross-provider scheduling algorithm that routes work to capacity.
+Each provider has different lifecycle primitives, different cost shapes, different network topologies, and different snapshot/pause-resume support. A router that knows about each by name doesn't scale: every new provider would force router edits. The fix is **capability declaration**: each provider declares typed flags; the router reasons about flags; new providers slot in by declaring their shape.
+
+This doc defines the capability struct, profiles each shipped provider against it, and specifies how capability declarations feed the routing decision.
 
 ## Reference implementation: donmai worker dial-out
 
@@ -75,8 +87,10 @@ interface SandboxProvider extends Provider<'sandbox'> {
   streamLogs?(handle: SandboxHandle): AsyncIterable<LogEvent>
 
   /**
-   * Optional: query current capacity. Used by the scheduler to decide
-   * whether to dispatch locally or burst to cloud.
+   * Optional: query current capacity. Feeds routing's health-and-headroom
+   * filter (see "Routing: capability filtering, then the capacity profile").
+   * It does NOT trigger an overflow to another provider: there is no burst
+   * mechanism (ADR-2026-08-07 D7).
    */
   capacity?(): Promise<CapacitySnapshot>
 }
@@ -160,7 +174,8 @@ interface SandboxProviderCapabilities {
   os: ('linux' | 'macos' | 'windows')[]
   arch: ('x86_64' | 'arm64' | 'wasm32')[]
 
-  // Cost shape — drives scheduler economic routing
+  // Cost shape — the reference data an operator weighs when authoring a
+  // capacity profile's pool order; not a per-session scoring input
   idleCostModel: 'zero' | 'storage-only' | 'metered'
   billingModel: 'wall-clock' | 'active-cpu' | 'invocation' | 'fixed'
   // wall-clock: charged for every second running (E2B)
@@ -214,13 +229,15 @@ The capability flags above are the *declared* shape — what a provider/host adv
 
 ## Regime fit — when to choose what
 
-The matrix above tells the scheduler what's *possible*; the table below tells operators what's *appropriate*. Tenants pick the regime; the scheduler routes within it.
+The matrix above tells the router what's *possible*; the table below tells operators what's *appropriate* when authoring a capacity profile's pool order. Operators pick the regime; routing filters and falls through within the order they authored.
+
+**The Primary/Fallback cells name providers, not pools.** A pool is a source over exactly one provider (`ADR-2026-08-07` D6.1), so picking a regime is picking which provider the profile's next pool should carry — the pool itself is named by its author (D9). The cells read as bare provider names for that reason; a cell reading `Local pool` here until 2026-08-07 was the only one that did not, and it invited the pool-vs-provider conflation this table exists to avoid.
 
 | Workload regime | Primary | Fallback | Why |
 |---|---|---|---|
-| **OSS local dev** | Local pool | — | Mac Studio fleet, no cloud spend, no auth ceremony |
+| **OSS local dev** | Local | — | Mac Studio fleet, no cloud spend, no auth ceremony |
 | **SaaS turnkey, NA, active-burst** | Vercel | E2B | Same Vercel account/auth/billing as the SaaS app, active-CPU billing wins for I/O-heavy agent work |
-| **Cross-region, long-idle, paused pools** | E2B | Modal | $0 paused tier, multi-region, mid-process pause/resume the killer feature for bursty queues |
+| **Cross-region, long-idle, paused sandboxes** | E2B | Modal | $0 paused tier, multi-region, mid-process pause/resume the killer feature for bursty queues |
 | **Enterprise self-hosted** | K8s | Docker | Already production-grade in the platform's existing impl, fits VPC/private-network requirements |
 | **Devcontainer-style long-lived workspaces** | Daytona | Local | Days-long workspaces, FS archive, dev-environment ergonomics |
 | **GPU-bound agent work (rare today)** | Modal | E2B+GPU | Modal is the only one with first-class GPU billing |
@@ -229,87 +246,172 @@ The matrix above tells the scheduler what's *possible*; the table below tells op
 
 Tenant-level regime selection lives in `.rensei/config.yaml` or platform config. Per-session override is allowed for forensics or special cases.
 
-## The cross-provider scheduler
+## Routing: capability filtering, then the capacity profile
 
-The scheduler decides which `SandboxProvider` (and which `WorkareaProvider`) handles a session. The interface is small:
+> **Reconciled 2026-08-07** per `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`
+> D6. This section previously specified a `SandboxScheduler.schedule(spec, hints)`
+> that scored every provider per session and picked the cheapest — i.e.
+> per-session routing *across* providers. The accepted model rejects that. The
+> reasoning behind the rejection is preserved below in § "Why routing does not
+> pick a provider per session", deliberately, so it is not re-proposed.
 
-> **Operator surface forward-reference.** The scheduler's per-session
-> decisions are surfaced through the local daemon's HTTP control API at
+Routing decides which **execution context** a session runs in. That decision is
+made at two levels, and keeping them apart is the whole of the design:
+
+- **A pool is a single-provider source of execution contexts.** Exactly one
+  substrate provider plus its credential and configuration, owned by the org and
+  named by a human. It enrolls persistent hosts, or mints ephemeral sandboxes on
+  demand. It carries no ordering and no fallback of its own.
+- **A capacity profile is a named policy over an ordered list of pools.** Org
+  authored, granted to projects. **This is the only place unlike capacity
+  composes.** Ordering, fallback, and constraints live here.
+
+So capability declarations — the subject of this doc — do not feed a
+provider-scoring function. They feed an **eligibility filter over the pools a
+profile already names**. What the profile names is authored by a human who
+weighed cost and latency once, at authoring time, with a name attached; it is not
+re-derived per session from a scoring heuristic nobody can see.
+
+> **Operator surface forward-reference.** The routing decision for a session is
+> surfaced through the local daemon's HTTP control API at
 > `GET /api/daemon/routing/explain/<sessionID>` (and the rolling-config
 > view at `GET /api/daemon/routing/config`). See `011-local-daemon-fleet.md`
 > § "HTTP Control API" and `ADR-2026-05-07-daemon-http-control-api.md` §§
 > D1, D4 for endpoint contracts. The wire shape of the explain response
 > mirrors the `RoutingDecision` + `RoutingTraceStep` types defined for the
-> SaaS dashboard so the same renderer composes both surfaces.
+> hosted dashboard so the same renderer composes both surfaces.
 
+### The routing algorithm
 
-```ts
-interface SandboxScheduler {
-  schedule(spec: SandboxSpec, hints?: ScheduleHints): Promise<SandboxHandle>
-}
+The candidate set is **the pools named by the capacity profile the project is
+granted**, in the order the profile declares. Candidates are eliminated, never
+re-ranked by a hidden score.
 
-interface ScheduleHints {
-  preferredProviders?: string[]     // tenant config
-  forbiddenProviders?: string[]
-  preferredRegions?: string[]
-  costBudgetCents?: number          // session-level cap
-  latencyBudgetMs?: number          // willingness to wait for warm path
-  workareaProviderHint?: string     // bias toward a paired workarea provider
-}
-```
-
-### Scheduling algorithm
-
-1. **Filter by capability constraints from `spec`.**
+1. **Filter by capability constraints from `spec`.** This is where every flag in
+   this doc earns its place. A pool is eligible only if its provider's declared
+   capabilities satisfy:
    - `region` matches `capabilities.regions`.
    - `os` and `arch` match `capabilities.os` / `capabilities.arch` (both required).
    - `resources.vCpu/memoryMb` ≤ provider ceilings.
    - `resources.gpu` requires `supportsGpu: true`.
    - `maxDurationSeconds` ≤ `maxSessionDurationSeconds`.
-   - Workarea pairing: provider supports the requested workarea provider's snapshot/pause-resume needs (e.g., a session asking for `release(pause)` requires `supportsPauseResume: true`).
+   - Workarea pairing: the provider supports the requested workarea provider's snapshot/pause-resume needs (e.g., a session asking for `release(pause)` requires `supportsPauseResume: true`).
+   - Session mode: an interactive or otherwise persistent-lane session is eligible only for pools whose provider can host persistently-enrolled hosts (see § "Persistent and on-demand are lanes").
 
-2. **Filter by tenant policy.**
-   - Hints (`preferredProviders` / `forbiddenProviders`).
-   - Layer 6 policy hooks may reject candidates (e.g., "this project may only run on `EnterpriseK8s`").
+2. **Filter by policy.** Layer 6 policy hooks may reject a candidate (e.g., "this
+   project may only run on `EnterpriseK8s`"). Note that a per-pool project grant
+   exists in the platform schema but is **advisory, not enforced** today, by
+   deliberate decision — `ADR-2026-08-07` D8, which records the exit condition
+   that would end that deferral.
 
-3. **Filter by capacity** (best-effort; not all providers expose `capacity()`).
-   - Drop providers reporting `unhealthy` health.
-   - Drop providers above 90% of `maxConcurrent` if known.
+3. **Filter by health and capacity** (best-effort; not all providers expose
+   `capacity()`).
+   - Drop pools whose provider reports `unhealthy` health.
+   - Drop pools above 90% of `maxConcurrent` where a ceiling is known. **A pool whose configured membership is a provider configuration rather than enrolled machines has no ceiling at all** — capacity accounting exists only on the enrolled-host face (`ADR-2026-08-07` D4). Absence of a ceiling is not evidence of available capacity.
 
-4. **Score remaining candidates by cost + latency.**
-   - Cost: normalize `billingModel` to expected-cents-per-session for the workload shape (active-CPU vs wall-clock matters here — agent workloads are I/O-heavy, so Vercel's `active-cpu` often beats E2B's `wall-clock` despite higher headline rate).
-   - Latency: sample-based estimate of `expectedAcquireMs` for paired workarea provider (warm pool / paused sandbox available?).
-   - Linger penalty: add expected idle cost over typical session length.
+4. **Take the first surviving pool in the profile's declared order.** There is no
+   cost/latency score and no cross-provider tie-break. Determinism comes from the
+   profile's order, which a human authored and can read back.
 
-5. **Pick the lowest-scored provider.** Ties broken by tenant `preferredProviders` order; final tie broken by lowest `providerId` for determinism.
+5. **Acquire an execution context from that pool, and route around failure.** If
+   acquisition *fails*, the profile is permitted to fall through to the next
+   surviving pool in its order. This is `ADR-2026-08-07` D7's failure-triggered
+   routing-around: reactive, bounded by the order the org already authored, and
+   requiring no telemetry that does not exist. It is **not** predictive burst,
+   which remains undesigned.
 
-6. **Provision and return.** On provision failure, blacklist for a back-off window and retry next-best.
+Cost and latency have not disappeared; they moved to where a human can see them.
+The reasoning that used to live in the scoring function — that agent workloads
+are I/O-heavy, so an `active-cpu` billing model often beats a `wall-clock` one
+despite a higher headline rate; that `expectedAcquireMs` differs sharply between
+a warm cache hit and a cold provision; that `idleCostModel` decides whether idle
+capacity is free or expensive — is exactly the reasoning that belongs in the
+**authoring** of a profile's pool order. The capability matrix below is the
+reference data for making that call.
+
+### Why routing does not pick a provider per session
+
+Preserved in full, because it is the kind of decision that gets re-proposed
+every six months by someone who has read the capability matrix and noticed it
+would make a lovely scoring input. Three reasons, in increasing order of cost.
+
+1. **It would be a second truth source for one decision.** The profile's ordered
+   pool list already *is* the substrate-priority statement. A per-session scorer
+   that can override that order is a second lever pointed at the same outcome,
+   and the two can disagree silently — the operator reads the profile, the
+   resolver obeys the score, and nobody can explain the placement afterwards.
+   This is the same objection that killed a proposed global
+   substrate-priority setting, and a per-session scorer re-creates it one level
+   further down. (The corresponding rejection *inside* a pool is the same
+   argument again: a pool that mixed providers would re-create the conflict
+   within a single named object.)
+2. **It assumes a fungibility the lanes do not have.** The provider a pool
+   carries decides whether that pool can host persistently-enrolled hosts at
+   all. The persistent and on-demand paths are disjoint because of it. A scorer
+   ranking an ephemeral cloud provider against a pool of enrolled machines is
+   comparing candidates that cannot substitute for one another for a whole class
+   of sessions; making them substitutable is a resolver rewrite, not a scoring
+   tweak.
+3. **Its cheapest-wins default is the wrong default under a real load metric.**
+   Any ranking that reads capacity as "how idle is it" inverts the moment a pool
+   has no enrolled machines: with pool load derived by summing over enrolled
+   hosts, an empty provider-configured pool scores as maximally idle and ranks
+   **first, always** — not on exhaustion. A scoring router would send work to
+   metered capacity unconditionally, and it would look like a routing preference
+   rather than a bug. Any future load-ordering policy on a profile has to fix
+   this before it is offered.
+
+What legitimately survives from the old design is the *shape* of the hint
+vocabulary — preferred and forbidden providers, region preference, budgets —
+but as **profile-level, human-authored, named policy**, not as per-session hints
+threaded into a scorer. A budget that lives in a profile is a statement an
+operator made; a budget that lives in a hint is a statement nobody can attribute.
 
 ### Capacity snapshots
 
-For providers that support it, `CapacitySnapshot` lets the scheduler reason about real-time load:
+For providers that support it, `CapacitySnapshot` lets the router reason about
+real-time load and lets an operator read a pool's observed membership:
 
 ```ts
 interface CapacitySnapshot {
   provisionedActive: number          // currently running
   provisionedPaused: number          // not running, can resume cheaply
-  maxConcurrent: number | null       // ceiling
+  maxConcurrent: number | null       // ceiling, or null when the pool has none
   estimatedAvailable: number         // safe to provision now
-  warmPoolReady: number              // sessions that can start in <Xs
+  warmCacheReady: number             // sessions that can start in <Xs
   capturedAt: Date
 }
 ```
 
-Local pool: trivially computable. K8s: `kubectl top` + `ResourceQuotas`. Docker: `/info` and host cgroups. Daytona: workspace counts via API. E2B / Modal / Vercel: opaque (return `null` from `capacity()`); scheduler falls back to optimistic provisioning + retry-on-rejection.
+Local: trivially computable. K8s: `kubectl top` + `ResourceQuotas`. Docker:
+`/info` and host cgroups. Daytona: workspace counts via API. E2B / Modal /
+Vercel: opaque (return `null` from `capacity()`); the router falls back to
+optimistic provisioning + retry-on-rejection. `warmCacheReady` reads the
+workarea cache described in `003-workarea-provider.md` § "The workarea cache".
 
-### Persistent vs on-demand modes
+Read `maxConcurrent: null` as *unknown*, never as *unlimited* — see step 3 above.
 
-The platform's existing `projects.sandboxMode: 'persistent' | 'on_demand'` distinction is **a scheduler bias, not a provider type**. Both modes use the same provider implementations.
+### Persistent and on-demand are lanes, not a scheduler bias
 
-- **Persistent** — scheduler keeps `provisionedActive` ≥ baseline regardless of demand. Workers stay registered. Acquire-acquire-acquire is fast.
-- **On-demand** — scheduler provisions on demand and tears down when sessions end. `provisionedActive` tracks demand directly. Cheaper but slower per-session.
+An earlier revision of this section called the `persistent | on_demand`
+distinction "a scheduler bias, not a provider type". That is now the wrong way
+round, and the correction matters: **the pool's provider decides which lane the
+pool can serve.** Only providers that can host persistently-enrolled hosts can
+back the persistent lane; the two resolution paths are disjoint (see reason 2
+above).
 
-Capability flag interaction: a provider with `idleCostModel: 'zero'` (E2B paused) collapses the persistent/on-demand distinction economically — paused workers cost storage only, so you can run "persistent" mode without paying for idle compute.
+- **Persistent** — the pool holds enrolled hosts that stay registered and offer
+  execution-context slots. Acquisition is fast because the host is already there.
+  Capacity accounting is real, because it sums over enrolled machines.
+- **On-demand** — the pool holds a provider configuration and mints an ephemeral
+  execution context per session, tearing it down at session end. Cheaper at rest,
+  slower per session, and **no pool-level ceiling exists** (`ADR-2026-08-07` D4).
+
+Capability flag interaction: a provider with `idleCostModel: 'zero'` (E2B
+paused) narrows the *economic* gap between the lanes — paused contexts cost
+storage only — but it does not merge them. The lane split is structural, not a
+cost trade-off, and treating an `idleCostModel: 'zero'` on-demand pool as a
+drop-in for a persistent one is the mistake reason 2 exists to prevent.
 
 ## Worker registration model
 
@@ -347,7 +449,7 @@ This works for solo dev with one project open. It breaks down at the scale a rea
 
 ### Daemon mode (recommended for any user with >1 project)
 
-A single long-running daemon registers with the orchestrator as a worker pool. One per machine, not per project. Work for any allowed project routes to whichever daemon worker has capacity; the workarea provider handles the per-session clone/checkout/toolchain setup.
+A single long-running daemon registers with the orchestrator **as a host**, offering execution contexts to the org. One per machine, not per project. Work for any allowed project routes to whichever host has a free execution-context slot; the workarea provider handles the per-session clone/checkout/toolchain setup.
 
 Concretely:
 
@@ -356,7 +458,7 @@ Concretely:
 │                       Mac Studio (one machine)                   │
 │                                                                  │
 │  ┌────────────────────────────────────────────────────────┐    │
-│  │  rensei-daemon (system service)                        │    │
+│  │  donmai daemon (system service)                        │    │
 │  │                                                        │    │
 │  │  - registers capacity: 16 vCPU, 64GB, projects: [*]   │    │
 │  │  - subscribes to work queue                           │    │
@@ -370,12 +472,19 @@ Concretely:
 │  └────────────────────────────────────────────────────────┘    │
 │                          ↓ acquires                             │
 │  ┌────────────────────────────────────────────────────────┐    │
-│  │  WorkareaProvider local pool                          │    │
-│  │  - warm pool members per (repo, toolchain) key       │    │
+│  │  WorkareaProvider workarea cache                      │    │
+│  │  - warm cache entries per (repo, toolchain) key      │    │
 │  │  - cold-path: clone + install on first project use   │    │
 │  └────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+> **Renamed 2026-08-07** — the bottom box read `WorkareaProvider local pool` /
+> `warm pool members` until this ADR. It is the machine-local **workarea cache**,
+> not a pool: `pool` names the org-owned capacity pool and nothing else
+> (`ADR-2026-08-07` D2.3). `003-workarea-provider.md` § "The workarea cache" is
+> the contract; its state names (`warming` / `ready` / `acquired` / `invalid` /
+> `retired`) are the canonical labels for the entries drawn here.
 
 ### Daemon lifecycle
 
@@ -441,7 +550,8 @@ Local daemon mode shifts a few declared capabilities relative to foreground mode
 
 ```ts
 {
-  // Worker pool model — workers register with orchestrator at daemon start
+  // Host model — the machine registers as a host with the orchestrator at
+  // daemon start, and offers execution-context slots from then on
   transportModel: 'either',   // dial-in via Unix socket or dial-out via queue
                               // — orchestrator picks per network topology
 
@@ -468,7 +578,7 @@ The discipline this preserves: daemon mode is shipped in the OSS execution layer
 
 This pattern is currently absent from the platform's icebox parse — there's no issue covering "local daemon" as an explicit mode. Net-new issue to author (see [`rensei-architecture/009-linear-realignment.md`](https://github.com/RenseiAI/rensei-architecture/blob/main/009-linear-realignment.md)):
 
-> **`Local daemon mode for the OSS execution layer`** — One per-machine daemon registers as a multi-project worker pool, replaces per-VSCode-workspace fleet model, supports auto-update, project allowlist, and workarea-on-demand bootstrapping. Closes the friction described by users running 8–20+ workspaces.
+> **`Local daemon mode for the OSS execution layer`** — One per-machine daemon registers as a multi-project **host**, replaces the per-VSCode-workspace fleet model, supports auto-update, project allowlist, and workarea-on-demand bootstrapping. Closes the friction described by users running 8–20+ workspaces.
 
 ## OSS vs SaaS responsibilities
 
@@ -479,17 +589,19 @@ This pattern is currently absent from the platform's icebox parse — there's no
 | `Local` impl | ✅ ships | inherits |
 | `Docker` / `K8s` impls | optional contrib | ✅ ships |
 | `Vercel` / `E2B` / `Modal` / `Daytona` impls | ❌ (cloud creds) | ✅ ships |
-| Cross-provider scheduler | ✅ owns interface | ✅ ships hosted impl |
-| Capacity-aware burst routing | ✅ ships local-only | ✅ ships hybrid (local + cloud) |
+| Capability-filtered routing | ✅ owns interface | ✅ ships hosted impl |
+| Capacity profiles (named policy over pools) | ❌ (single-tenant; no grant edge) | ✅ owns |
 | Per-tenant regime config | ❌ (single-tenant) | ✅ owns |
 | Fleet observability dashboard | ❌ (basic logs) | ✅ owns |
 
-The OSS layer can run a multi-Mac-Studio fleet on a LAN with the local provider plus optional Docker. SaaS adds the cloud burst story and the multi-tenant control plane.
+A `Capacity-aware burst routing | ✅ ships local-only | ✅ ships hybrid (local + cloud)` row stood here until 2026-08-07. It was removed rather than re-scoped: **neither side ships burst routing, and neither ever did.** See § "Why this exists" and `ADR-2026-08-07` D7.
+
+The OSS layer can run a multi-Mac-Studio fleet on a LAN with the local provider plus optional Docker. The hosted control plane adds capacity profiles with a project grant edge, the multi-tenant control plane, and the cloud substrate implementations the OSS layer does not ship credentials for.
 
 ## Open questions
 
 1. **Workarea provider pairing.** Should a `SandboxSpec` always carry a `workareaSpec`, or are there sandbox uses without workareas (e.g., GPU eval runs that don't touch a repo)? Default: yes-always for coding-agent flows; admit "no-workarea" mode for benchmarks/eval. Concrete in `006-cross-provider-interactions.md`.
-2. **Scheduler bias function.** The cost/latency score weighting needs tenant-level config (cost-sensitive customers vs latency-sensitive). Default: 70/30 cost/latency. Real customers will want this tunable.
+2. ~~**Scheduler bias function.**~~ **Closed 2026-08-07** by `ADR-2026-08-07` D6. There is no cost/latency scoring function to tune, because routing does not score providers per session — it filters, then honours the order a human authored in a capacity profile. The cost-sensitive-vs-latency-sensitive choice is expressed by *which* profile a project is granted and *how* its pools are ordered. What remains genuinely open is the shape of the profile object itself (its fields and verbs), which is D6.2 accepting-work, not a question about this doc.
 3. **Health check semantics.** Do we treat a single failed `health()` as unhealthy, or require N consecutive? Default: fail-fast on `unhealthy`, two-strike on `degraded`. Tenants may override.
 4. **A2A capability shape.** A remote A2A agent doesn't expose VCpu/Memory ceilings — those are the remote's concern. Capabilities for A2A providers may need a `delegatedCapacity: true` flag and a fallback contract that the remote will refuse if it can't satisfy. Not yet specified; revisit when A2A becomes load-bearing.
 

@@ -1,8 +1,8 @@
 # 003 — WorkareaProvider
 
-**Status:** Reference (initial draft)
-**Last updated:** 2026-07-22
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`
+**Status:** Reference
+**Last updated:** 2026-08-07
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `011-local-daemon-fleet.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`
 
 ## Why this exists
 
@@ -10,7 +10,7 @@ The QA coordinator runs in a worktree it inherited with whatever residual state 
 
 The architectural fix is to stop treating "the worktree the coordinator happens to be in" as the workarea, and start treating workarea provisioning as a first-class provider contract — the same shape we'd give any sandbox provider. If the workarea is in a known initial state when `acquire` returns, then a non-zero exit from validation means the code is broken, not the environment was. The coordinator's existing hard-fail rule becomes meaningful instead of fragile.
 
-This contract also handles the cost-vs-determinism tension at fleet scale. A naive "git clean -fdx + pnpm install on every acquire" makes 1000-concurrent-agents mathematically impossible (pnpm install on the Supaku monorepo is multi-minute). The interface below is designed so providers can choose the fastest path that satisfies the determinism guarantee — pool, snapshot clone, pause-resume — without each scheduler having to know which one.
+This contract also handles the cost-vs-determinism tension at fleet scale. A naive "git clean -fdx + pnpm install on every acquire" makes 1000-concurrent-agents mathematically impossible (pnpm install on the Supaku monorepo is multi-minute). The interface below is designed so providers can choose the fastest path that satisfies the determinism guarantee — warm cache, snapshot clone, pause-resume — without the caller having to know which one.
 
 ## The interface
 
@@ -20,13 +20,13 @@ interface WorkareaProvider extends Provider<'workarea'> {
    * Returns a workarea in a known-deterministic state.
    * Implementation chooses fastest path that satisfies the determinism
    * guarantee declared in capabilities. Caller MUST NOT assume anything
-   * about how the state was achieved (clean, pool reuse, snapshot, resume).
+   * about how the state was achieved (clean, cache reuse, snapshot, resume).
    */
   acquire(spec: WorkareaSpec): Promise<Workarea>
 
   /**
    * Returns the workarea to the provider. The caller declares intent;
-   * the provider chooses what to do with it (destroy, return to pool,
+   * the provider chooses what to do with it (destroy, return to cache,
    * pause and retain, archive to cold storage).
    *
    * ADR-2026-07-18-bounded-terminal-workarea-leases.md accepts the following
@@ -168,7 +168,7 @@ crash-recoverable lease on the exact `Workarea.id` for a terminal exchange that
 requires workarea-backed verification. Acceptance ratifies the architecture;
 implementation and release remain pending, and the contract must not be treated
 as an available capability. The lease is an overlay on `acquired`; it is not a
-second pool-member state and does not transfer ownership to another session.
+second cache-entry state and does not transfer ownership to another session.
 
 A conforming workarea lifecycle owner must enforce these invariants:
 
@@ -196,7 +196,7 @@ A conforming workarea lifecycle owner must enforce these invariants:
    reusable; only successful provider release followed by durable `released`
    does so.
 5. **Recovery and acquisition failure fail closed.** Every `active` and
-   `release-pending` lease is loaded before pool admission. A separate durable
+   `release-pending` lease is loaded before cache admission. A separate durable
    quarantine guard is written before lease acquisition; guard or lease failure
    excludes the exact workarea at boot and during bounded cleanup.
 6. **Lease time is exact and replay-coherent.** `acquiredAtMs` is the
@@ -236,12 +236,19 @@ never a successful acknowledgement or a terminal-verdict change. A requested
 lease is independent of `PreserveWorktreeAlways`; ordinary preservation cannot
 suppress the descriptor or the lease state machine.
 
-## The local-pool implementation (OSS-shipped reference)
+## The workarea cache (OSS-shipped reference)
 
-The OSS execution layer must ship a working `WorkareaProvider` for the local-machine case. The fast path is a warm pool of pre-built workareas, keyed by `(repository, toolchain-set)`.
+> **Renamed 2026-08-07** from `the local-pool implementation`, per
+> `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` D2.3. The
+> word `pool` now names exactly one thing — the org-owned capacity pool, a
+> single-provider *source of execution contexts*. This section describes
+> something else entirely: a machine-local warm **cache** of prepared workareas.
+> The two were never related, and sharing a word made them read as if they were.
+
+The OSS execution layer must ship a working `WorkareaProvider` for the local-machine case. The fast path is a warm **cache** of pre-built workareas, keyed by `(repository, toolchain-set)`.
 
 ```
-Pool member states:
+Cache entry states:
   warming    — git clone + pnpm install in progress
   ready      — clean, deps installed, available for acquire
   acquired   — currently in use by a session
@@ -250,18 +257,20 @@ Pool member states:
   retired    — slated for destruction
 ```
 
-This pool-state contract is consumed by the user-facing `host workarea` TUI subcommand (`rensei host workarea list / inspect / restore`) per `ADR-2026-05-06-tui-noun-consolidation.md`, which folded the previous top-level `workarea` namespace into `host` alongside daemon lifecycle and capacity. The state names in this section are the canonical labels the TUI renders on each pool member; clients using the older top-level `workarea` command see the same labels through the deprecated alias for one release.
+This cache-state contract is consumed by the user-facing `host workarea` TUI subcommand (`<binary> host workarea list / inspect / restore`) per `ADR-2026-05-06-tui-noun-consolidation.md`, which folded the previous top-level `workarea` namespace into `host` alongside daemon lifecycle and capacity. The state names in this section are the canonical labels the TUI renders on each cache entry; clients using the older top-level `workarea` command see the same labels through the deprecated alias.
+
+The daemon's control surface for this cache is `GET /api/daemon/pool/stats` and `POST /api/daemon/pool/evict` — `pool`-spelled paths addressing this workarea cache, not any org capacity pool. `ADR-2026-08-07` D2.3/D2.4 authorizes renaming them (and the rest of that surface's `pool` spellings) to the vocabulary this doc uses in prose; **that rename is not implemented and ships as its own lock-step change.** See `011-local-daemon-fleet.md` § "The `pool` wire spellings on this surface".
 
 ### `acquire(spec)` — fast path
 
-1. Find a `ready` pool member matching `(spec.source.repository, spec.toolchain)`.
+1. Find a `ready` cache entry matching `(spec.source.repository, spec.toolchain)`.
 2. Validate its `ref` is reachable from `spec.source.ref`; if not, `git fetch` and `git checkout`.
 3. Run scoped clean: `rm -rf .next .turbo node_modules/.cache dist coverage` (configurable per project).
-4. Verify lockfile hasn't drifted; if it has, mark member `invalid`, fall through to slow path.
+4. Verify lockfile hasn't drifted; if it has, mark the entry `invalid`, fall through to slow path.
 5. Compute `cleanStateChecksum` over a set of canonical files (lockfile + selected configs); store in `Workarea`.
-6. Mark member `acquired`, return.
+6. Mark the entry `acquired`, return.
 
-P95 target: < 5 seconds when a warm member exists.
+P95 target: < 5 seconds when a warm entry exists.
 
 ### `acquire(spec)` — slow path (cold or no match)
 
@@ -271,21 +280,31 @@ P95 target: < 5 seconds when a warm member exists.
 4. Run any kit-declared post-install steps.
 5. Mark `acquired`, return.
 
-P95 target: < 90 seconds for typical TS monorepo. Background warmer creates additional pool members in anticipation.
+P95 target: < 90 seconds for typical TS monorepo. Background warmer creates additional cache entries in anticipation.
 
 ### `release(workarea, mode)`
 
-- `destroy` — `git worktree remove`, delete pool entry.
+- `destroy` — `git worktree remove`, delete the cache entry.
 - `return-to-pool` — scoped clean, mark `ready`. The default for most sessions.
 - `pause` — local provider has no memory-pause primitive; degrades to `return-to-pool` and emits a warning.
-- `archive` — tar to a configurable location, mark pool member `retired`. Useful for forensic preservation.
+- `archive` — tar to a configurable location, mark the cache entry `retired`. Useful for forensic preservation.
 
-### Pool management
+> **The type literals are deliberately unchanged.** `ReleaseMode`'s
+> `'return-to-pool'` and the `acquire_path` values `'pool-warm'` /
+> `'pool-fresh'` still carry the old spelling. `ADR-2026-08-07` D2.3/D2.4
+> authorizes exactly three surface renames — the daemon control paths, the
+> `--pool` flag, and `capacity.poolMaxDiskGb`, none of them implemented yet —
+> and these enum literals are none of them.
+> Renaming a typed contract member is `ADR-2026-08-07` D10 work, gated on the
+> sizing pass that separates wording-only edits from schema-and-wire ones. Prose
+> in this doc says *cache*; the contract still says `pool` until that gate opens.
 
-- **Lockfile invalidation** — file watcher on `pnpm-lock.yaml` / `package-lock.json` / `Cargo.lock` etc. Any change marks all members `invalid` for that repo+toolchain key. Background rebuilder repopulates.
-- **Staleness** — pool members exceeding configured age (default 24h) are invalidated even without lockfile changes, to catch out-of-band dependency drift.
-- **Eviction** — LRU when pool capacity exceeded; configurable capacity per (repo, toolchain) key.
-- **Concurrency** — pool operations are serialized per (repo, toolchain) key via per-key mutex; multiple keys parallelize.
+### Cache management
+
+- **Lockfile invalidation** — file watcher on `pnpm-lock.yaml` / `package-lock.json` / `Cargo.lock` etc. Any change marks all entries `invalid` for that repo+toolchain key. Background rebuilder repopulates.
+- **Staleness** — cache entries exceeding configured age (default 24h) are invalidated even without lockfile changes, to catch out-of-band dependency drift.
+- **Eviction** — LRU when the cache's disk envelope is exceeded; the envelope is the daemon setting `capacity.poolMaxDiskGb` (`011`). Additionally configurable per (repo, toolchain) key.
+- **Concurrency** — cache operations are serialized per (repo, toolchain) key via per-key mutex; multiple keys parallelize.
 
 ### Observability
 
@@ -304,7 +323,7 @@ acquire_path: 'pool-warm' | 'pool-fresh' | 'cold'
 acquire_duration_ms
 ```
 
-The `acquire_path` field is the operational hook for "are we missing pool warmth?" alerts.
+The `acquire_path` field is the operational hook for "are we missing cache warmth?" alerts. Its value literals keep the `pool-` prefix — see the note above on unchanged type literals.
 
 ## Snapshot-aware implementations
 
@@ -339,7 +358,7 @@ When `release(pause)` and a later `resume()` happen, naive replay would double-e
 1. Workarea capabilities declare `emitsObservationEvents: true` if the provider integrates with the FS event capture stream.
 2. The `Workarea` handle carries an opaque `observationCursor` that represents "all events up to this point have been delivered to the memory writer."
 3. `snapshot()` MUST capture the cursor; `resume()` MUST restore it. Replays from a snapshot start delivering events from the cursor forward, not from the beginning.
-4. When a workarea is reused (`return-to-pool`), the cursor is RESET — a returned pool member starts fresh on its next acquire, because the prior session is logically over.
+4. When a workarea is reused (`return-to-pool`), the cursor is RESET — a returned cache entry starts fresh on its next acquire, because the prior session is logically over.
 
 This is one of the seams (`006-cross-provider-interactions.md`) where a small contract detail prevents a class of cross-layer bugs. If we miss it, eval reproducibility and proactive memory both surface duplicate observations.
 
@@ -347,7 +366,7 @@ This is one of the seams (`006-cross-provider-interactions.md`) where a small co
 
 The composition seam: a Kit's `provide.toolchain = { java = "17", node = "20" }` propagates into `WorkareaSpec.toolchain`. The workarea provider then matches against:
 
-- **Local pool**: pool members tagged by toolchain set; warmer maintains members for declared toolchain combinations.
+- **Local workarea cache**: cache entries tagged by toolchain set; warmer maintains entries for declared toolchain combinations.
 - **Snapshot-capable providers**: snapshot template lookup (`template:java-17+node-20`); if missing, cold-install once and tag.
 - **K8s**: image selector (`workarea-image: 'rensei/wa-java17-node20:v1'`); pod chosen from a warm replica set.
 
@@ -377,11 +396,11 @@ A provider that doesn't support shared mode (`capabilities.supportsSharedMode: f
 
 ## Capability profile by sandbox
 
-Mapping the seven sandbox providers to expected workarea capability shapes (informs `004` scheduler design):
+Mapping the seven sandbox providers to expected workarea capability shapes (informs `004`'s routing design). Note this table's "capability profile" is per-sandbox capability data and is **not** `ADR-2026-08-07`'s **capacity profile**, which is an org-authored policy over capacity pools:
 
 | Sandbox | cleanGuarantee | snapshot | pauseResume | sharedMode | resume | acquire-p95 |
 |---|---|---|---|---|---|---|
-| Local pool | scoped | ❌ | ❌ | ✅ | ❌ | ~5s warm / ~90s cold |
+| Local | scoped | ❌ | ❌ | ✅ | ❌ | ~5s warm / ~90s cold |
 | Vercel Sandbox | scoped | ✅ | ❌ | ❌ | from snap | ~5s warm / ~10s cold |
 | E2B | scoped | ✅ | ✅ | ❌ | ✅ | ~1s warm / ~10s cold |
 | Modal | scoped | ✅ (preview) | ✅ (preview) | ❌ | ✅ | seconds |

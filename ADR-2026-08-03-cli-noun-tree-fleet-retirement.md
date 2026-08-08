@@ -7,7 +7,7 @@ split: sibling-extensions
 
 # ADR-2026-08-03 — CLI noun tree: retire `fleet`, consolidate on `host` + `capacity`
 
-**Status:** Accepted — architecture decision; the OSS `host` factory (D2), the OSS/downstream alias-and-deletion sequencing (D5), and most of the downstream `capacity`-migration work are implementation and release pending. Downstream `fleet` retirement (moving its leaves under `capacity`, deleting overdue aliases) proceeds now per the 2026-08-03 operator ruling; OSS `daemon`→`host` has not shipped. See § Implementation notes.
+**Status:** Accepted — architecture decision. **D2 has shipped** (status refreshed 2026-08-07): the OSS `host` factory is exported and registered, `daemon` is a hidden deprecated alias, and the downstream `capacity` migration has landed its leaves and dropped its top-level `fleet` registration. **One piece of D5 remains unbuilt: the D5.4 release-gate check** that fails the build when an alias outlives its declared removal version. See § Implementation notes for what was verified and what was not.
 **Date:** 2026-08-03 (proposed and accepted same day)
 **Boundary:** shared (OSS-canonical here; `status: Mirrored` stub plus a platform-extensions delta in `rensei-architecture`)
 **Authors:** agent:claude, filed for mark
@@ -212,6 +212,22 @@ factory instead. Until it lands, `011`/`014` must describe the OSS surface as
    vocabulary is *instance* (matching the platform wire's own
    `instanceKind: persistent_host | on_demand_sandbox`), surfaced through
    `capacity show`.
+
+   **Applications of this rule, numbered so it reads as a rule rather than as a
+   pair of precedents:**
+
+   | # | Noun | Referents before | Resolution | Recorded in |
+   |---|---|---|---|---|
+   | 1 | `provider` | two, at two depths | collapsed to one | `ADR-2026-05-06` |
+   | 2 | `host` | this machine vs any machine | fixed to "this machine"; org side is `instance` | this ADR, above |
+   | 3 | `pool` | **four** — the org capacity pool, one daemon machine, the warm workarea cache, and this machine's local disk envelope | kept for the org capacity pool only; the other three renamed to **host**, **workarea cache**, and `capacity.workareaMaxDiskGb`. The `host` rename and the workarea-cache *prose* landed with `ADR-2026-08-07`'s acceptance; the wire/config half (daemon control paths, `--pool`, the disk-envelope key) is **authorized there and not yet implemented** | `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` D2 |
+   | 4 | `sandbox` | three — the provider family and execution-context kind, a deprecated composition-schema field, and a legacy per-project setting | narrowed to one *kind* of execution context (the ephemeral, provider-minted kind); the generic unit noun is **execution context**, wire noun `instance` | `ADR-2026-08-07` D1 |
+
+   Application 3 is the one that shows the rule has teeth: `pool` reached four
+   referents precisely because nobody applied this rule to it, and three of the
+   four lived in the OSS corpus. Application 4 lands the org-side `instance`
+   vocabulary this rule already named — `ADR-2026-08-07` D1 supplies the noun
+   (`execution context`) that `instanceKind` was already discriminating.
 2. **A leaf may be platform-only under a shared noun** (per
    `rensei-architecture/ADR-2026-05-06-tui-noun-consolidation-platform-extensions.md`
    § Addendum 2026-08-03). A **noun** may not mean different things in two
@@ -406,17 +422,69 @@ here.
 
 ## Implementation notes
 
-As of this ADR's acceptance (2026-08-03), nothing in it has shipped. Per the
-2026-08-03 operator ruling, downstream implementation proceeds now — `fleet`
-retires org-side and overdue aliases get deleted — while OSS `host` (D2) is
-built but not yet merged. Order still matters for the sequencing that depends
-on the unmerged piece: OSS `host` factory → OSS minor → downstream `go get`
-bump → downstream alias-deletion minor → downstream `fleet`-deletion minor.
-Attempting the downstream move before the OSS factory exists reproduces the
-hand-assembled tree this ADR is trying to delete. Until an OSS release
-carrying D2 exists, `011-local-daemon-fleet.md` and `014-tui-operator-surfaces.md`
-correctly describe the OSS binary as `daemon`-shaped (see their command-surface
-notes) even though this ADR is `Accepted`.
+**Status refresh, 2026-08-07.** The paragraph that stood here said "nothing in it
+has shipped" and that the OSS `host` factory was "built but not yet merged". Both
+were stale. Re-verified against the code and tag history on 2026-08-07 as part of
+`ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`'s accepting
+commit, which lists this refresh on its own edit checklist:
+
+**Verified shipped.**
+
+- **D2 — the OSS `host` factory.** `afcli` exports a real `host` parent
+  (`newHostCmd`) and registers it in `RegisterCommands`; `daemon` is registered
+  alongside it as the hidden deprecated alias, with `deprecateTree` wrapping the
+  whole subtree so the notice goes to stderr and `--json` output stays parseable.
+  It shipped in the `v0.57.0` line; the tag history has since run past it.
+- **The alias-version discipline (D5.4's *declaration* half).** The package
+  declares a concrete `v0.58.0` removal constant for the `daemon`→`host` and
+  `fleet-watch`→`host watch` aliases, and unit tests assert both that the
+  deprecation string names it and that it is a concrete `vX.Y.Z` rather than "the
+  next release".
+- **The downstream `capacity` migration.** The composing binary carries its
+  `capacity` leaves and no longer registers a top-level `fleet` command.
+- **The legacy OSS `fleet`/`worker` process-supervision subtree** is now behind an
+  explicit opt-in flag rather than registered unconditionally.
+
+**Verified NOT built — and it is the load-bearing half.**
+
+- **D5.4's enforcement.** No script, Makefile target, or CI workflow checks an
+  alias against its declared removal version. The only enforcement is the unit
+  tests above, which assert the *shape* of the constant and never its *expiry*.
+  So the declared-removal-version rule currently rests on the same honour system
+  the "one release" promise did — which is the exact failure D5.4 was written to
+  end, and it is why an earlier alias generation outlived its promise by 84
+  releases. Building it is outstanding work, and it acquires urgency as new
+  aliases are declared against it — `ADR-2026-08-07` D2.3/D2.4 authorize a batch
+  of them, though that rename is decoupled from its accepting commit and has not
+  been implemented, so no new alias exists against the unbuilt gate *yet*. That
+  is a reprieve, not a fix.
+- **A sequencing collision the gate would immediately surface.** `v0.58.0` is
+  simultaneously the declared removal of the `daemon`→`host` alias and the
+  natural creation release for `ADR-2026-08-07`'s aliases whenever they land.
+  That removal has an
+  unmet precondition recorded in the code: service units already written to disk
+  by earlier builds still invoke `<binary> daemon run`, and they are only
+  rewritten when an operator re-runs the installer — deleting the alias on
+  schedule stops the service on every machine that has not re-installed. Decide
+  that sequencing before turning a D5.4 gate on, or it goes red on day one.
+
+**Not re-verified**, and deliberately not asserted here: the individual D5
+alias-leaf deletion counts, the removal of `fleet scale`, and the
+`fleet-watch`→`host watch` rename's downstream completion. This refresh corrects
+the two claims that were checked and found false; it is not a full re-audit of
+D5, and a later reader should not read it as one.
+
+The original sequencing note, retained because it still governs any future
+lock-step move: OSS factory → OSS minor → downstream module bump → downstream
+alias-deletion minor → downstream `fleet`-deletion minor. Attempting the
+downstream move before the OSS factory exists reproduces the hand-assembled tree
+this ADR is trying to delete.
+
+`011-local-daemon-fleet.md` and `014-tui-operator-surfaces.md` still carry
+command-surface notes describing the OSS binary as `daemon`-shaped. Those notes
+are now stale for the same reason this paragraph was, and their correction is
+this ADR's cleanup debt — not `ADR-2026-08-07`'s, whose accepting commit
+deliberately left them alone rather than widening its own closed edit list.
 
 The platform-side delta — which platform endpoints back the moved leaves, the
 route write-path semantics the moved `capacity route set` inherits, and the

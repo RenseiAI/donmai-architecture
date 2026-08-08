@@ -157,7 +157,7 @@ The architecture splits these. AgentRuntime support belongs on `AgentRuntimeProv
 Two modes per `004` and `011`:
 
 - **Foreground mode** (legacy): worker spawned per VSCode session, lifetime tied to that editor. Anti-pattern at fleet scale; deprecated as default.
-- **Daemon mode** (recommended): one long-running daemon per machine, registers as a worker pool, multi-project allowlist, auto-update. Detail in `011`.
+- **Daemon mode** (recommended): one long-running daemon per machine, **registers as a host** and offers execution contexts, multi-project allowlist, auto-update. Detail in `011`. *(It does not register "as a worker pool" — a pool is an org-owned, single-provider source of execution contexts, per `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` D2.2.)*
 
 The daemon and the worker are not the same process. The daemon is a long-running supervisor that:
 - Registers the *machine's* capacity once at boot
@@ -335,7 +335,7 @@ Worker-process exit, transport delivery, acknowledgement, expiry, and daemon
 restart do not end exclusive ownership. Ownership ends only at durable
 `released`; provider failure retains `release-pending` and keeps the exact
 workarea unavailable. Recovery loads quarantine records, every `active` and
-`release-pending` lease, local claims, and outbox state before pool admission.
+`release-pending` lease, local claims, and outbox state before workarea-cache admission.
 A privileged verification composition remains unavailable unless the running
 released-artifact set and, when Kit commands are selected, the active package
 identity and command-composition digest exactly match their approved values.
@@ -463,10 +463,14 @@ Any future binary added to the OSS distribution channel inherits this rule. Its 
 | TUI fleet view | ✅ ships | extended |
 | Multi-tenant orchestrator | ❌ | ✅ owns |
 | Routing Intelligence panel | ❌ | ✅ owns |
-| Cross-machine fleet aggregation | partial (LAN) | ✅ owns (cloud-burst) |
+| Cross-machine fleet aggregation | partial (LAN) | ✅ owns (multi-tenant) |
 | macOS signing rule | ✅ ships (architectural commitment) | extends with operational state |
 
-OSS users get a fully working orchestrator + governor + worker fleet on their Mac Studio. The SaaS extensions (Topology view, Routing Intelligence panel, multi-tenant orchestration, cloud-burst aggregation, the platform-merge-queue specifics) live in the platform-extensions doc.
+The `Cross-machine fleet aggregation` row read `✅ owns (cloud-burst)` until 2026-08-07, and the paragraph below it listed `cloud-burst aggregation` among the hosted extensions. **Aggregation is real; the burst qualifier was not, and never was.** The hosted control plane does aggregate hosts across machines, and does so per tenant — that half stands. What it does not do is spill work from one pool to another: there is no overflow policy, no exhaustion trigger, and no schema for either. `ADR-2026-08-07` D7 records the absence as fact, and an audit of the hosted plane's dispatch history corroborated it — **no fall-back events, and no dispatch ever re-placed after its initial binding.** What does exist is a static capability-mismatch filter: it reads a provider's declared flags, and takes no capacity or availability input at all, so it cannot detect the exhaustion a burst would respond to. The same qualifier was deleted from `004-sandbox-capability-matrix.md`'s equivalent row in this ADR's accepting commit, with the epitaph *"neither side ships burst routing, and neither ever did."* This row is the second half of that deletion.
+
+Failure-triggered routing-around — honouring a capacity profile's existing order when a dispatch *fails* — is D7's named first iteration and is not yet built. Predictive burst is undesigned and needs its own ADR.
+
+OSS users get a fully working orchestrator + governor + worker fleet on their Mac Studio. The SaaS extensions (Topology view, Routing Intelligence panel, multi-tenant orchestration, multi-tenant fleet aggregation, the platform-merge-queue specifics) live in the platform-extensions doc.
 
 **One server-side operation per user intent.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D8, this table is about *who implements* a concern — never about *who can reach it*. Each state-changing intent ("this host serves this scope", "stop this session", "drain this host") is expressed once, server-side, and every client calls that same operation. Clients carry no machine-facing concepts and no client-specific write path. Two consequences bind reviewers: a capability reachable from only one client is not shipped, and physical presence at a machine is never a requirement for anything except installing the host service.
 

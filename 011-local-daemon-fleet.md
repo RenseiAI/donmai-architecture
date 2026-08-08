@@ -25,7 +25,7 @@ Concretely, the user's day:
 
 1. **Once at install:** `brew install donmai && donmai daemon install` (or equivalent on Linux). Daemon starts; registers as a system service.
 2. **Once per project:** `donmai project allow github.com/foo/bar`. Daemon now accepts work for that project. Credentials are picked up from system keychain or per-project config.
-3. **Day-to-day:** open VSCode for any allowed project, or don't. Linear webhooks → orchestrator → daemon. The daemon clones the repo on first session, warms a workarea pool, and runs sessions. No window-switching, no per-workspace fleet management.
+3. **Day-to-day:** open VSCode for any allowed project, or don't. Linear webhooks → orchestrator → daemon. The daemon clones the repo on first session, warms its workarea cache, and runs sessions. No window-switching, no per-workspace fleet management.
 4. **On release:** daemon auto-updates on configured channel. Drains in-flight work, restarts cleanly. User sees a single notification or nothing at all.
 
 ## Installation paths
@@ -68,7 +68,7 @@ Logs to `journalctl --user -u af-daemon`. The OSS execution layer ships only the
 
 Initial OSS support is deferred — we don't have the user demand or the test coverage today, and the user has stated a preference against Windows-as-primary. But the architecture (`004` capability flags, `005` per-OS kit contributions) admits Windows as a first-class OS. When regulated banking customers eventually require it (and they will), the daemon port is a 4-week scoped piece of work, not an architectural rewrite.
 
-Concretely, the Windows port consists of: a Windows Service host (replacing launchd plist / systemd unit), Windows-flavored credential helpers (Windows Credential Manager), pool directory in `%LOCALAPPDATA%\rensei`, NDJSON logs to ETW or file. Kits already declare per-OS install scripts and command overrides per `005`; the Spring kit, the TS kit, and the Rust kit all work as long as their `[provide.toolchain_install.windows]` and `[provide.commands_override.windows]` sections are populated.
+Concretely, the Windows port consists of: a Windows Service host (replacing launchd plist / systemd unit), Windows-flavored credential helpers (Windows Credential Manager), workarea-cache directory in `%LOCALAPPDATA%\rensei`, NDJSON logs to ETW or file. Kits already declare per-OS install scripts and command overrides per `005`; the Spring kit, the TS kit, and the Rust kit all work as long as their `[provide.toolchain_install.windows]` and `[provide.commands_override.windows]` sections are populated.
 
 ### Linux ARM64
 
@@ -176,7 +176,7 @@ Cores and memory the daemon will *not* touch. The user is still using their mach
 - `full` — full clone. Slower first-time, supports `git log`-heavy operations.
 - `reference-clone` — clone-from-existing-local-mirror. Fast and full history if you already have a clone elsewhere on disk.
 
-The workarea provider's local pool composes with this — first acquire pays the clone cost; subsequent acquires reuse the pool member.
+The workarea provider's local cache composes with this — first acquire pays the clone cost; subsequent acquires reuse the cache entry.
 
 ### `projects[].git.credentialHelper`
 
@@ -226,7 +226,7 @@ When the daemon needs to restart (auto-update, manual stop, system reboot schedu
 
 1. **Stop accepting new work.** Daemon updates its registered status to `draining` and reports it on the next heartbeat; a compliant orchestrator reads it and stops routing new sessions to the host. This depends on the heartbeat request actually carrying the status field on the wire, not just computing it internally — see `ADR-2026-08-03-daemon-host-status-signal-completion.md`, which closes a prior gap where the daemon computed this status every beat and silently dropped it before serialization. Until a daemon build including that fix is in use, treat "the orchestrator routes new sessions elsewhere" as aspirational rather than guaranteed.
 2. **Wait for in-flight sessions.** Up to `drainTimeoutSeconds` (default 600). Sessions get a SIGTERM at the timeout. Unleased workareas follow the configured post-mortem release policy. Under the accepted, implementation-pending terminal-lease architecture, every `active` or `release-pending` workarea remains unavailable until provider disposition is complete and `released` is durably saved; acknowledgement and expiry only select a release path.
-3. **Release eligible pool members.** Pool members in `ready` or `warming` state are torn down; `acquired` members follow the policy above. Drain never overrides a non-released terminal workarea lease or acquisition-quarantine guard.
+3. **Release eligible workarea-cache entries.** Cache entries in `ready` or `warming` state are torn down; `acquired` entries follow the policy above. Drain never overrides a non-released terminal workarea lease or acquisition-quarantine guard.
 4. **Restart.** New process boots, re-registers, status returns to `ready`.
 
 For graceful planned restarts (e.g., a reboot), `donmai daemon drain` returns when drain completes. CI scripts or shutdown hooks can wait on it.
@@ -239,16 +239,16 @@ If the daemon process dies unexpectedly:
 
 1. **System service auto-restart.** launchd / systemd brings it back. Default backoff: immediate, then 30s, 5m for repeated crashes.
 2. **In-flight sessions become orphans.** Their workareas remain on disk. Under the accepted, implementation-pending terminal-lease architecture, the new daemon loads the separate acquisition-quarantine journal first, then every durable `active` and `release-pending` lease, before classifying orphan workareas. Any guarded, quarantined, non-released, or unreconciled exact workarea remains unavailable under its originating session identity; only an unleased, unguarded orphan follows the ordinary post-mortem policy.
-3. **Pool state survives.** Pool members are filesystem state; they are rediscovered only after quarantine, lease, session, and pool-catalog reconciliation. A member with a quarantine record or non-released lease cannot be admitted to an available state.
+3. **Workarea-cache state survives.** Cache entries are filesystem state; they are rediscovered only after quarantine, lease, session, and cache-catalog reconciliation. An entry with a quarantine record or non-released lease cannot be admitted to an available state.
 4. **Logs preserve crash context.** macOS: `~/Library/Logs/donmai/daemon.log`; Linux: `journalctl --user -u donmai-daemon`. The daemon emits a final crash dump to the same path before exiting (when possible).
 
 If the daemon refuses to start, common causes:
 
 - **Bad credentials** for a configured project. Daemon logs the project ID and exits. Fix via `donmai project credentials github.com/foo/bar`.
 - **Port collision** for the local exec endpoint. Daemon picks a free port by default; explicit `localExecPort` in config can hit collisions. Run `donmai daemon doctor` to detect.
-- **Disk full** in the pool directory. Pool members are scratch FS; running out of disk halts acquires. Default cleanup: warn at 80%, refuse new pool members at 90%.
+- **Disk full** in the workarea-cache directory. Cache entries are scratch FS; running out of disk halts acquires. Default cleanup: warn at 80%, refuse new cache entries at 90%. The configured envelope is the daemon setting `capacity.poolMaxDiskGb` — a `pool`-spelled key for a workarea-cache concern; see § "The `pool` wire spellings on this surface".
 
-`donmai daemon doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, pool sane) and prints the failing condition.
+`donmai daemon doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, workarea cache sane) and prints the failing condition.
 
 Every remediation string above is an admission that the daemon could not heal itself. Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D4 each one is therefore a work item rather than a UX affordance: a hint may not name an action whose inputs the daemon or its orchestrator already holds. Two rules follow, and both are cheap to enforce.
 
@@ -265,7 +265,7 @@ the exact approved released artifacts.
 
 Before attempting to persist a terminal lease, the daemon writes and fsyncs a
 record in a separate acquisition-quarantine journal. A durable lease supersedes
-the guard only after it is re-read and associated with the pool member. If lease
+the guard only after it is re-read and associated with the cache entry. If lease
 persistence fails, the guard remains: terminal success is not posted, the exact
 workarea is excluded at boot, and automatic cleanup may only destroy it. If the
 quarantine authority is unavailable, the affected provider root remains
@@ -288,7 +288,7 @@ provider disposition followed by durable `released` does so.
 
 Recovery order is quarantine journal, leases and local claims, terminal-status
 outbox, downstream receipt/result outbox state when configured,
-session/catalog reconciliation, actionable indexes, then pool admission.
+session/catalog reconciliation, actionable indexes, then workarea-cache admission.
 Duplicate terminal submissions reuse a record only for the same terminal-result
 identity and canonical-byte-equivalent Donmai invariants. A configured privileged
 consumer remains disabled unless the running released-artifact set and, when Kit
@@ -376,7 +376,7 @@ work as the deferred root's "no progress." Full contract:
 Three observability surfaces:
 
 - **`donmai daemon logs`** — tail the daemon log. NDJSON by default. Pretty-printed when stdout is a TTY.
-- **`donmai daemon stats`** — current capacity, sessions in flight, pool state per (repo, toolchain), recent acquire/release latencies.
+- **`donmai daemon stats`** — current capacity, sessions in flight, workarea-cache state per (repo, toolchain), recent acquire/release latencies.
 - **Prometheus metrics** at `http://localhost:9101/metrics` (configurable). Scrape into your own monitoring if running multi-machine.
 
 Key NDJSON fields the daemon emits (consumed by Layer 6 observability per `006`):
@@ -434,6 +434,54 @@ in-process `WorkerSpawner.StopSession` primitive. Full contract — the in-band 
 signal, the `FailureOperatorCancelled` / `FailureNoProgress` terminal modes, and
 the no-progress watchdog — is in
 `ADR-2026-06-22-daemon-per-session-cancel-wire.md`.
+
+#### The `pool` wire spellings on this surface: what they mean, and the rename that is authorized but not yet shipped
+
+`GET /api/daemon/pool/stats` and `POST /api/daemon/pool/evict` report on and
+evict from the machine-local **workarea cache**
+(`003-workarea-provider.md` § "The workarea cache") — never from an org capacity
+pool, which the daemon has no authority over. The same referent mismatch runs
+through the rest of this daemon's `pool` spellings: the `?pool=true` query
+parameter on `GET /api/daemon/stats`, the `pool` object in that endpoint's
+response, the `<binary> host stats --pool` flag, the `capacity.poolMaxDiskGb`
+config key, and the `pool-invalidated` log event listed under § "Logging and
+observability". **Every one of those spellings above is current and correct as
+written — this section is describing shipped behaviour, not a target state.**
+
+`ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` D2.3/D2.4
+**authorizes** renaming that whole set to the `workarea`/`workarea-cache`
+vocabulary under `ADR-2026-08-03` D5.4's alias discipline. **It is not
+implemented.** No `workarea`-spelled endpoint, query parameter, response field,
+flag, or config key exists in any released build, and none is aliased. The
+rename ships as its own lock-step doc-and-code change; until that change lands,
+a client or operator should read every `pool` spelling on this API at face
+value.
+
+Three constraints that change carries, recorded here because they are properties
+of *this* surface rather than of the ADR:
+
+- **The `?pool=true` query parameter and the `pool` response field must be
+  aliased, not just the paths.** An unrecognised query parameter is *ignored*,
+  not rejected, and the response field is `omitempty` — so an un-aliased rename
+  degrades silently (an older client asks for cache stats and gets a response
+  with the section missing) rather than failing cleanly. Silent degradation is
+  the worse failure and the one the alias exists to prevent.
+- **`capacity.poolMaxDiskGb` needs a read alias on the config struct, not just
+  in the CLI key allowlist, and the config *writer* must keep emitting the old
+  key until the alias is retired.** The daemon's YAML load is non-strict, so an
+  unrecognised key is dropped silently; the field's `0` means **no limit**; and
+  the config writer replaces the whole `capacity` mapping, so an unmodelled key
+  inside it is erased by the next unrelated `set`. A CLI-only or write-only
+  rename would therefore turn an operator's existing disk cap into "no limit" on
+  the first version-skewed read — LRU eviction off, disk fills — and that fires
+  on the ordinary skew case, not an exotic one.
+- **`/api/daemon/workarea/*` (singular) would sit one character from the
+  already-shipped `/api/daemon/workareas/*` (plural — individual workareas and
+  their archives, listed below), which is a different referent.** That adjacency
+  is uncomfortable for a rename whose whole subject is one noun per referent.
+  `ADR-2026-08-07` § "One risk carried forward" records it and names
+  `/api/daemon/workarea-cache/*` as the unambiguous spelling the follow-up
+  should take.
 
 Provider/Kit/Workarea/Routing operator surfaces (Wave 9):
 
@@ -504,7 +552,7 @@ donmai project allow github.com/newco/newrepo --no-credentials
 donmai project credentials github.com/newco/newrepo
 ```
 
-### "Pool's getting big, disk is filling"
+### "The workarea cache is getting big, disk is filling"
 
 ```bash
 donmai daemon stats --pool           # see usage by (repo, toolchain)
@@ -513,6 +561,12 @@ donmai daemon evict --repo github.com/old/project --older-than 7d
 donmai daemon set capacity.poolMaxDiskGb 100
 # the daemon will LRU-evict to fit
 ```
+
+The flag and the config key are spelled `pool`; the thing they address is the
+machine-local workarea cache. That mismatch is `ADR-2026-08-07` D2.3/D2.4's
+authorized-but-unimplemented rename — see § "The `pool` wire spellings on this
+surface". Setting the disk envelope to `0` means *no limit*, which disables LRU
+eviction entirely.
 
 ### "I need to inspect a workarea after a session failed"
 
