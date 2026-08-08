@@ -259,7 +259,7 @@ Cache entry states:
 
 This cache-state contract is consumed by the user-facing `host workarea` TUI subcommand (`<binary> host workarea list / inspect / restore`) per `ADR-2026-05-06-tui-noun-consolidation.md`, which folded the previous top-level `workarea` namespace into `host` alongside daemon lifecycle and capacity. The state names in this section are the canonical labels the TUI renders on each cache entry; clients using the older top-level `workarea` command see the same labels through the deprecated alias.
 
-The daemon's control surface for this cache is `GET /api/daemon/workarea/stats` and `POST /api/daemon/workarea/evict`; see `011-local-daemon-fleet.md` § "HTTP Control API", including the aliases that carry the previous `/api/daemon/pool/*` spelling and their declared removal version.
+The daemon's control surface for this cache is `GET /api/daemon/pool/stats` and `POST /api/daemon/pool/evict` — `pool`-spelled paths addressing this workarea cache, not any org capacity pool. `ADR-2026-08-07` D2.3/D2.4 authorizes renaming them (and the rest of that surface's `pool` spellings) to the vocabulary this doc uses in prose; **that rename is not implemented and ships as its own lock-step change.** See `011-local-daemon-fleet.md` § "The `pool` wire spellings on this surface".
 
 ### `acquire(spec)` — fast path
 
@@ -291,9 +291,10 @@ P95 target: < 90 seconds for typical TS monorepo. Background warmer creates addi
 
 > **The type literals are deliberately unchanged.** `ReleaseMode`'s
 > `'return-to-pool'` and the `acquire_path` values `'pool-warm'` /
-> `'pool-fresh'` still carry the old spelling. `ADR-2026-08-07` D2.3 authorizes
-> exactly three surface renames — the daemon control paths, the `--pool` flag,
-> and `capacity.poolMaxDiskGb` — and these enum literals are none of them.
+> `'pool-fresh'` still carry the old spelling. `ADR-2026-08-07` D2.3/D2.4
+> authorizes exactly three surface renames — the daemon control paths, the
+> `--pool` flag, and `capacity.poolMaxDiskGb`, none of them implemented yet —
+> and these enum literals are none of them.
 > Renaming a typed contract member is `ADR-2026-08-07` D10 work, gated on the
 > sizing pass that separates wording-only edits from schema-and-wire ones. Prose
 > in this doc says *cache*; the contract still says `pool` until that gate opens.
@@ -302,7 +303,7 @@ P95 target: < 90 seconds for typical TS monorepo. Background warmer creates addi
 
 - **Lockfile invalidation** — file watcher on `pnpm-lock.yaml` / `package-lock.json` / `Cargo.lock` etc. Any change marks all entries `invalid` for that repo+toolchain key. Background rebuilder repopulates.
 - **Staleness** — cache entries exceeding configured age (default 24h) are invalidated even without lockfile changes, to catch out-of-band dependency drift.
-- **Eviction** — LRU when the cache's disk envelope is exceeded; the envelope is the daemon setting `capacity.workareaMaxDiskGb` (`011`). Additionally configurable per (repo, toolchain) key.
+- **Eviction** — LRU when the cache's disk envelope is exceeded; the envelope is the daemon setting `capacity.poolMaxDiskGb` (`011`). Additionally configurable per (repo, toolchain) key.
 - **Concurrency** — cache operations are serialized per (repo, toolchain) key via per-key mutex; multiple keys parallelize.
 
 ### Observability

@@ -126,7 +126,7 @@ Detail: **`008-version-control-providers.md`** for VCS specifically. IssueTracke
 Where work physically happens. Four sub-concepts that compose:
 
 - **SandboxProvider** — *where* compute runs. Local Mac Studio fleet, Vercel Sandbox, E2B, Modal, Daytona, Docker, Kubernetes. Owns capacity, billing, network topology.
-- **WorkareaProvider** — *what filesystem state* the worker sees. Acquire-deterministic-state / release-with-disposition lifecycle. Local impl uses a warm pool with scoped clean; snapshot-capable providers (E2B, Vercel) accelerate via filesystem or memory snapshots.
+- **WorkareaProvider** — *what filesystem state* the worker sees. Acquire-deterministic-state / release-with-disposition lifecycle. Local impl uses a warm **workarea cache** with scoped clean; snapshot-capable providers (E2B, Vercel) accelerate via filesystem or memory snapshots.
 - **AgentRuntimeProvider** — *which model + agentic protocol* dispatches the LLM process. Claude (Anthropic), Codex (OpenAI), Amp, Spring AI, OpenCode, Ollama, Gemini, plus A2A as a transport flavor for federated work. Each declares capabilities like `supportsMessageInjection`, `supportsSessionResume`, `supportsToolPlugins`, `canSpawnNativeChildren`, `canRunHeadlessly`, `emitsSubagentEvents` (drives operator-surface child visibility), `streamingTransport` (sse / ndjson / websocket / none), and `humanLabel` companions for capability flags so TUI surfaces don't re-encode semantics. Each also declares a **stability tier** (`stable | beta | unstable | registration-only`); the orchestrator (`013`) consults the tier when placing work, warning on `unstable` and refusing `registration-only` unless the session is explicitly a probe.
 - **Worker** — the agent process itself. Registers with the orchestrator (dial-in or dial-out per `SandboxProvider.capabilities.transportModel`) and consumes work.
 
@@ -202,7 +202,7 @@ A **Kit** declares:
 - **Provide** — contributions to the session: build/test/validate commands, prompt fragments, tool permissions, MCP servers, skills (SKILL.md), agent templates, A2A skill exports, *toolchain demands* (e.g., `java = "17"`).
 - **Composition rules** — ordering, scope, conflict resolution when multiple Kits apply.
 
-The killer architectural mechanic: **a Kit's toolchain demand is a signal to the SandboxProvider+WorkareaProvider scheduler.** Declaring `provide.toolchain = { java = "17" }` causes the scheduler to route to a warm pool member, image, or snapshot that satisfies the demand. Kits never know about sandbox providers; sandbox providers never know about Kits. The toolchain spec is the contract between them.
+The killer architectural mechanic: **a Kit's toolchain demand is a signal to the SandboxProvider+WorkareaProvider scheduler.** Declaring `provide.toolchain = { java = "17" }` causes the scheduler to route to a warm workarea-cache entry, image, or snapshot that satisfies the demand. Kits never know about sandbox providers; sandbox providers never know about Kits. The toolchain spec is the contract between them.
 
 This layer is where the strategic timing call lives: the AI ecosystem is converging on a buildpacks-shaped pattern (MCP Registry, Anthropic Skills, AgentStack, nori-skillsets), but no system today bundles all four required dimensions (manifest + detect + registry + composition) with host-driven introspection. Landing this layer with a real spec is a chance to set the standard rather than adopt one.
 
@@ -240,7 +240,7 @@ Bringing the layers together, here are the ten typed Provider Family contracts. 
 | Family | Layer | OSS-shipped impl | Platform-shipped alternates |
 |---|---|---|---|
 | **SandboxProvider** | Execution | Local (Mac Studio fleet) | Vercel Sandbox · E2B · Modal · Daytona · Docker · K8s |
-| **WorkareaProvider** | Execution | Local-pool (scoped clean) | Snapshot-aware variants per sandbox |
+| **WorkareaProvider** | Execution | Local workarea cache (scoped clean) | Snapshot-aware variants per sandbox |
 | **AgentRuntimeProvider** | Execution | Claude (Anthropic) | Codex · Gemini · Amp · Spring AI · OpenCode · Ollama · A2A |
 | **VersionControlProvider** | Integration | Git (GitHub) | Atomic · S3 · structured-content backends |
 | **IssueTrackerProvider** | Integration | Linear | Jira · Asana · Monday · Sheets/Notion · proxy mode |

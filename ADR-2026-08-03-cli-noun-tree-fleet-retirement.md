@@ -220,7 +220,7 @@ factory instead. Until it lands, `011`/`014` must describe the OSS surface as
    |---|---|---|---|---|
    | 1 | `provider` | two, at two depths | collapsed to one | `ADR-2026-05-06` |
    | 2 | `host` | this machine vs any machine | fixed to "this machine"; org side is `instance` | this ADR, above |
-   | 3 | `pool` | **four** — the org capacity pool, one daemon machine, the warm workarea cache, and this machine's local disk envelope | kept for the org capacity pool only; the other three renamed to **host**, **workarea cache**, and `capacity.workareaMaxDiskGb` | `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` D2 |
+   | 3 | `pool` | **four** — the org capacity pool, one daemon machine, the warm workarea cache, and this machine's local disk envelope | kept for the org capacity pool only; the other three renamed to **host**, **workarea cache**, and `capacity.workareaMaxDiskGb`. The `host` rename and the workarea-cache *prose* landed with `ADR-2026-08-07`'s acceptance; the wire/config half (daemon control paths, `--pool`, the disk-envelope key) is **authorized there and not yet implemented** | `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` D2 |
    | 4 | `sandbox` | three — the provider family and execution-context kind, a deprecated composition-schema field, and a legacy per-project setting | narrowed to one *kind* of execution context (the ephemeral, provider-minted kind); the generic unit noun is **execution context**, wire noun `instance` | `ADR-2026-08-07` D1 |
 
    Application 3 is the one that shows the rule has teeth: `pool` reached four
@@ -454,11 +454,14 @@ commit, which lists this refresh on its own edit checklist:
   the "one release" promise did — which is the exact failure D5.4 was written to
   end, and it is why an earlier alias generation outlived its promise by 84
   releases. Building it is outstanding work, and it acquires urgency as new
-  aliases are declared against it (`ADR-2026-08-07` D2.3/D2.4 add three more,
-  declaring `v0.59.0`).
+  aliases are declared against it — `ADR-2026-08-07` D2.3/D2.4 authorize a batch
+  of them, though that rename is decoupled from its accepting commit and has not
+  been implemented, so no new alias exists against the unbuilt gate *yet*. That
+  is a reprieve, not a fix.
 - **A sequencing collision the gate would immediately surface.** `v0.58.0` is
   simultaneously the declared removal of the `daemon`→`host` alias and the
-  natural creation release for `ADR-2026-08-07`'s aliases. That removal has an
+  natural creation release for `ADR-2026-08-07`'s aliases whenever they land.
+  That removal has an
   unmet precondition recorded in the code: service units already written to disk
   by earlier builds still invoke `<binary> daemon run`, and they are only
   rewritten when an operator re-runs the installer — deleting the alias on
