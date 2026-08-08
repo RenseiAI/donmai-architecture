@@ -277,10 +277,83 @@ check_allowlist_refusal() {
   fi
   PASS=$((PASS + 1))
 }
-check_allowlist_refusal wholefile '^sample\.md:.*'                          refuse
-check_allowlist_refusal unanchored 'sample\.md:[0-9]+:.*\[rule: BRAND_NAME' refuse
-check_allowlist_refusal wildcard  '^sample\.md:[0-9]+:.*\[rule: .*'         refuse
-check_allowlist_refusal scoped    '^sample\.md:[0-9]+:.*\[rule: BRAND_NAME' accept
+check_allowlist_refusal wholefile  'BRAND_NAME :: ^sample\.md:[0-9]+ :: .*'    refuse
+check_allowlist_refusal unanchored 'BRAND_NAME :: sample\.md:[0-9]+ :: Acme'   refuse
+check_allowlist_refusal wildcard   'BRAND_NAME :: ^.*:[0-9]+ :: Acme'          refuse
+check_allowlist_refusal twofield   'BRAND_NAME :: ^sample\.md:[0-9]+'          refuse
+check_allowlist_refusal unknownid  'BRAND_NAMES :: ^sample\.md:[0-9]+ :: Acme' refuse
+check_allowlist_refusal scoped     'BRAND_NAME :: ^sample\.md:[0-9]+ :: Acme'  accept
+
+# ---- ENGINE: an allowlist entry exempts one OCCURRENCE, not a whole line ----
+# The pre-round-3 grammar matched one regex against the composed display string
+# "<location>:<line>:<content> [rule: …]". Because <content> is the whole line,
+# an exemption keyed on one identifier silently covered every other violation
+# sharing that line. Two identifiers, one exempted: the other must still fire.
+check_allowlist_per_occurrence() {
+  local d="$TMP/allow-per-occurrence" out rc
+  N=$((N + 1))
+  mkdir -p "$d"
+  printf '%s\n' \
+    "TRACKER_ID :: ^sample\.md:[0-9]+ :: ${U}EN-9990" > "$d/.guard-allowlist"
+  printf 'fixes %sEN-9990 and also %sEN-9991 in one line\n' "$U" "$U" > "$d/sample.md"
+  set +e
+  out="$(cd "$d" && "$GUARD" sample.md 2>&1)"
+  rc=$?
+  set -e
+  if [[ $rc -eq 0 ]]; then
+    fail "exempting one identifier suppressed a second, unlisted one on the same line"
+    printf '%s\n' "$out" | sed 's/^/    /' >&2
+    return
+  fi
+  # Assert on the [match: …] annotation, not the whole output: the reported
+  # line's CONTENT necessarily contains both identifiers, so grepping the
+  # output for the exempted one always hits and proves nothing.
+  if printf '%s\n' "$out" | grep -q "\[match: .*${U}EN-9990"; then
+    fail "the exempted occurrence was still reported"
+    printf '%s\n' "$out" | sed 's/^/    /' >&2
+    return
+  fi
+  if ! printf '%s\n' "$out" | grep -q "\[match: .*${U}EN-9991"; then
+    fail "the unlisted occurrence was not reported"
+    printf '%s\n' "$out" | sed 's/^/    /' >&2
+    return
+  fi
+  PASS=$((PASS + 1))
+}
+check_allowlist_per_occurrence
+
+# ---- ENGINE: a rule scope is a whole string, not a prefix -------------------
+# `TRACKER_ID` must NOT cover `TRACKER_ID_SLUG`. The old grammar compared the
+# scope as a bare prefix of the composed string, so the narrower-looking scope
+# silently exempted every rule whose ID began with it.
+check_allowlist_scope_not_prefix() {
+  local d="$TMP/allow-scope-prefix" out rc
+  N=$((N + 1))
+  mkdir -p "$d"
+  # NB: pass the whole prefix as ONE argument. Splitting it so that a '%s'
+  # conversion abuts the rest of the prefix reassembles the banned literal in
+  # this file's own source — the exact violation the fragment convention in the
+  # header exists to prevent, and this guard flags it on its own selftest.
+  printf '%s\n' \
+    "TRACKER_ID :: ^sample\.md:[0-9]+ :: ${LS}up-9990" > "$d/.guard-allowlist"
+  printf 'branch %s-9990-wire carries the slug form\n' "${LS}up" > "$d/sample.md"
+  set +e
+  out="$(cd "$d" && "$GUARD" sample.md 2>&1)"
+  rc=$?
+  set -e
+  if [[ $rc -eq 0 ]]; then
+    fail "a TRACKER_ID scope exempted a TRACKER_ID_SLUG violation (prefix match)"
+    printf '%s\n' "$out" | sed 's/^/    /' >&2
+    return
+  fi
+  if ! printf '%s\n' "$out" | grep -q 'rule: TRACKER_ID_SLUG '; then
+    fail "the slug violation was not reported under TRACKER_ID_SLUG"
+    printf '%s\n' "$out" | sed 's/^/    /' >&2
+    return
+  fi
+  PASS=$((PASS + 1))
+}
+check_allowlist_scope_not_prefix
 
 # ---- Report -----------------------------------------------------------------
 echo ""
