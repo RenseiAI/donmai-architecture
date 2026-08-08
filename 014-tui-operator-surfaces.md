@@ -11,7 +11,7 @@
 
 | Top-level | Concept layer | Owns | Implemented in |
 |---|---|---|---|
-| `host` | This machine | Daemon lifecycle (install / status / doctor / drain / update), capacity envelope, local workarea pool, installed providers and kits, project admission, the local live-session dashboard | OSS; composed downstream unchanged |
+| `host` | This machine | Daemon lifecycle (install / status / doctor / drain / update), capacity envelope, local workarea cache, installed providers and kits, project admission, the local live-session dashboard | OSS; composed downstream unchanged |
 | `capacity` | The org's execution capacity | Execution providers, pools, live instances (persistent hosts and on-demand sandboxes), project→pool routing, cost rollups | Downstream only; name reserved (not implemented) in OSS |
 
 `fleet` is retired as a top-level noun. Downstream, its leaves move under `capacity` (e.g. `fleet route set` becomes `capacity route set`). In OSS, `fleet` keeps its pre-existing single-machine meaning (the worker processes supervised on this host) but is now deprecated in favor of `host`/`daemon` and scheduled for removal, per that ADR's D3/D5. The previous top-levels (`worker`, `machine`, `execution`, `workarea`, top-level `provider`, `route`, `routing`) ship as **hidden deprecated aliases** that print a one-line deprecation notice and forward to the new command; per D5.4, every alias now declares its removal version at creation rather than an unbound "one release."

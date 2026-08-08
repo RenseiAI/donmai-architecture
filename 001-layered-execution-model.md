@@ -15,7 +15,7 @@ Donmai orchestrates fleets of coding agents — and increasingly, non-coding age
 
 The single most important architectural commitment binding the two: **the OSS layer never ships an interface whose only working implementation lives downstream in the SaaS product.** Every contract in this corpus must have a usable OSS-shipped implementation.
 
-The single most important *user* commitment: **using Donmai across LLM providers, sandbox providers, and issue trackers must produce a strictly better result than using any of those providers alone.** If we fail at that, we are an integration vendor, not a platform. The Intelligence Services layer (§4 below) is where this commitment is honored.
+The single most important *user* commitment: **using Donmai across LLM providers, substrate providers, and issue trackers must produce a strictly better result than using any of those providers alone.** If we fail at that, we are an integration vendor, not a platform. The Intelligence Services layer (§4 below) is where this commitment is honored.
 
 The single most important *quality* commitment: **project quality must compound, not decay.** Today's agent fleets show a Day-1-vs-Day-40 gap — sessions feel like magic on day one, like a slog on day forty. Conversational quality with the same models stays consistent. The architectural answer is in the Memory layer (`007`) — active context injection at session start, with this corpus and per-project CLAUDE.md as high-priority retrieval sources, plus session-end writes that compound knowledge across runs. If we don't close this gap, the platform fails its own scale story.
 

@@ -223,7 +223,7 @@ The platform ships against multiple cloud providers (Blaxel, Cloudflare, Daytona
 | `egressDefault` | allow-all | allow-all (configurable) | allow-all | allow-all | allow-all | allow-all | cluster-policy |
 | `isA2ARemote` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
-The seventh row — A2A as transport flavor — is its own provider implementation in code (`A2ASandboxProvider`), declaring `isA2ARemote: true` and `transportModel: 'dial-in'` (the orchestrator dials into the remote A2A peer). Treating remote A2A agents as a sandbox provider unifies "where does work execute" reasoning regardless of whether the work lives on our infra or someone else's.
+The seventh row — A2A as transport flavor — is its own provider implementation in code (`A2ASandboxProvider`), declaring `isA2ARemote: true` and `transportModel: 'dial-in'` (the orchestrator dials into the remote A2A peer). Treating remote A2A agents as a substrate provider unifies "where does work execute" reasoning regardless of whether the work lives on our infra or someone else's. *(Substrate provider, not "sandbox provider": an A2A peer is a `remote_peer` placement, never the ephemeral kind — `ADR-2026-08-07` D1/D10.1. The code identifier `A2ASandboxProvider` and the `Sandbox` Provider Family name are unchanged, per D10.5.)*
 
 The capability flags above are the *declared* shape — what a provider/host advertises at registration time. The corresponding *runtime view* is `LiveCapacityInstance.capabilities` in the live execution capacity contract (`014-tui-operator-surfaces.md` § "Live capacity contract" and `ADR-2026-05-06-tui-noun-consolidation.md` Addendum 2026-05-06). Each live row carries the capability tags currently in force on that specific instance — the operator-facing reflection of what this doc specifies as the provider's capability schema.
 
@@ -439,7 +439,7 @@ A remote A2A agent registers as a `SandboxProvider` with `isA2ARemote: true`. Pr
 
 ## Local daemon mode (the central machine pattern)
 
-The Local sandbox provider has two operational modes. Tenants pick one per machine.
+The Local substrate provider has two operational modes. Tenants pick one per machine. *(Substrate provider, not "sandbox provider": daemon mode below enrolls a persistent host, which is an execution context of the **other** kind — `ADR-2026-08-07` D10.1. The `SandboxProvider` family name is unchanged, per D10.5.)*
 
 ### Foreground mode (legacy default, pre-daemon)
 

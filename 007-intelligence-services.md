@@ -7,13 +7,13 @@
 
 ## Why this exists
 
-The single most important user commitment from `001`: **using Donmai across LLM providers, sandbox providers, and issue trackers must produce a strictly better result than using any of those providers alone.** If we fail at that, we are an integration vendor.
+The single most important user commitment from `001`: **using Donmai across LLM providers, substrate providers, and issue trackers must produce a strictly better result than using any of those providers alone.** If we fail at that, we are an integration vendor.
 
 Memory, Code Intelligence, and Architectural Intelligence are how that commitment is honored. They are the layer where the OSS execution layer accumulates compounding value: every session enriches the knowledge graph, every codebase improves the index, every PR refines the architectural understanding.
 
 This is also where the **Day-1-vs-Day-40 quality commitment** from `001` is honored. Conversational quality stays consistent because conversations have compounding context; agent-fleet quality decays today because each session reads the issue, the codebase, maybe a CLAUDE.md, and starts fresh. Intelligence Services is the fix: persistent context that compounds across sessions and is actively retrieved at session start.
 
-This doc defines the three services, the contracts they expose to kits and agents, and the cooperation rules with the rest of the architecture. The services are intentionally specified as capabilities that compose with provider-orthogonal sessions: an agent running on a snapshot-paused workarea using a Spring Java kit benefits from the same memory graph, same code index, and same architectural understanding as one running on a local pool with a TS kit.
+This doc defines the three services, the contracts they expose to kits and agents, and the cooperation rules with the rest of the architecture. The services are intentionally specified as capabilities that compose with provider-orthogonal sessions: an agent running on a snapshot-paused workarea using a Spring Java kit benefits from the same memory graph, same code index, and same architectural understanding as one running on a locally cached workarea with a TS kit.
 
 ## Implementation status (2026-05-07)
 
@@ -111,9 +111,9 @@ Detail is in `006` (Seam 1). Contract summary:
 
 - Workarea handles carry an `observationCursor` keyed on `(streamId, position)`.
 - The memory writer dedupes idempotently on the cursor.
-- Pause/resume preserves the cursor; pool reuse mints a fresh cursor.
+- Pause/resume preserves the cursor; workarea-cache reuse mints a fresh cursor.
 
-Without this contract, every snapshot resume double-emits, every pool reuse leaks state, and eval replay (Seam 5) is unreliable. The seam doc is the authoritative source; this layer's contract just states the obligations on the memory side.
+Without this contract, every snapshot resume double-emits, every workarea-cache reuse leaks state, and eval replay (Seam 5) is unreliable. The seam doc is the authoritative source; this layer's contract just states the obligations on the memory side.
 
 ### Memory access from external contexts
 
@@ -166,8 +166,8 @@ interface CodeIntelligence {
 
 Properties that matter:
 
-- **Indexed per workarea, keyed by `cleanStateChecksum`.** When the workarea is reused (same checksum), the index is reused. When the workarea changes, the diff is incremental (Merkle tree). This is what makes the OSS local pool fast.
-- **Provider-orthogonal.** The code index doesn't care which sandbox/workarea provider hosts the workarea. Indexes are computed against the filesystem path; results are the same on snapshot-restored vs locally-pooled workareas.
+- **Indexed per workarea, keyed by `cleanStateChecksum`.** When the workarea is reused (same checksum), the index is reused. When the workarea changes, the diff is incremental (Merkle tree). This is what makes the OSS local workarea cache fast.
+- **Provider-orthogonal.** The code index doesn't care which sandbox/workarea provider hosts the workarea. Indexes are computed against the filesystem path; results are the same on snapshot-restored vs locally cached workareas.
 - **Domain-extensible via kits.** Kits' intelligence extractors (`005`) augment the index with domain-specific concepts (e.g., "Spring Bean wired into this controller"). Generic stays in core; domain stays in kits.
 
 ### Cooperation with workarea

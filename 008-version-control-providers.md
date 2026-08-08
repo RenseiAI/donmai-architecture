@@ -322,7 +322,7 @@ The workarea provider's `acquire(spec)` includes `spec.source.repository` and `s
 - An Atomic repo at `atomic://atomicremote.example.com/foo` clones via `AtomicVCSProvider.clone()`.
 - An S3 prefix at `s3://bucket/path` clones via `S3VersionedVCSProvider.clone()` (mirrors to local cache).
 
-The workarea provider doesn't assume any of these; it asks the right VCS provider to do it. This is what makes the local-pool warm cache work across VCS types — pool members are keyed on `(vcsProviderId, repository, toolchain)`, not on git-specific assumptions.
+The workarea provider doesn't assume any of these; it asks the right VCS provider to do it. This is what makes the local workarea cache work across VCS types — cache entries are keyed on `(vcsProviderId, repository, toolchain)`, not on git-specific assumptions.
 
 ## OSS vs SaaS responsibilities
 
