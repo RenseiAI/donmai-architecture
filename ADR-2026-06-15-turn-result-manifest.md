@@ -73,8 +73,15 @@ Resolution order in the runner (`runner/loop.go`):
    lane), and rejects an unrecognised `schemaVersion`. The manifest verdict and
    summary OVERRIDE the scraped marker. A `blocked` verdict feeds the same
    blocked-classification fork the marker scan produces.
-2. **Marker scrape** (`scanWorkResult`) — the prior behaviour, now the fallback.
-3. **Deterministic backstop** — unchanged, the last resort.
+2. **Inline manifest** (`ParseInlineManifest`) — recovers an
+   `Intended manifest: { … }` JSON block the agent printed in its final message,
+   for stages whose tool policy removes the file-writing tool so the agent
+   CANNOT write `.agent/turn-result.json`. The recovered object is validated
+   through the SAME schema + `schemaVersion` + verdict-enum path as tier 1, so a
+   tool-restricted stage still produces the full structured outcome instead of
+   degrading to a bare marker verdict.
+3. **Marker scrape** (`scanWorkResult`) — the prior behaviour, now the fallback.
+4. **Deterministic backstop** — unchanged, the last resort.
 
 The runner posts the validated manifest VERBATIM on the terminal status wire
 (`result/poster.go` gains an additive `manifest` field). The platform applies it
