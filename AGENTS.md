@@ -26,8 +26,9 @@ The boundary discipline — verbatim from `001-layered-execution-model.md` § "T
 
 **Operational implication for agents working in this repo:** never let platform-specific (closed-source) content land here. Concretely:
 
-- No internal tracker issue IDs — **any** team prefix the org issues, not just the platform team's, and in **any** case. That includes the uppercase form in prose, the lowercase form that branch names, worktree directories and task-list IDs carry, and tracker deep links. Cross-references to platform tracker IDs belong in `rensei-architecture`'s extension docs. **This applies to commit messages too**: they are published with the repo, and a file scan cannot see them — run `scripts/guard-b-lint.sh --commits origin/main..HEAD` before pushing. (A prior carve-out here declared "migration-context call-outs in commit messages are fine"; it was never enforceable and is withdrawn — see `scripts/guard-b-lint.sh` § rule table.)
-- No references to platform-resident endpoints (`/api/cli/capacity`, `/api/cli/whoami`, etc.) as if they were OSS-shipped. Daemon endpoints (`/api/daemon/*`) are OSS; platform CLI endpoints (`/api/cli/*`) are not.
+- No internal tracker issue IDs — **any** team prefix the org issues, not just the platform team's, and in **any** case: the uppercase form prose uses, the lowercase form that branch names, worktree directories and task-list IDs carry, and the title case a sentence-cased subject line or a UI label produces. Tracker deep links are banned on **any** path, not just issue links — the workspace key alone is the leak. Cross-references to platform tracker IDs belong in `rensei-architecture`'s extension docs. **This applies to published text a file scan cannot see**, of which there are two kinds: commit messages, **including merge commits** — the one place a branch slug lands in history — and the squash-merge message GitHub composes from a pull-request title and body, which exists in no branch commit at all. Run `scripts/guard-b-lint.sh --commits origin/main..HEAD` before pushing; CI scans the pull-request title and body over `--stdin`. (A prior carve-out here declared "migration-context call-outs in commit messages are fine"; it was never enforceable and is withdrawn — see `scripts/guard-b-lint.sh` § rule table.)
+- No references to platform-resident endpoints (`/api/cli/capacity`, `/api/cli/whoami`, etc.) as if they were OSS-shipped. Daemon endpoints (`/api/daemon/*`) are OSS; platform CLI endpoints (`/api/cli/*`) are not. Enforced by the `CLOSED_CLI_ENDPOINT` rule; the three files that legitimately name these routes *to place them on the closed side* are exempted by name in `.guard-allowlist`, and every other file in the corpus fails on a hit.
+- No production measurements of the closed control plane. Row counts, event counts and dispatch counts read off the hosted plane's database are operational data, not architecture, and they age into falsehood the moment they are written. Cite the **shape** of the finding ("no dispatch has ever been re-placed after its initial binding") and leave the measurement in the private run record. Enforced approximately by the `PROD_METRIC` rule, which catches a seven-figure count qualifying a plane noun and any count framed as an in-production observation; the written rule is broader than the mechanical one, and the written rule governs.
 - No SaaS-dashboard parity claims. The dual-surface discipline ("every dashboard panel ships a TUI counterpart") is a platform commitment; it lives in `rensei-architecture`.
 - No multi-tenant policy hooks (Cedar, RLS, org allowlists) presented as OSS-shipped. The OSS layer ships single-tenant; the platform ships multi-tenant on top.
 - No closed-source repo references (the legacy TS `donmai-libraries/` monorepo, `platform/`, closed-source TUI extensions) as if they were canonical sources of truth for the contract. Cite OSS repos (`donmai`, `tui-components`, future OSS Kit repos) and the public TS package names (`@donmai/server`, `@donmai/code-intelligence`) when illustrating the contract.
@@ -131,14 +132,19 @@ Direct edits without an ADR are fine for clarifications, examples, typo fixes, a
 ```bash
 bash scripts/guard-b-lint-selftest.sh                    # proves every guard-b rule still fires (CI: secret-scan.yml)
 bash scripts/guard-b-lint.sh --all                       # closed-source content guard, tracked files (CI: secret-scan.yml)
-bash scripts/guard-b-lint.sh --commits origin/main..HEAD # same guard over the commit messages you are about to push
+bash scripts/guard-b-lint.sh --commits origin/main..HEAD # same guard over the commit messages you are about to push, merges included
+printf '%s\n\n%s\n' "$PR_TITLE" "$PR_BODY" | bash scripts/guard-b-lint.sh --stdin pr-squash-message
+                                            # the squash message GitHub will compose (CI does this from the PR payload)
 bash scripts/adr-status-lint.sh --all       # ADR status frontmatter + README index drift (CI: adr-lint.yml)
 bash scripts/check-boundary-sync.sh         # BOUNDARY-SYNC regions byte-identical with the sibling corpus (CI: boundary-sync.yml)
 ```
 
 A green `guard-b-lint.sh --all` is only evidence if the self-test is green too:
 the guard's rules used to be narrow enough that whole classes of leak passed it
-silently, and the file scan cannot see commit messages at all.
+silently, and a file scan sees neither commit messages nor the squash message a
+merge composes. The self-test covers both, plus the two engine holes that made
+green meaningless in a different way — a NUL byte suppressing a whole file, and
+a blanket `.guard-allowlist` entry suppressing every rule in one.
 
 `check-boundary-sync.sh` assumes the sibling at `../rensei-architecture/`; override with `DONMAI_ARCH_PATH=/abs/path`. A red boundary-sync after landing one side of a paired edit is the reminder to land the other side — never bypass it.
 

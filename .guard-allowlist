@@ -1,73 +1,65 @@
 # guard-b allowlist — one grep -E pattern per line, matched against the full
 # ANNOTATED violation string:
 #
-#     <file>:<line>:<content>  [rule: <RULE_ID> — <description>]
+#     <location>:<line>:<content>  [rule: <RULE_ID> — <description>]
 #
 # so an entry can be scoped to a file AND a rule AND the specific content.
 #
-# RULES FOR THIS FILE (adopted 2026-08-07):
-#   1. No blanket `<file>:.*` entries. A whole-file exemption in a leak guard
-#      disables the guard for that file — six of them were live before this
-#      date and hid every rule, including the tracker-ID rules, in six ADRs.
-#   2. Anchor with ^, name the file, and scope to a rule with `\[rule: ID`.
+# RULES FOR THIS FILE — enforced by scripts/guard-b-lint.sh, not merely declared.
+# An entry that breaks either rule is REFUSED and the guard exits 2:
+#   1. Anchor with '^'. An unanchored entry matches anywhere in any location.
+#   2. Scope to concrete rule IDs with '\[rule: ID' or '\[rule: (ID|ID)'.
+#      A '<file>:.*' entry exempts every rule on every line of a file, forever
+#      and silently — that is how a gate stops being evidence.
+# Two further conventions, by discipline rather than by check:
 #   3. Where the exemption exists for specific identifiers, list them
 #      explicitly so a *new* one is not silently inherited.
 #   4. Say what the entry protects and why, in a comment above it.
-
-# --- guard-b's own rule table -------------------------------------------------
-# The RULES array literally contains the strings it scans for. Scoped to the
-# rule-definition line shape ("  'RULE_ID|flags|…'"), so prose, comments and
-# any other line in the script are still scanned.
-^scripts/guard-b-lint\.sh:[0-9]+:  '[A-Z_]+\|[-i]\|
-
-# --- guard-b's self-test samples ---------------------------------------------
-# The self-test asserts each rule fires, so it must contain one real sample of
-# each banned shape. Scoped to the sample-invocation lines only; the rest of
-# the file (comments, harness code) is still scanned.
-^scripts/guard-b-lint-selftest\.sh:[0-9]+:expect_(flagged|clean)
+#
+# NOTE ON THE '.' IN 'Rens.i', 'platform/sr[c]/', '/api/cl[i]/' AND FRIENDS:
+# this file is itself scanned. Writing the banned strings literally would make
+# every entry a violation and force a self-exemption — which is the whole-file
+# escape this file exists to prevent. A one-character wildcard matches the same
+# text at scan time and keeps the literal out of the source, so this file needs
+# no exemption of its own. Do not "correct" them.
 
 # --- ADR author attribution ---------------------------------------------------
-# "Mark Kropf (Rensei)" on an ADR Authors: line is parent-company attribution.
-^ADR-.*\.md:[0-9]+:\*\*Authors:\*\*.*Mark Kropf \(Rensei\)
+# The parent-company attribution on an ADR "Authors:" line.
+^ADR-.*\.md:[0-9]+:\*\*Authors:\*\*.*Mark Kropf \(Rens.i\).*\[rule: BRAND_NAME
+
+# --- The synchronized boundary-contract section heading + its cross-refs ------
+# The load-bearing boundary section heading names the enterprise product.
+# Renaming it requires a paired commit to the sibling corpus (BOUNDARY-SYNC).
+^001-layered-execution-model\.md:[0-9]+:.*Rens.i Platform contract.*\[rule: BRAND_NAME
 
 # --- BOUNDARY-SYNC marker id --------------------------------------------------
 # The synchronized-section marker id encodes the boundary concept name and must
 # be globally unique across both corpora; renaming it requires a paired commit
-# in the sibling corpus. It is an identifier, not a brand reference.
-^001-layered-execution-model\.md:[0-9]+:.*001-donmai-rensei-platform-contract
-^BOUNDARY\.md:[0-9]+:.*001-donmai-rensei-platform-contract
-^scripts/check-boundary-sync\.sh:[0-9]+:.*001-donmai-rensei-platform-contract
+# in the sibling corpus. It is an identifier, not a platform reference.
+^(001-layered-execution-model|BOUNDARY)\.md:[0-9]+:.*001-donmai-rens.i-platform-contract.*\[rule: CLOSED_PLATFORM
 
-# --- The "donmai <-> Rensei Platform contract" section heading + cross-refs ----
-# The load-bearing boundary section heading names the enterprise product.
-# Renaming it requires a paired commit to the sibling corpus (BOUNDARY-SYNC).
-^001-layered-execution-model\.md:[0-9]+:.*(agentfactory|donmai).*Rensei Platform contract
-^BOUNDARY\.md:[0-9]+:.*(agentfactory|donmai).*Rensei Platform contract
-^AGENTS\.md:[0-9]+:.*(agentfactory|donmai).*Rensei Platform contract
-^README\.md:[0-9]+:.*(agentfactory|donmai).*Rensei Platform contract
-^ADR-template\.md:[0-9]+:.*(agentfactory|donmai).*Rensei Platform contract
-
-# --- Parent-brand attribution in the boundary//meta docs ----------------------
+# --- Parent-brand attribution in the boundary / meta docs ---------------------
 # These describe the OSS<->enterprise seam and legitimately name the enterprise
 # product. Scoped to the brand rule and to the specific noun phrases used.
-^BOUNDARY\.md:[0-9]+:.*Rensei(-| SaaS| team| org| Platform| runs).*\[rule: BRAND_NAME
-^README\.md:[0-9]+:.*Rensei(-| SaaS| team| Platform| Architecture).*\[rule: BRAND_NAME
-^ADR-template\.md:[0-9]+:.*Rensei(-| team| org).*\[rule: BRAND_NAME
-^001-layered-execution-model\.md:[0-9]+:.*Rensei(-| team| org| Platform).*\[rule: BRAND_NAME
-^AGENTS\.md:[0-9]+:.*Rensei(-| team| org| Platform).*\[rule: BRAND_NAME
+^BOUNDARY\.md:[0-9]+:.*Rens.i(-| SaaS| team| org| Platform| runs|AI/).*\[rule: BRAND_NAME
+^README\.md:[0-9]+:.*Rens.i(-| SaaS| team| org| Platform| runs|AI/).*\[rule: BRAND_NAME
+^AGENTS\.md:[0-9]+:.*Rens.i(-| SaaS| team| org| Platform| runs|AI/).*\[rule: BRAND_NAME
+^ADR-template\.md:[0-9]+:.*Rens.i(-| SaaS| team| org| Platform| runs|AI/).*\[rule: BRAND_NAME
 
-# --- Sibling closed corpus is named as a path, which contains "rensei-platform"
-# `rensei-architecture/…-platform-extensions.md` cross-refs are explicitly
-# allowed in this corpus; the CLOSED_PLATFORM rule matches the substring.
-^(001-layered-execution-model|BOUNDARY)\.md:[0-9]+:.*rensei-architecture.*\[rule: CLOSED_PLATFORM
+# --- Parent-brand attribution in individual ADRs ------------------------------
+# Each names the enterprise product once, to state which side of the boundary
+# owns the behaviour. Scoped per file to the brand rule.
+^ADR-2026-05-12-cli-linear-proxy\.md:[0-9]+:.*\[rule: BRAND_NAME
+^ADR-2026-05-12-cross-process-hook-bus-bridge\.md:[0-9]+:.*\[rule: BRAND_NAME
 
 # --- ADR-2026-06-02-oss-brand-neutral-runtime-contract.md ---------------------
 # WAS: whole-file `.*`.
 # PROTECTS: the de-brand ADR enumerates, by necessity, the exact closed-source
-# names it is removing — the RENSEI_* env vars, the parent domain, the closed
-# TUI repo, the internal monorepo path, and the brand itself.
-# NARROWED TO: those five rules. Tracker IDs, tracker URLs, tracker slugs and
-# developer absolute paths in this file are NOT exempt and now fail the guard.
+# names it is removing — the closed env-var prefix, the parent domain, the
+# closed TUI repo, the internal monorepo path, and the brand itself.
+# NARROWED TO: those five rules. Tracker IDs (all three casings), tracker URLs,
+# developer absolute paths, closed CLI endpoints and production metrics in this
+# file are NOT exempt and fail the guard.
 ^ADR-2026-06-02-oss-brand-neutral-runtime-contract\.md:[0-9]+:.*\[rule: (BRAND_NAME|CLOSED_TUI_REPO|PARENT_DOMAIN|CLOSED_ENV_VAR|PLATFORM_PATH)
 
 # --- ADR-2026-06-03-injectable-state-dir.md -----------------------------------
@@ -82,17 +74,17 @@
 # PROTECTS: two tracker lane IDs the design doc cites, plus one closed-side
 # contract path it is replacing.
 # NARROWED TO: those exact two IDs and that exact path. A new tracker ID in
-# this file now fails the guard.
+# this file fails the guard.
 ^ADR-2026-06-01-code-survival-pool-execution\.md:[0-9]+:.*\bREN-(1247|1554)\b.*\[rule: TRACKER_ID
-^ADR-2026-06-01-code-survival-pool-execution\.md:[0-9]+:.*platform/src/lib/factory/code-survival-scan-contract\.ts.*\[rule: PLATFORM_PATH
+^ADR-2026-06-01-code-survival-pool-execution\.md:[0-9]+:.*platform/sr[c]/lib/factory/code-survival-scan-contract\.ts.*\[rule: PLATFORM_PATH
 
 # --- ADR-2026-06-02-interactive-agent-run-mode.md -----------------------------
 # WAS: whole-file `.*`.
-# PROTECTS: two tracker lane IDs and two parent-brand mentions naming the
+# PROTECTS: two tracker lane IDs and two parent-brand phrases naming the
 # closed product whose interview lane motivates the ADR.
-# NARROWED TO: those exact two IDs and those two brand phrases.
+# NARROWED TO: those exact two IDs and those two phrases.
 ^ADR-2026-06-02-interactive-agent-run-mode\.md:[0-9]+:.*\bREN-(1563|1570)\b.*\[rule: TRACKER_ID
-^ADR-2026-06-02-interactive-agent-run-mode\.md:[0-9]+:.*Rensei('s| lane).*\[rule: BRAND_NAME
+^ADR-2026-06-02-interactive-agent-run-mode\.md:[0-9]+:.*Rens.i('s| lane).*\[rule: BRAND_NAME
 
 # --- ADR-2026-06-03-batch-work-type-category.md -------------------------------
 # WAS: whole-file `.*`.
@@ -101,17 +93,11 @@
 # NARROWED TO: those exact two IDs.
 ^ADR-2026-06-03-batch-work-type-category\.md:[0-9]+:.*\bREN-(1166|1265)\b.*\[rule: TRACKER_ID
 
-# --- Parent-brand attribution in individual ADRs ------------------------------
-# Each names the enterprise product once, to state which side of the boundary
-# owns the behaviour. Scoped per file to the brand rule.
-^ADR-2026-05-12-cli-linear-proxy\.md:[0-9]+:.*\[rule: BRAND_NAME
-^ADR-2026-05-12-cross-process-hook-bus-bridge\.md:[0-9]+:.*\[rule: BRAND_NAME
-
-# --- This file's own pattern lines --------------------------------------------
-# Every entry above quotes the string it exempts, so the allowlist trips its own
-# rules. Scoped to lines that are a pattern (start with ^) or a comment (start
-# with #), AND to the three rules those quotes actually involve. A tracker ID, a
-# tracker URL, a tracker slug or a developer absolute path in this file is still
-# a violation — which is why the ADR entries above factor issue numbers as
-# `REN-(1247|1554)` rather than writing the IDs literally.
-^\.guard-allowlist:[0-9]+:[#^].*\[rule: (BRAND_NAME|CLOSED_PLATFORM|PLATFORM_PATH)
+# --- Closed control-plane CLI endpoints, where the ADR is ABOUT the seam ------
+# The CLOSED_CLI_ENDPOINT rule bans presenting the closed control-plane CLI
+# route prefix as OSS-shipped. These three files do the opposite: they name the
+# routes precisely to place them on the closed side of the boundary. Every
+# other file in the corpus is enforced.
+^ADR-2026-05-12-cli-linear-proxy\.md:[0-9]+:.*\[rule: CLOSED_CLI_ENDPOINT
+^ADR-2026-06-21-mcp-adapter-archetype\.md:[0-9]+:.*\[rule: CLOSED_CLI_ENDPOINT
+^AGENTS\.md:[0-9]+:- No references to platform-resident endpoints.*\[rule: CLOSED_CLI_ENDPOINT
