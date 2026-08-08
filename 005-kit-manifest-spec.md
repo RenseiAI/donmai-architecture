@@ -195,7 +195,7 @@ clean_dirs = ["target", ".gradle/caches/build-cache"]
 preserve_dirs = ["~/.m2/repository"]   # cache that survives release-to-pool
 
 # Per-OS toolchain install — used by the workarea provider when the
-# requested toolchain is not pre-warmed in the pool. Kits declare these
+# requested toolchain is not pre-warmed in the workarea cache. Kits declare these
 # so the platform doesn't have to maintain Spring/Rust/Cargo install
 # logic for every OS.
 [provide.toolchain_install.linux]

@@ -756,6 +756,27 @@ several axes.
    sizing pass starts from that table. Whoever runs it should re-scan rather
    than trust the line numbers, which drift.
 
+   **Update 2026-08-08 — the gate opened and this inventory's prose bucket is
+   swept.** The D10.3 sizing pass landed (wording-only versus schema-or-wire
+   separated on paper), so the **prose** half of D10.7 was executed: `005`,
+   `006`, `007`, `008` and `014:14` now say *workarea cache*. Three things did
+   **not** move, each for a stated reason:
+   - **The surface half stays gated.** `014`'s `WorkareaPoolPanel` typed
+     primitive, its `"Warming pool"` rendered label, `003`'s `ReleaseMode` /
+     `acquire_path` literals and `011`'s emitted `pool-invalidated` /
+     `acquire_path: "pool-warm"` NDJSON values are schema-or-wire and ride the
+     D2.3 lock-step change.
+   - **The `SandboxProvider` family name stays**, per D10.5. What moved in
+     prose is only the *generic* use of "sandbox provider" for a driver that
+     supplies execution contexts of **every** kind — D10.1's defect — and the
+     word it moved to is the noun table's **substrate provider**. Prose that
+     names the family, its roster of seven, or a genuinely ephemeral
+     provider-minted box still reads "sandbox".
+   - **Six ADRs carry referent-3 prose this inventory never scanned** and are
+     out of scope; they are enumerated in § "Not edited — and exactly how far
+     that goes", together with why the retired-claim rules this ADR asks for
+     could not land in the same commit.
+
 ### Rename versus behaviour change — explicit
 
 | Decision | Kind | What actually changes |
@@ -903,7 +924,12 @@ trust it, so it is replaced here with the scan's actual output.
 | `015-plugin-spec.md` | Zero occurrences. |
 | `016-workflow-engine.md` | Zero occurrences. |
 
-**Still carrying referent 3 — enumerated, and deliberately not edited here:**
+**Still carrying referent 3 — enumerated, and deliberately not edited here.**
+*(Superseded 2026-08-08: every **prose** site in this table was swept to
+*workarea cache* once the D10.3 sizing pass landed — see D10.7's update. The
+table is retained verbatim as the inventory the sweep worked from. Only the
+`014` **surface** entries — `WorkareaPoolPanel` and `"Warming pool"` — and the
+unchanged type literals called out per row still stand.)*
 
 | Document | Sites (line numbers as of this commit) |
 |---|---|
@@ -946,6 +972,30 @@ carries the renamed-from banner that resolves it, and `004`'s diagram now
 carries one too — those two are the entry points a reader is most likely to
 arrive through. The remaining five documents are recorded here so the debt has
 a name and an inventory rather than being discovered a third time.
+
+*(2026-08-08: that cost is paid for the five documents above. Two things the
+sweep found that this section did not predict, recorded so the next reader
+inherits them rather than rediscovering them a fourth time:*
+
+1. ***This inventory is not the whole residue.** It was built by scanning the
+   eight reference docs `002`–`016`. Referent-3 `pool` prose also stands in
+   **six ADRs** nobody scanned: `ADR-2026-05-06` ("local workarea pool", ×2),
+   `ADR-2026-05-07` ("pool members" on the workarea control surface, ×5),
+   `ADR-2026-06-03` ("local pool capacity"), `ADR-2026-06-22` ("occupied a pool
+   member", ×3), `ADR-2026-07-18` ("orphan pool member", ×2) and
+   `ADR-2026-08-03` (a quoted help string). They are **out of this sweep's
+   scope** — amending six Accepted ADRs is not a wording errand — and they are
+   the next lane's inventory.*
+2. ***The § "Implementation notes" instruction to "add those rules in the commit
+   that does the sweep" was attempted and deliberately NOT carried.** Every
+   candidate rule (`pool reuse`, `pool.warmed`, `local.pool warm cache`,
+   `locally.pooled`, `pool member`) fires on two populations this commit may not
+   edit: the six ADRs in (1), and **this ADR's own inventory table above**,
+   which quotes each retired phrase in double quotes rather than code spans and
+   is retained verbatim on purpose. A gate that reds files nobody is authorized
+   to fix is the exact failure mode that bullet was written to avoid. The rules
+   belong to the commit that sweeps the six ADRs — and that commit should
+   backtick this table's quotes first.*
 
 **No `BOUNDARY-SYNC` region was touched.** Verified at acceptance against all
 four currently tracked marker pairs, cited by **file and subject** rather than

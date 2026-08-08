@@ -35,10 +35,10 @@ Contract:
 - The Memory layer's observation writer keys events on `(streamId, position)`. It dedupes idempotently.
 - `WorkareaProvider.snapshot()` MUST capture the cursor in the snapshot ref.
 - `WorkareaProvider.resume()` MUST restore the cursor; observation events resume from `position`, not from zero.
-- `WorkareaProvider.release(return-to-pool)` MUST mint a fresh `streamId` for the next acquire of the same pool member. Prior observations don't leak.
+- `WorkareaProvider.release(return-to-pool)` MUST mint a fresh `streamId` for the next acquire of the same workarea-cache entry. Prior observations don't leak. *(The `return-to-pool` `ReleaseMode` literal is unchanged — `ADR-2026-08-07` D10 gates type literals; only the prose noun moves.)*
 - Sub-agents in `mode: 'shared'` inherit the parent's `streamId` but emit with their own session-tagged events; the writer attributes correctly.
 
-**Bug class prevented:** double-emission of observations in eval replay, false memory inflation in long-running sessions, cross-session leakage in pool reuse.
+**Bug class prevented:** double-emission of observations in eval replay, false memory inflation in long-running sessions, cross-session leakage in workarea-cache reuse.
 
 ## Seam 2 — Kit toolchain demand → Workarea/Sandbox supply
 
@@ -60,7 +60,7 @@ Contract details:
 - The workarea provider returns `Workarea.toolchain` with the *resolved* concrete versions (e.g., `"java": "21.0.5"`), not the requested ranges. Kit `provide()` reads these for any version-sensitive logic.
 - A kit's `provide()` MAY run installation steps for its specific framework (e.g., `pip install -r requirements.txt`), but MUST NOT install base toolchains. That's the workarea provider's job.
 
-**Bug class prevented:** install conflicts, wrong-toolchain false negatives, slow per-session installs that should have been pool-warmed.
+**Bug class prevented:** install conflicts, wrong-toolchain false negatives, slow per-session installs that should have been warmed in the workarea cache.
 
 ## Seam 3 — A2A as Sandbox transport flavor
 
@@ -208,7 +208,7 @@ Contract details:
 - If the sandbox is `isA2ARemote: true`, step 6 is a no-op locally; the workarea is the remote's concern. The scheduler still tracks "workarea was demanded" so kits' `provide()` can validate.
 - On any partial failure (workarea acquired, sandbox provision failed), the scheduler MUST roll back the workarea (release + destroy). Half-provisioned sessions must not occupy resources.
 
-**Bug class prevented:** wasted-warm-pool members on sandbox failures, half-state sessions that consume budgets without producing work.
+**Bug class prevented:** wasted warm workarea-cache entries on sandbox failures, half-state sessions that consume budgets without producing work.
 
 ## Seam 8 — Kit detect parallelism ↔ scheduler latency budget
 
@@ -226,7 +226,7 @@ Contract details:
 
 ## Seam 9 — Memory + Code Intelligence reading from workarea
 
-**Problem:** Code Intelligence indexes the workarea filesystem (BM25, vectors, AST). Memory writes observations from FS events on the workarea. Both layers read state that the workarea provider owns. If they read at the wrong time (mid-acquire, during pool clean), they capture invalid state.
+**Problem:** Code Intelligence indexes the workarea filesystem (BM25, vectors, AST). Memory writes observations from FS events on the workarea. Both layers read state that the workarea provider owns. If they read at the wrong time (mid-acquire, during workarea-cache clean), they capture invalid state.
 
 **Cooperation:** Intelligence Services subscribe to workarea lifecycle events and only read in `state: 'ready'`.
 

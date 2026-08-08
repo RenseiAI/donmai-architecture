@@ -15,7 +15,7 @@ boundary: shared
 
 `001-layered-execution-model.md` § "Goal of the platform" commits the architecture to a user-facing promise:
 
-> **using Donmai across LLM providers, sandbox providers, and issue trackers must produce a strictly better result than using any of those providers alone. If we fail at that, we are an integration vendor, not a platform.**
+> **using Donmai across LLM providers, substrate providers, and issue trackers must produce a strictly better result than using any of those providers alone. If we fail at that, we are an integration vendor, not a platform.**
 
 The eight Provider Families (`002`) — `Sandbox · Workarea · AgentRuntime · VCS · IssueTracker · Deployment · AgentRegistry · Kit` — each have concrete OSS impls today and a list of shipping or planned alternates. Onboarding the second impl in any family forces a design choice that reappears every time:
 
