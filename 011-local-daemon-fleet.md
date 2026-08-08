@@ -246,7 +246,7 @@ If the daemon refuses to start, common causes:
 
 - **Bad credentials** for a configured project. Daemon logs the project ID and exits. Fix via `donmai project credentials github.com/foo/bar`.
 - **Port collision** for the local exec endpoint. Daemon picks a free port by default; explicit `localExecPort` in config can hit collisions. Run `donmai daemon doctor` to detect.
-- **Disk full** in the workarea-cache directory. Cache entries are scratch FS; running out of disk halts acquires. Default cleanup: warn at 80%, refuse new cache entries at 90%. The configured envelope is `capacity.workareaMaxDiskGb`.
+- **Disk full** in the workarea-cache directory. Cache entries are scratch FS; running out of disk halts acquires. Default cleanup: warn at 80%, refuse new cache entries at 90%. The configured envelope is the daemon setting `capacity.poolMaxDiskGb` — a `pool`-spelled key for a workarea-cache concern; see § "The `pool` wire spellings on this surface".
 
 `donmai daemon doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, workarea cache sane) and prints the failing condition.
 
@@ -416,8 +416,8 @@ POST   /api/daemon/stop
 POST   /api/daemon/drain
 POST   /api/daemon/update
 POST   /api/daemon/capacity
-GET    /api/daemon/workarea/stats
-POST   /api/daemon/workarea/evict
+GET    /api/daemon/pool/stats
+POST   /api/daemon/pool/evict
 GET    /api/daemon/sessions
 GET    /api/daemon/sessions/<id>
 POST   /api/daemon/sessions/<id>/stop
@@ -435,51 +435,53 @@ signal, the `FailureOperatorCancelled` / `FailureNoProgress` terminal modes, and
 the no-progress watchdog — is in
 `ADR-2026-06-22-daemon-per-session-cancel-wire.md`.
 
-#### Workarea-cache surface rename (2026-08-07) and its aliases
+#### The `pool` wire spellings on this surface: what they mean, and the rename that is authorized but not yet shipped
 
-`GET /api/daemon/workarea/stats` and `POST /api/daemon/workarea/evict` were
-`GET /api/daemon/pool/stats` and `POST /api/daemon/pool/evict` until 2026-08-07.
-They report on and evict from the machine-local **workarea cache**
+`GET /api/daemon/pool/stats` and `POST /api/daemon/pool/evict` report on and
+evict from the machine-local **workarea cache**
 (`003-workarea-provider.md` § "The workarea cache") — never from an org capacity
-pool, which the daemon has no authority over. `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`
-D2.3 renamed them under `ADR-2026-08-03` D5.4's alias discipline:
+pool, which the daemon has no authority over. The same referent mismatch runs
+through the rest of this daemon's `pool` spellings: the `?pool=true` query
+parameter on `GET /api/daemon/stats`, the `pool` object in that endpoint's
+response, the `<binary> host stats --pool` flag, the `capacity.poolMaxDiskGb`
+config key, and the `pool-invalidated` log event listed under § "Logging and
+observability". **Every one of those spellings above is current and correct as
+written — this section is describing shipped behaviour, not a target state.**
 
-| Surface | Superseded spelling (alias) | Removed in |
-|---|---|---|
-| `GET /api/daemon/workarea/stats` | `GET /api/daemon/pool/stats` | **v0.59.0** |
-| `POST /api/daemon/workarea/evict` | `POST /api/daemon/pool/evict` | **v0.59.0** |
-| `GET /api/daemon/stats?workarea=true` | `GET /api/daemon/stats?pool=true` | **v0.59.0** |
-| `DaemonStatsResponse.workarea` | `DaemonStatsResponse.pool` | **v0.59.0** |
-| `<binary> host stats --workarea` | `--pool` | **v0.59.0** |
-| `capacity.workareaMaxDiskGb` | `capacity.poolMaxDiskGb` | **v0.59.0** |
+`ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` D2.3/D2.4
+**authorizes** renaming that whole set to the `workarea`/`workarea-cache`
+vocabulary under `ADR-2026-08-03` D5.4's alias discipline. **It is not
+implemented.** No `workarea`-spelled endpoint, query parameter, response field,
+flag, or config key exists in any released build, and none is aliased. The
+rename ships as its own lock-step doc-and-code change; until that change lands,
+a client or operator should read every `pool` spelling on this API at face
+value.
 
-Rules this rename is bound by, each of which is a defect if skipped:
+Three constraints that change carries, recorded here because they are properties
+of *this* surface rather than of the ADR:
 
-- **Every alias declares a concrete removal version at creation.** `v0.59.0` —
-  one minor after the release that creates them, matching the cadence the
-  `daemon`→`host` aliases set. An alias with no removal version is a defect
-  (`ADR-2026-08-03` D5.4).
 - **The `?pool=true` query parameter and the `pool` response field must be
-  aliased too.** An unrecognised query parameter is *ignored*, not rejected — so
-  an un-aliased rename degrades silently (an older client asks for cache stats
-  and gets a response with the section missing) rather than failing cleanly.
-  Silent degradation is the worse failure and the one the alias exists to
-  prevent.
+  aliased, not just the paths.** An unrecognised query parameter is *ignored*,
+  not rejected, and the response field is `omitempty` — so an un-aliased rename
+  degrades silently (an older client asks for cache stats and gets a response
+  with the section missing) rather than failing cleanly. Silent degradation is
+  the worse failure and the one the alias exists to prevent.
 - **`capacity.poolMaxDiskGb` needs a read alias on the config struct, not just
-  in the CLI key allowlist.** The daemon's YAML load is non-strict, so an
+  in the CLI key allowlist, and the config *writer* must keep emitting the old
+  key until the alias is retired.** The daemon's YAML load is non-strict, so an
   unrecognised key is dropped silently; the field's `0` means **no limit**; and
   the config writer replaces the whole `capacity` mapping, so an unmodelled key
-  inside it is erased by the next unrelated `set`. A CLI-only alias would
-  therefore turn an operator's existing disk cap into "no limit" and then delete
-  it from disk — LRU eviction off, disk fills.
-
-**Do not confuse `/api/daemon/workarea/*` (singular — the cache) with
-`/api/daemon/workareas/*` (plural — individual workareas and their archives,
-listed below).** They are one character apart and address different things. That
-is an uncomfortable adjacency for a rename whose whole subject is one noun per
-referent; it is recorded in `ADR-2026-08-07` § "One risk carried forward" along
-with the unambiguous spelling (`/api/daemon/workarea-cache/*`) a follow-up
-should take if it proves confusing in practice.
+  inside it is erased by the next unrelated `set`. A CLI-only or write-only
+  rename would therefore turn an operator's existing disk cap into "no limit" on
+  the first version-skewed read — LRU eviction off, disk fills — and that fires
+  on the ordinary skew case, not an exotic one.
+- **`/api/daemon/workarea/*` (singular) would sit one character from the
+  already-shipped `/api/daemon/workareas/*` (plural — individual workareas and
+  their archives, listed below), which is a different referent.** That adjacency
+  is uncomfortable for a rename whose whole subject is one noun per referent.
+  `ADR-2026-08-07` § "One risk carried forward" records it and names
+  `/api/daemon/workarea-cache/*` as the unambiguous spelling the follow-up
+  should take.
 
 Provider/Kit/Workarea/Routing operator surfaces (Wave 9):
 
@@ -553,17 +555,18 @@ donmai project credentials github.com/newco/newrepo
 ### "The workarea cache is getting big, disk is filling"
 
 ```bash
-donmai daemon stats --workarea       # see usage by (repo, toolchain)
+donmai daemon stats --pool           # see usage by (repo, toolchain)
 donmai daemon evict --repo github.com/old/project --older-than 7d
 # or
-donmai daemon set capacity.workareaMaxDiskGb 100
+donmai daemon set capacity.poolMaxDiskGb 100
 # the daemon will LRU-evict to fit
 ```
 
-`--pool` and `capacity.poolMaxDiskGb` still work as deprecated aliases and are
-removed in **v0.59.0** — see § "Workarea-cache surface rename (2026-08-07) and
-its aliases". Setting the disk envelope to `0` means *no limit*, which disables
-LRU eviction entirely.
+The flag and the config key are spelled `pool`; the thing they address is the
+machine-local workarea cache. That mismatch is `ADR-2026-08-07` D2.3/D2.4's
+authorized-but-unimplemented rename — see § "The `pool` wire spellings on this
+surface". Setting the disk envelope to `0` means *no limit*, which disables LRU
+eviction entirely.
 
 ### "I need to inspect a workarea after a session failed"
 

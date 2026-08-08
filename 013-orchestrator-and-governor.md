@@ -335,7 +335,7 @@ Worker-process exit, transport delivery, acknowledgement, expiry, and daemon
 restart do not end exclusive ownership. Ownership ends only at durable
 `released`; provider failure retains `release-pending` and keeps the exact
 workarea unavailable. Recovery loads quarantine records, every `active` and
-`release-pending` lease, local claims, and outbox state before pool admission.
+`release-pending` lease, local claims, and outbox state before workarea-cache admission.
 A privileged verification composition remains unavailable unless the running
 released-artifact set and, when Kit commands are selected, the active package
 identity and command-composition digest exactly match their approved values.
@@ -466,7 +466,7 @@ Any future binary added to the OSS distribution channel inherits this rule. Its 
 | Cross-machine fleet aggregation | partial (LAN) | ✅ owns (multi-tenant) |
 | macOS signing rule | ✅ ships (architectural commitment) | extends with operational state |
 
-The `Cross-machine fleet aggregation` row read `✅ owns (cloud-burst)` until 2026-08-07, and the paragraph below it listed `cloud-burst aggregation` among the hosted extensions. **Aggregation is real; the burst qualifier was not, and never was.** The hosted control plane does aggregate hosts across machines, and does so per tenant — that half stands. What it does not do is spill work from one pool to another: there is no overflow policy, no exhaustion trigger, and no schema for either. `ADR-2026-08-07` D7 records the absence as fact, and an independent audit of the hosted plane's dispatch history confirmed it in the strongest available form — **zero fall-back events across 1,262,827 audit records, and not one dispatch ever re-placed after its initial binding.** What does exist is a static capability-mismatch filter: it reads a provider's declared flags, and takes no capacity or availability input at all, so it cannot detect the exhaustion a burst would respond to. The same qualifier was deleted from `004-sandbox-capability-matrix.md`'s equivalent row in this ADR's accepting commit, with the epitaph *"neither side ships burst routing, and neither ever did."* This row is the second half of that deletion.
+The `Cross-machine fleet aggregation` row read `✅ owns (cloud-burst)` until 2026-08-07, and the paragraph below it listed `cloud-burst aggregation` among the hosted extensions. **Aggregation is real; the burst qualifier was not, and never was.** The hosted control plane does aggregate hosts across machines, and does so per tenant — that half stands. What it does not do is spill work from one pool to another: there is no overflow policy, no exhaustion trigger, and no schema for either. `ADR-2026-08-07` D7 records the absence as fact, and an audit of the hosted plane's dispatch history corroborated it — **no fall-back events, and no dispatch ever re-placed after its initial binding.** What does exist is a static capability-mismatch filter: it reads a provider's declared flags, and takes no capacity or availability input at all, so it cannot detect the exhaustion a burst would respond to. The same qualifier was deleted from `004-sandbox-capability-matrix.md`'s equivalent row in this ADR's accepting commit, with the epitaph *"neither side ships burst routing, and neither ever did."* This row is the second half of that deletion.
 
 Failure-triggered routing-around — honouring a capacity profile's existing order when a dispatch *fails* — is D7's named first iteration and is not yet built. Predictive burst is undesigned and needs its own ADR.
 
