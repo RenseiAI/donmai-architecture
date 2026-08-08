@@ -199,12 +199,19 @@ if [[ ${#BINARY_FILES[@]} -gt 0 ]]; then
   printf '  %s\n' "${BINARY_FILES[@]}"
 fi
 
-# ---- Non-file sources, flattened once into <location>:<line>:<content> ----
-# Both are text that is published but is not a file, so a file scan cannot see
-# them. Flattening here rather than inside the rule loop keeps the cost at one
-# `git log` per commit instead of one per commit per rule.
+# ---- Non-file sources, flattened once ----
+# Commit messages and the composed squash message are published text that is
+# not a file, so a file scan cannot see them. Flattening once here rather than
+# re-reading inside the rule loop keeps the cost at one `git log` per commit
+# instead of one per commit per rule.
+#
+# Content and location go to two PARALLEL files, line for line, and the rules
+# are matched against the content only. Prefixing the content with its location
+# would let the location itself match — a branch name in a `Merge branch ...`
+# subject would flag every line of that commit's body.
 NONFILE_SRC="$(mktemp)"
-trap 'rm -f "$NONFILE_SRC"' EXIT
+NONFILE_LOC="$(mktemp)"
+trap 'rm -f "$NONFILE_SRC" "$NONFILE_LOC"' EXIT
 
 # Merge commits are NOT excluded. `--no-merges` used to be on this rev-list, and
 # a merge commit is the one place a branch slug lands in published history —
@@ -212,14 +219,16 @@ trap 'rm -f "$NONFILE_SRC"' EXIT
 if [[ -n "$COMMIT_RANGE" ]]; then
   while IFS= read -r sha; do
     [[ -n "$sha" ]] || continue
-    git log -1 --format='%s%n%b' "$sha" \
-      | awk -v p="commit-message:${sha:0:12}:" '{ print p NR ":" $0 }'
-  done < <(git rev-list "$COMMIT_RANGE" 2>/dev/null || true) >> "$NONFILE_SRC"
+    git log -1 --format='%s%n%b' "$sha" > "$NONFILE_SRC.one"
+    cat "$NONFILE_SRC.one" >> "$NONFILE_SRC"
+    awk -v p="commit-message:${sha:0:12}" '{ print p ":" NR }' "$NONFILE_SRC.one" >> "$NONFILE_LOC"
+  done < <(git rev-list "$COMMIT_RANGE" 2>/dev/null || true)
+  rm -f "$NONFILE_SRC.one"
 fi
 
 if [[ -n "$STDIN_LABEL" ]]; then
-  printf '%s\n' "$STDIN_TEXT" \
-    | awk -v p="$STDIN_LABEL:" '{ print p NR ":" $0 }' >> "$NONFILE_SRC"
+  printf '%s\n' "$STDIN_TEXT" >> "$NONFILE_SRC"
+  printf '%s\n' "$STDIN_TEXT" | awk -v p="$STDIN_LABEL" '{ print p ":" NR }' >> "$NONFILE_LOC"
 fi
 
 # ---- Scan ----
@@ -233,8 +242,8 @@ for rule in "${RULES[@]}"; do
   pattern="${rest%|*}"
 
   file_flags=(-n -H -E -a)
-  # No -n/-H for the flattened source: it already carries <location>:<line>:.
-  text_flags=(-E -a)
+  # -n only: the location comes from the parallel index, keyed on that number.
+  text_flags=(-n -E -a)
   if [[ "$flags" == "i" ]]; then
     file_flags+=(-i)
     text_flags+=(-i)
@@ -255,7 +264,10 @@ for rule in "${RULES[@]}"; do
   if [[ -s "$NONFILE_SRC" ]]; then
     while IFS= read -r match; do
       [[ -n "$match" ]] || continue
-      annotated="$match  [rule: $rule_id — $description]"
+      nf_n="${match%%:*}"
+      nf_content="${match#*:}"
+      nf_loc="$(awk -v n="$nf_n" 'NR == n { print; exit }' "$NONFILE_LOC")"
+      annotated="$nf_loc:$nf_content  [rule: $rule_id — $description]"
       is_allowed "$annotated" && continue
       VIOLATIONS+=("$annotated")
     done < <(grep "${text_flags[@]}" -- "$pattern" "$NONFILE_SRC" || true)

@@ -207,6 +207,23 @@ check_stdin_squash_message() {
 }
 check_stdin_squash_message
 
+# ---- ENGINE: the location prefix must not participate in matching -----------
+# Locations are attached from a parallel index, not prefixed onto the content.
+# Prefixing would make a tracker slug in a branch name flag every line of that
+# commit's body, burying the real hits under thousands of phantom ones.
+check_location_not_matched() {
+  local out
+  N=$((N + 1))
+  if ! out="$(printf 'a perfectly clean line of prose\n' \
+      | (cd "$REPO_ROOT" && "$GUARD" --stdin "added-by:agent/${L}en-9990-wire-fix") 2>&1)"; then
+    fail "the location label matched a rule and flagged clean content"
+    printf '%s\n' "$out" | sed 's/^/    /' >&2
+    return
+  fi
+  PASS=$((PASS + 1))
+}
+check_location_not_matched
+
 # ---- ENGINE: a NUL byte must not suppress a file ----------------------------
 # `grep -I` used to be in the flag set, so one NUL byte made an entire file
 # invisible to every rule, with no report of the skip.
