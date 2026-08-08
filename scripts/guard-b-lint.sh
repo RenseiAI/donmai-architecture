@@ -10,7 +10,9 @@
 #   --stdin <label>     scan text arriving on stdin, reported under <label>.
 #                       CI uses this for the squash-merge message GitHub
 #                       composes from the PR title and body — that text becomes
-#                       a published commit and exists in no branch commit.
+#                       a published commit and exists in no branch commit — and
+#                       for the pull request's own head branch name, which
+#                       `git ls-remote --heads` publishes to anyone.
 #   --punch-list        also write violations to GUARD-B-VIOLATIONS.txt
 #   <file>...           scan an explicit file list
 #
@@ -18,19 +20,31 @@
 #
 # Self-test: scripts/guard-b-lint-selftest.sh — proves every rule fires on a
 # known-bad sample, stays quiet on a known-good one, and that the engine's
-# non-obvious behaviours (merge commits, stdin, binary files, blanket-allowlist
-# refusal) actually work. A guard nobody has watched fail is not evidence.
+# non-obvious behaviours (merge commits, stdin, binary files, per-occurrence
+# allowlisting, blanket-allowlist refusal) actually work. A guard nobody has
+# watched fail is not evidence.
 #
-# Allowlist: .guard-allowlist in the repo root — one grep -E pattern per line
-# (comments with #). Each pattern is matched against the *annotated* violation
-# string:
+# ── Allowlist: .guard-allowlist, three or four fields per entry ──────────────
 #
-#     <location>:<line>:<content>  [rule: <RULE_ID> — <description>]
+#     <RULE_ID>[,<RULE_ID>...] :: <location-regex> :: <match-regex>[ :: <line-regex>]
 #
-# Every entry MUST be anchored with '^' and MUST name concrete rule IDs after
-# '\[rule: '. Both are enforced below and refused with exit 2 — a whole-file
-# exemption in a leak guard disables the guard for that file, which is how a
-# gate stops being evidence.
+# An entry exempts a violation only when ALL of these hold:
+#   * the firing rule's ID is in the comma-separated list, compared as a whole
+#     string — a `TRACKER_ID` scope does NOT cover `TRACKER_ID_SLUG`;
+#   * <location-regex> matches "<location>:<line-number>";
+#   * <match-regex> matches THE TEXT THE RULE ACTUALLY MATCHED, not the line it
+#     sits on — so a second, unlisted identifier sharing a line with an exempted
+#     one is still reported;
+#   * <line-regex>, if given, matches the whole line (optional extra narrowing).
+#
+# This shape replaced a single regex matched against the composed display
+# string. That design had two holes, both of which shipped: an exemption keyed
+# on one identifier silently covered every other violation on the same line, and
+# a rule scope written as a bare prefix covered every rule whose ID started with
+# it. Every field is validated at load time and a malformed or blanket entry is
+# REFUSED with exit 2 — precedent: scripts/retired-claim-lint.sh. Declaring a
+# discipline in a comment is not enforcing it; that is how a gate stops being
+# evidence.
 
 set -eo pipefail
 # nounset (-u) intentionally omitted: bash 3 treats empty arrays as unbound,
@@ -57,6 +71,19 @@ PUNCH_LIST_MODE=false
 # tripped the rules and had to be exempted. Those exemptions are where the
 # whole-file escapes came from.
 #
+# ── Word boundaries are spelled out, because \b does not mean what it looks
+#    like it means ─────────────────────────────────────────────────────────────
+# `_` is a word character, so `\br[e]n-2034\b` does NOT match the branch name
+# `feature_r[e]n-2034-wire` and `\bs[u]p-1840\b` does NOT match the worktree
+# `wt_s[u]p-1840-cred`. Both are shapes ordinary branch and worktree naming
+# produces, and both scanned clean under a `\b` boundary. (The bracketed letters
+# are the same convention as the rule table below: they keep this comment from
+# being a violation of the very rules it documents.)
+# The tracker rules use explicit `(^|[^0-9A-Za-z])` / `([^0-9A-Za-z]|$)`
+# boundaries instead, which treat `_` as the separator it visually is. The cost
+# is that the matched text includes the boundary character; allowlist
+# <match-regex>es are matched unanchored, so that is invisible to them.
+#
 # ── Tracker IDs are covered in all three casings that occur in practice ─────
 # The three rules are disjoint by construction (upper / lower / title), so a
 # single leak is reported once, by the rule that names its shape:
@@ -64,25 +91,34 @@ PUNCH_LIST_MODE=false
 #   TRACKER_ID_SLUG       the all-lower-case form a branch, worktree directory
 #                         or task-list id carries, with its trailing slug
 #   TRACKER_ID_TITLECASE  the form a title-cased sentence or a UI label makes
-# The marketing team's key collides with calendar strings, so its lower- and
-# title-case forms require the trailing slug segment that a branch name always
-# carries. A bare month-and-day and a bare month-and-year stay clean; the same
-# string followed by a hyphen and a slug word does not.
+# The separator between prefix and number is OPTIONAL (`-?`): live branches in
+# a sibling public repo carry the un-hyphenated spelling of the same ID, and it
+# scanned clean while the hyphenated spelling failed. The marketing team's key
+# collides with calendar strings, so it keeps its hyphen in the prose form and
+# its lower- and title-case forms require the trailing slug segment that a
+# branch name always carries. A bare month-and-day and a bare month-and-year
+# stay clean; the same string followed by a hyphen and a slug word does not.
 RULES=(
   'BRAND_NAME|-|\bRens[e]i\b|closed product brand (use Donmai, or allowlist parent-brand attribution)'
-  'TRACKER_ID|-|\b(REN2|RENOPS|REN|SUP|MAR)-[0-9]+\b|internal tracker issue ID'
-  'TRACKER_ID_SLUG|-|\b((ren2|renops|ren|sup)-[0-9]+\b|mar-[0-9]+-)|internal tracker ID in a branch / worktree / task-list slug'
-  'TRACKER_ID_TITLECASE|-|\b((Ren2|RenOps|Renops|Ren|Sup)-[0-9]+\b|Mar-[0-9]+-)|internal tracker ID in title case'
-  'TRACKER_URL|-|(^|[^.[:alnum:]-])linear\.app/[A-Za-z0-9_-]+/|internal tracker deep link (any workspace, team key or path)'
+  'TRACKER_ID|-|(^|[^0-9A-Za-z])((R[E]N2|R[E]NOPS|R[E]N|S[U]P)-?[0-9]+|M[A]R-[0-9]+)([^0-9A-Za-z]|$)|internal tracker issue ID'
+  'TRACKER_ID_SLUG|-|(^|[^0-9A-Za-z])((r[e]n2|r[e]nops|r[e]n|s[u]p)-?[0-9]+([^0-9A-Za-z]|$)|m[a]r-?[0-9]+-)|internal tracker ID in a branch / worktree / task-list slug'
+  'TRACKER_ID_TITLECASE|-|(^|[^0-9A-Za-z])((R[e]n2|R[e]nOps|R[e]nops|R[e]n|S[u]p)-?[0-9]+([^0-9A-Za-z]|$)|M[a]r-?[0-9]+-)|internal tracker ID in title case'
+  'TRACKER_URL|-|(^|[^.[:alnum:]-])linear\.app/[A-Za-z0-9_-]+|internal tracker deep link (any workspace, team key or path)'
   'CLOSED_CLI_ENDPOINT|-|/api/cl[i]/|closed control-plane CLI endpoint (only /api/daemon/* is OSS-shipped)'
   'CLOSED_TUI_REPO|-|rens[e]i-tui|closed-source TUI repo name'
   'CLOSED_PLATFORM|-|rens[e]i-platform|closed-source platform moniker'
   'PARENT_DOMAIN|-|rens[e]i\.ai|parent-company domain (allowlist legitimate parent-brand URLs)'
-  'PLATFORM_PATH|-|\bplatform/(src|app|api|lib|components|drizzle|migrations|e2e|sdk|scripts|contracts|types|clickhouse|public|docs|tests)/|internal monorepo path prefix'
+  'PLATFORM_PATH|-|(^|[^0-9A-Za-z])platform/(src|app|api|lib|components|drizzle|migrations|e2e|sdk|scripts|contracts|types|clickhouse|public|docs|tests)/|internal monorepo path prefix'
   'DEV_ABS_PATH|-|/Us[e]rs/[^/[:space:]]+/|developer absolute path'
   'CLOSED_ENV_VAR|-|RENS[E]I_[A-Z_]+|closed-source environment variable name'
   'PROD_METRIC|-|(([0-9]{1,3}(,[0-9]{3}){2,}|[0-9]{7,})[[:space:]]+([a-z][a-z-]*[[:space:]]+){0,2}(record|row|event|session|run|job|org|organi[sz]ation|tenant|user|deliver(y|ies)|span|dispatch|message|request|invocation|entr(y|ies))(e?s)?\b|\b(in|on|across) production\b[^.]{0,60}[0-9]{1,3}(,[0-9]{3})+)|production measurement of the closed control plane (operational data, not architecture)'
 )
+
+RULE_IDS=""
+for _r in "${RULES[@]}"; do
+  RULE_IDS="${RULE_IDS},${_r%%|*}"
+done
+RULE_IDS="${RULE_IDS},"
 
 # ---- Parse args ----
 FILES=()
@@ -135,51 +171,117 @@ if [[ -n "$STDIN_LABEL" ]]; then
   STDIN_TEXT="$(cat)"
 fi
 
-# ---- Load allowlist, refusing blanket entries ----
-# Precedent: scripts/retired-claim-lint.sh, which refuses blanket patterns for
-# the same reason. Both headers used to merely *declare* the no-whole-file rule;
-# nothing enforced it, and a `<file>:.*` entry survived three review rounds.
+# ---- Load allowlist, refusing malformed and blanket entries ----
 refuse_allowlist() {
   local lineno="$1" why="$2" entry="$3"
   echo "guard-b: $ALLOWLIST:$lineno — REFUSED: $why" >&2
   echo "  entry: $entry" >&2
   echo "" >&2
-  echo "  Every allowlist entry must:" >&2
-  echo "    (a) be anchored with '^' so it names a specific file, and" >&2
-  echo "    (b) carry a concrete rule scope, e.g. '\\[rule: BRAND_NAME' or" >&2
-  echo "        '\\[rule: (BRAND_NAME|PLATFORM_PATH)'." >&2
-  echo "  An entry that omits either one exempts every rule on the line it" >&2
-  echo "  matches — and a '<file>:.*' entry exempts an entire file forever," >&2
-  echo "  silently. That is how a gate stops being evidence. Narrow it, or fix" >&2
-  echo "  the line it was protecting." >&2
+  echo "  Entry grammar:" >&2
+  echo "    <RULE_ID>[,<RULE_ID>...] :: <location-regex> :: <match-regex>[ :: <line-regex>]" >&2
+  echo "" >&2
+  echo "  Every rule ID must be one this guard defines, spelled in full." >&2
+  echo "  <location-regex> must be '^'-anchored and must start on a literal" >&2
+  echo "  path character, so it names a file rather than matching every" >&2
+  echo "  location. <match-regex> must bind the identifier being exempted, so" >&2
+  echo "  a second, unlisted one on the same line is still reported. No field" >&2
+  echo "  may be a wildcard: a blanket entry disables the guard silently, and" >&2
+  echo "  that is how a gate stops being evidence. Narrow it, or fix the line." >&2
   exit 2
 }
 
-ALLOWLIST_PATTERNS=()
+# is_blanket <regex> — 0 when the regex carries no real literal to bind on.
+is_blanket() {
+  local stripped
+  stripped="$(printf '%s' "$1" | tr -d '.*+?^$()|[]{}\\ ')"
+  [[ ${#stripped} -lt 2 ]]
+}
+
+ALLOW_RULES=()
+ALLOW_LOC=()
+ALLOW_MATCH=()
+ALLOW_LINE=()
 if [[ -f "$ALLOWLIST" ]]; then
   al_lineno=0
   while IFS= read -r line || [[ -n "$line" ]]; do
     al_lineno=$((al_lineno + 1))
     [[ "$line" =~ ^[[:space:]]*# || -z "$line" ]] && continue
-    [[ "$line" == '^'* ]] || refuse_allowlist "$al_lineno" "entry is not anchored with '^'" "$line"
+
     case "$line" in
-      *'\[rule: '*) ;;
-      *) refuse_allowlist "$al_lineno" "entry is not scoped to a rule" "$line" ;;
+      *' :: '*) ;;
+      *) refuse_allowlist "$al_lineno" "entry has no ' :: ' field separators" "$line" ;;
     esac
-    al_scope="$(printf '%s' "$line" | sed 's/.*\\\[rule: //')"
-    [[ "$al_scope" =~ ^(\(|[A-Z_]) ]] || \
-      refuse_allowlist "$al_lineno" "rule scope must name concrete rule IDs, not a wildcard" "$line"
-    ALLOWLIST_PATTERNS+=("$line")
+
+    al_rules="${line%% :: *}"
+    al_rest="${line#* :: }"
+    al_loc="${al_rest%% :: *}"
+    al_match=""
+    al_line=""
+    if [[ "$al_rest" == *' :: '* ]]; then
+      al_rest2="${al_rest#* :: }"
+      al_match="${al_rest2%% :: *}"
+      if [[ "$al_rest2" == *' :: '* ]]; then
+        al_line="${al_rest2#* :: }"
+        [[ "$al_line" == *' :: '* ]] && \
+          refuse_allowlist "$al_lineno" "entry has more than four fields" "$line"
+      fi
+    else
+      refuse_allowlist "$al_lineno" "entry has fewer than three fields" "$line"
+    fi
+
+    # (a) every rule ID must exist, spelled in full.
+    [[ -n "$al_rules" ]] || refuse_allowlist "$al_lineno" "entry names no rule" "$line"
+    al_norm=""
+    IFS=',' read -r -a al_rule_arr <<< "$al_rules"
+    for al_rid in "${al_rule_arr[@]}"; do
+      al_rid="${al_rid//[[:space:]]/}"
+      [[ -n "$al_rid" ]] || refuse_allowlist "$al_lineno" "empty rule ID in the scope list" "$line"
+      case "$RULE_IDS" in
+        *",$al_rid,"*) ;;
+        *) refuse_allowlist "$al_lineno" "unknown rule ID '$al_rid' (a typo exempts nothing, or everything)" "$line" ;;
+      esac
+      al_norm="${al_norm},${al_rid}"
+    done
+    al_norm="${al_norm},"
+
+    # (b) the location regex must name a file, not match every location.
+    [[ "$al_loc" == '^'* ]] || refuse_allowlist "$al_lineno" "location regex is not anchored with '^'" "$line"
+    al_head="${al_loc#^}"
+    al_head="${al_head#(}"
+    [[ "$al_head" =~ ^[A-Za-z0-9_/-] ]] || \
+      refuse_allowlist "$al_lineno" "location regex must start on a literal path character, not a wildcard" "$line"
+    is_blanket "$al_loc" && refuse_allowlist "$al_lineno" "location regex is blanket" "$line"
+
+    # (c) the match regex must bind the identifier being exempted.
+    is_blanket "$al_match" && \
+      refuse_allowlist "$al_lineno" "match regex is blanket — it would exempt every hit of these rules in that file" "$line"
+
+    # (d) the optional line regex, if present, must also be concrete.
+    if [[ -n "$al_line" ]]; then
+      is_blanket "$al_line" && refuse_allowlist "$al_lineno" "line regex is blanket" "$line"
+    fi
+
+    ALLOW_RULES+=("$al_norm")
+    ALLOW_LOC+=("$al_loc")
+    ALLOW_MATCH+=("$al_match")
+    ALLOW_LINE+=("$al_line")
   done < "$ALLOWLIST"
 fi
 
-# is_allowed <annotated-violation> — 0 if an allowlist pattern covers it.
+# is_allowed <rule-id> <location> <line-number> <matched-text> <line-content>
 is_allowed() {
-  local ap
-  for ap in "${ALLOWLIST_PATTERNS[@]}"; do
-    if printf '%s\n' "$1" | grep -qE "$ap"; then
-      return 0
+  local rid="$1" loc="$2" lno="$3" occ="$4" content="$5" i
+  for ((i = 0; i < ${#ALLOW_RULES[@]}; i++)); do
+    case "${ALLOW_RULES[$i]}" in
+      *",$rid,"*) ;;
+      *) continue ;;
+    esac
+    printf '%s' "$loc:$lno" | grep -qE -- "${ALLOW_LOC[$i]}" || continue
+    printf '%s' "$occ" | grep -qE -- "${ALLOW_MATCH[$i]}" || continue
+    if [[ -n "${ALLOW_LINE[$i]}" ]]; then
+      printf '%s' "$content" | grep -qE -- "${ALLOW_LINE[$i]}" || continue
     fi
+    return 0
   done
   return 1
 }
@@ -200,10 +302,10 @@ if [[ ${#BINARY_FILES[@]} -gt 0 ]]; then
 fi
 
 # ---- Non-file sources, flattened once ----
-# Commit messages and the composed squash message are published text that is
-# not a file, so a file scan cannot see them. Flattening once here rather than
-# re-reading inside the rule loop keeps the cost at one `git log` per commit
-# instead of one per commit per rule.
+# Commit messages, the composed squash message and the head branch name are
+# published text that is not a file, so a file scan cannot see them. Flattening
+# once here rather than re-reading inside the rule loop keeps the cost at one
+# `git log` per commit instead of one per commit per rule.
 #
 # Content and location go to two PARALLEL files, line for line, and the rules
 # are matched against the content only. Prefixing the content with its location
@@ -211,7 +313,7 @@ fi
 # subject would flag every line of that commit's body.
 NONFILE_SRC="$(mktemp)"
 NONFILE_LOC="$(mktemp)"
-trap 'rm -f "$NONFILE_SRC" "$NONFILE_LOC"' EXIT
+trap 'rm -f "$NONFILE_SRC" "$NONFILE_LOC" "$NONFILE_SRC.one"' EXIT
 
 # Merge commits are NOT excluded. `--no-merges` used to be on this rev-list, and
 # a merge commit is the one place a branch slug lands in published history —
@@ -221,18 +323,44 @@ if [[ -n "$COMMIT_RANGE" ]]; then
     [[ -n "$sha" ]] || continue
     git log -1 --format='%s%n%b' "$sha" > "$NONFILE_SRC.one"
     cat "$NONFILE_SRC.one" >> "$NONFILE_SRC"
-    awk -v p="commit-message:${sha:0:12}" '{ print p ":" NR }' "$NONFILE_SRC.one" >> "$NONFILE_LOC"
+    awk -v p="commit-message:${sha:0:12}" '{ print p "\t" NR }' "$NONFILE_SRC.one" >> "$NONFILE_LOC"
   done < <(git rev-list "$COMMIT_RANGE" 2>/dev/null || true)
   rm -f "$NONFILE_SRC.one"
 fi
 
 if [[ -n "$STDIN_LABEL" ]]; then
   printf '%s\n' "$STDIN_TEXT" >> "$NONFILE_SRC"
-  printf '%s\n' "$STDIN_TEXT" | awk -v p="$STDIN_LABEL" '{ print p ":" NR }' >> "$NONFILE_LOC"
+  printf '%s\n' "$STDIN_TEXT" | awk -v p="$STDIN_LABEL" '{ print p "\t" NR }' >> "$NONFILE_LOC"
 fi
 
 # ---- Scan ----
 VIOLATIONS=()
+
+# record_line <rule-id> <pattern> <flags> <description> <location> <lineno> <content>
+#
+# One violation per DISTINCT MATCHED OCCURRENCE, not one per matching line. The
+# allowlist is consulted per occurrence, so exempting one identifier cannot
+# exempt a different one that happens to share its line.
+record_line() {
+  local rule_id="$1" pattern="$2" flags="$3" description="$4"
+  local loc="$5" lineno="$6" content="$7"
+  local occ found=0
+  local oflags=(-o -E -a)
+  [[ "$flags" == "i" ]] && oflags+=(-i)
+  while IFS= read -r occ; do
+    [[ -n "$occ" ]] || continue
+    found=1
+    is_allowed "$rule_id" "$loc" "$lineno" "$occ" "$content" && continue
+    VIOLATIONS+=("$loc:$lineno:$content  [rule: $rule_id — $description]  [match: $occ]")
+  done < <(printf '%s\n' "$content" | grep "${oflags[@]}" -- "$pattern" 2>/dev/null | awk '!seen[$0]++')
+  # The line matched but no occurrence could be re-extracted — possible when a
+  # NUL byte mangles the content on its way through the shell. Report it rather
+  # than dropping it: an unreportable match is still a match.
+  if [[ $found -eq 0 ]]; then
+    VIOLATIONS+=("$loc:$lineno:$content  [rule: $rule_id — $description]  [match: <unresolved>]")
+  fi
+}
+
 for rule in "${RULES[@]}"; do
   rule_id="${rule%%|*}"
   rest="${rule#*|}"
@@ -241,12 +369,9 @@ for rule in "${RULES[@]}"; do
   description="${rest##*|}"
   pattern="${rest%|*}"
 
-  file_flags=(-n -H -E -a)
-  # -n only: the location comes from the parallel index, keyed on that number.
-  text_flags=(-n -E -a)
+  line_flags=(-n -E -a)
   if [[ "$flags" == "i" ]]; then
-    file_flags+=(-i)
-    text_flags+=(-i)
+    line_flags+=(-i)
   fi
 
   # --- files ---
@@ -254,23 +379,21 @@ for rule in "${RULES[@]}"; do
     [[ -f "$file" ]] || continue
     while IFS= read -r match; do
       [[ -n "$match" ]] || continue
-      annotated="$match  [rule: $rule_id — $description]"
-      is_allowed "$annotated" && continue
-      VIOLATIONS+=("$annotated")
-    done < <(grep "${file_flags[@]}" -- "$pattern" "$file" 2>/dev/null || true)
+      record_line "$rule_id" "$pattern" "$flags" "$description" \
+        "$file" "${match%%:*}" "${match#*:}"
+    done < <(grep "${line_flags[@]}" -- "$pattern" "$file" 2>/dev/null || true)
   done
 
-  # --- commit messages and the composed squash message (already flattened) ---
+  # --- commit messages, the composed squash message, the head branch name ---
   if [[ -s "$NONFILE_SRC" ]]; then
     while IFS= read -r match; do
       [[ -n "$match" ]] || continue
       nf_n="${match%%:*}"
       nf_content="${match#*:}"
-      nf_loc="$(awk -v n="$nf_n" 'NR == n { print; exit }' "$NONFILE_LOC")"
-      annotated="$nf_loc:$nf_content  [rule: $rule_id — $description]"
-      is_allowed "$annotated" && continue
-      VIOLATIONS+=("$annotated")
-    done < <(grep "${text_flags[@]}" -- "$pattern" "$NONFILE_SRC" || true)
+      nf_loc_rec="$(awk -v n="$nf_n" 'NR == n { print; exit }' "$NONFILE_LOC")"
+      record_line "$rule_id" "$pattern" "$flags" "$description" \
+        "${nf_loc_rec%%$'\t'*}" "${nf_loc_rec##*$'\t'}" "$nf_content"
+    done < <(grep "${line_flags[@]}" -- "$pattern" "$NONFILE_SRC" || true)
   fi
 done
 
@@ -290,11 +413,12 @@ echo "------------------------------------------------------------"
 echo ""
 echo "Rewrite the content to describe the behaviour instead of citing internal"
 echo "trackers, repos, endpoints, hosts or production measurements. To allowlist"
-echo "a specific line, add a grep -E pattern to .guard-allowlist matching the"
-echo "full annotated violation string:"
-echo "  <location>:<line>:<content>  [rule: <RULE_ID> — <description>]"
-echo "Anchor it with ^, name the file, and scope it to concrete rule IDs."
-echo "Unanchored or unscoped entries are refused outright."
+echo "one specific identifier on one specific file, add an entry to"
+echo ".guard-allowlist:"
+echo "  <RULE_ID>[,<RULE_ID>...] :: <location-regex> :: <match-regex>[ :: <line-regex>]"
+echo "Spell each rule ID in full, anchor the location on a literal filename, and"
+echo "bind the match regex to the identifier itself — never to the whole line."
+echo "Malformed or blanket entries are refused outright."
 echo ""
 
 if $PUNCH_LIST_MODE; then
