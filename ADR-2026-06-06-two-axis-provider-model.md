@@ -184,3 +184,55 @@ Two things follow, and neither is a change to the decision in D1:
 The `contractAbi` skew-tolerance window described in D1 remains correct and is
 unaffected — it governs how much divergence is *tolerated* once detected, which
 presumes detection works.
+
+---
+
+## Addendum 2026-08-08 — the generated matrix gains an adapter version and a computed rung; D7's contribution path resolves into two tiers
+
+Recorded by
+[`ADR-2026-08-08-harness-as-versioned-deliverable.md`](ADR-2026-08-08-harness-as-versioned-deliverable.md),
+which decides the harness axis's versioning, tiering, and conformance model on
+top of the model D1/D3/D7 established. Neither decision below changes a verdict
+in this ADR; both add a field or resolve an ambiguity it left open.
+
+**1. `contractAbi` is the family ABI and stops being the harness's version.**
+D1's manifest carries one `contractAbi` per harness and, as shipped, all ten
+harness manifests declare the same value — so the string identifies the *family
+contract*, which is correct, while the wire field derived from it is named
+"version", which is not. That ADR's D1 separates four namespaces and gives each
+one producer: the family ABI (this field, unchanged), a new per-harness
+**adapter version**, the existing `binaryPins` triple, and a computed
+conformance rung. The generated matrix gains the adapter version as a per-harness
+field, and the execution cell's harness reference carries **that**, not this one.
+The skew-tolerance window above continues to govern the family ABI, whose move is
+lock-step by definition; an adapter version moves alone, which is the whole point
+of separating them.
+
+**2. `stability` and `smoked` become computed, not authored.** D3 makes the
+generated matrix the single source of truth for capability data, and the
+per-cell tier fields are part of it — but they are hand-authored Go literals in
+the valid-cell list, so nothing ties `smoked: true` to a lane that passed. That
+ADR's D4 replaces them with a four-rung ladder (`untested` →
+`contract-conformant` → `smoke-validated` → `adaptation-verified`) that the
+generator refuses to emit unless it derived the rung from a gate outcome. This
+is the same rule as the addendum above, applied to a different field: a claim's
+witness must sit on the other side of the boundary it is claiming across.
+
+**3. D7's "signed manifest row" resolves into two tiers.** D7 says a third party
+contributes a harness by shipping a signed manifest, with the safest path
+requiring zero Go. That remains the destination, and the tier model says which
+contributions can actually take it: a **declared harness** (manifest, no code,
+bound to a shared in-tree driver, capabilities a strict subset of that driver's)
+genuinely is a manifest row; a **native adapter** — one needing hooks, tool
+registration, a native permission grammar, PTY, or delivery into a live session
+— is not, and calling it one is how "adding a harness is a manifest row" became
+a claim the harness-addition checklist had to walk back. The trust model, entry
+kinds and two-tier `verified`/`community` listing in D7 are reused unchanged and
+are the mechanism the enterprise-private case rides.
+
+**4. Two applications of one existing rule, not new machinery.** The subset
+assertion that keeps a declared harness honest (`manifest.caps ⊆ driver.caps`)
+is D1's per-cell narrowing rule (`cell.caps ⊆ harness.caps`) applied one level
+down, and both are the narrow-only, fail-closed shape of D5's per-machine
+invariant. Nothing in the tier model needs a fourth mechanism, and anything that
+appears to should be read as a design error first.

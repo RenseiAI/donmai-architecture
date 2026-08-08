@@ -52,6 +52,32 @@ stops re-litigating it.
    (durable replay, multi-session, steer semantics). Until then, no native
    harness adapter is deprecated in favor of ACP.
 
+### Addendum 2026-08-08 — `acp-generic` is reclassified as the first purpose-built shared driver
+
+[`ADR-2026-08-08-harness-as-versioned-deliverable.md`](ADR-2026-08-08-harness-as-versioned-deliverable.md)
+D2 names the two-tier harness model this decision was already describing without
+a vocabulary for it: a **native adapter** (in-tree code, full capability
+integration — Decision 1's primary surface) and a **declared harness** (a
+manifest, no code, bound to a **shared driver** that implements the event
+contract for a whole class of harnesses). Decision 2's "one adapter, then a
+manifest row per agent" is exactly the breadth tier, and `acp-generic` is
+therefore not a one-off experiment: it is the **third shared driver** — after the
+shared CLI-JSONL execution driver and the shared interactive PTY spawn-mode
+driver, both of which were extracted from existing adapters — and the first built
+to be one from the start.
+
+Two things follow, and neither changes a decision here. Decision 2's cap
+(`experimental` stability, entry at `untested`) is generalized by that ADR's D4.5
+into the rung-per-tier rule, so the cap is now the general case rather than a
+special condition on this adapter. And its capability ceiling becomes structural
+rather than editorial: a manifest bound to `acp-generic` may declare only a
+subset of what `acp-generic` implements, so the "no injection/resume guarantees"
+limit in Decision 2 stops being a sentence someone must remember and becomes an
+assertion the generator makes.
+
+The promotion criteria in Decision 3 are unaffected and still gate any
+re-evaluation of ACP as a *first-class* surface.
+
 ## Consequences
 
 ### Positive

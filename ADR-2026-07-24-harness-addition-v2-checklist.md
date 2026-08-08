@@ -45,6 +45,45 @@ adaptation-plan amendment.
 | 11 | **Child conformance.** Native-child identity/event/cancel/terminal mapping is proven where claimed. Every production headless harness also passes at least one non-native child smoke using an independently admitted cell, adaptation plan, receipt, and `SessionRef`. | child fixture + smokes lane |
 | 12 | **No prompt-equivalence shortcuts.** A prompt/CLI partial cannot prove MCP, native-tool, service, hook, or policy activation. Any such downgrade is optional, named before admission, and visible in the applied receipt. | negative fixture + receipt assertion |
 
+### Amendment 2026-08-08 — the rows are tier-scoped, and row 6 is corrected
+
+Recorded by
+[`ADR-2026-08-08-harness-as-versioned-deliverable.md`](ADR-2026-08-08-harness-as-versioned-deliverable.md),
+which splits the harness family into a **native adapter** tier (in-tree code,
+full capability integration) and a **declared harness** tier (a manifest bound
+to a shared in-tree driver, no code, capabilities a strict subset of that
+driver's). The table above was written when every harness was a native adapter;
+it applies unchanged to that tier. For a declared harness the rows scope as
+follows, and the scoping is what keeps "a manifest row" from meaning "an
+unproven harness":
+
+| Rows | Declared harness (breadth tier) |
+|---|---|
+| 1, 2 (binary pin, pin-bump protocol) | **Apply unchanged.** The pin describes the third-party program and is independent of how we drive it. |
+| 3, 4 (policy injection, fail-closed trust boundary) | **Apply, but are the driver's obligation, not the manifest's.** A manifest may only select from what its driver enforces; it can never weaken a boundary it did not build. |
+| 5 (endpoint pin) | **Applies unchanged**, enforced by the driver. |
+| 6 (event-contract conformance) | **Applies, asserted at the driver** — see the correction below. |
+| 7 (smoke set) | **Applies** to reach `smoke-validated`; a declared harness may be listed at `contract-conformant` (fake-binary fixtures only) before it earns routability. |
+| 8 (tier entry) | **Applies unchanged**, with the rung now *computed* rather than authored. |
+| 9–12 (adaptation manifest, applied receipts, child conformance, no prompt-equivalence shortcuts) | **Apply to whatever the manifest declares** — which is bounded by the driver's surface. A declared harness cannot claim a channel its driver lacks, so these rows shrink to the manifest's own argv/env/profile selections plus the driver's already-proven channels. |
+
+**Row 6 is corrected.** The row states the event contract is "asserted by a
+reusable conformance test **every adapter runs**". Measured 2026-08-08 against
+this repository: the shared suite (`agent/conformance`) is 63 lines, encodes one
+invariant, self-describes as a minimal seed, and is imported by **5 of the 10**
+shipped harness packages. Neither shared driver imports it — including the one
+that three harnesses ride, so the harness whose entire execution path is a
+shared driver asserts none of the contract it inherits. Row 6 was an aspiration
+written in the present tense.
+
+The fix is not "wire the other five": it is to assert the contract **once per
+shared driver**, covering every harness bound to it, plus a per-harness fixture
+pack for that harness's own argv, env, and profile selections. Running the suite
+per-adapter is precisely the cost the breadth tier exists to remove — a
+manifest-only harness must not need its own Go test package to be certified.
+Row 6's *requirement* is unchanged and its *enforcement* moves; see that ADR's
+D4.3.
+
 ## Consequences
 
 ### Positive
