@@ -67,7 +67,7 @@ family-agnostic header (`Version: m.ContractABI`). The wire field named
 **F2 — admission pins that field, and the runner re-asserts it by equality.**
 `runner/harness_selection.go:362-364` denies with
 `DenialUnsupportedHarnessVersion` when the live registry's harness version
-differs from the version the receipt pins, and `:386-389` denies again if the
+differs from the version the receipt pins, and `:387-389` denies again if the
 identity changes after admission. The gate is correct and fail-closed. With one
 shared token behind it, it has two degenerate behaviours and no useful middle:
 *within* a release it can never fire on a version difference, because every
@@ -128,7 +128,7 @@ states an aspiration in the present tense.
 **F7 — registration is a compile-time list, and adding a harness is a lock-step
 release.** `afcli/agent_run.go` calls its constructor slice "the single
 hand-authored ctor list — **the SoT** for the agent-run provider set", and
-`recognizedHarnessToken` (`runner/harness_selection.go:470-505`) is a closed
+`recognizedHarnessToken` (`runner/harness_selection.go:473-505`) is a closed
 `switch` over string literals with a `default` that returns *unrecognized*. A
 new harness is therefore a Go edit in at least three hand-maintained places, and
 because the closed composing binary embeds this module as a library at a pinned
