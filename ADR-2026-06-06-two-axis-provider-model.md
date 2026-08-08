@@ -142,3 +142,45 @@ The phase plan (Phase 0 → Phase 7), repos, gates, and per-phase ADR actions li
 - **Phase 0 is the hard prerequisite** and ships standalone: wire the OSS donmai daemon `OnPreSpawn → snapshot` (the hook is already live closed-side in the closed platform TUI's credential-snapshot injection; only the OSS daemon leaves it nil). Nothing in D5/D6 actuates until P0 lands.
 - **The narrow-only port** (D5) lives at `donmai/runner/access.ResolveMachineCell`, is read-only enforcement, and is gated to byte-agree with the platform writer via the committed `narrow-only-vectors.json`. Full contract: `04-per-machine-narrowing.md` §3–§4.
 - **Detailed Go contract** (the two interfaces, `EndpointBinding`, `SpawnComplete`, the 7-provider → cell mapping, the protocol matrix): `02-two-axis-architecture.md` §2–§3. **SoT descriptor schema + codegen/doc-gen/CI-parity flow:** `03-capability-matrix-spec.md`.
+
+---
+
+## Addendum 2026-08-08 — the shipped consumer-side parity gate is a closed loop, not the gate specified here
+
+Recorded by
+[`ADR-2026-08-08-harness-authority-admission-plane-parked.md`](ADR-2026-08-08-harness-authority-admission-plane-parked.md)
+D7, which names the vendored capability matrix as the production lane for
+capability resolution and therefore cannot leave this divergence unstated.
+
+D1 above specifies the anti-drift discipline as **a load-bearing CI parity gate
+that blocks merges on "the JSON being byte-identical to a fresh `go
+generate`"**. That is a *freshness* assertion: it compares the consumed copy
+against the generating source.
+
+The gate as actually shipped on the consumer side does something different. It
+hashes each vendored fixture (`matrix.json`, `harnesses.json`,
+`endpoints.json`) against a release manifest **committed beside those fixtures
+in the same repository**. Both sides of the comparison are vendored together and
+move together, so the assertion can only detect an edit to one of two
+co-committed files. It cannot detect that the pin itself is stale, and it has
+not: the vendored copies are pinned two minor versions behind the current tag of
+this repo, both `matrix.json` and `harnesses.json` differ byte-for-byte from a
+fresh `go generate` here, and the gate has stayed green throughout.
+
+Two things follow, and neither is a change to the decision in D1:
+
+1. **D1 is right; the code needs to align.** The consumer-side gate's
+   comparison target must become the generated artifact, per the corpus rule
+   that where corpus and code disagree, the code aligns or an ADR amends the
+   corpus. This addendum is not that amendment — it records a defect and leaves
+   D1 standing.
+2. **The failure shape is worth naming**, because this corpus found the
+   identical shape on the other side of the same question in the same week:
+   *evidence that certifies itself*. A freshness claim whose only witness is
+   committed next to the thing it witnesses is not a freshness claim. A parity
+   gate must compare across the boundary it is guarding, or it is measuring one
+   file against its own shadow.
+
+The `contractAbi` skew-tolerance window described in D1 remains correct and is
+unaffected — it governs how much divergence is *tolerated* once detected, which
+presumes detection works.
