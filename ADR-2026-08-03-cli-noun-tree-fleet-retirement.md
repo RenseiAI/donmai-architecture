@@ -222,12 +222,17 @@ factory instead. Until it lands, `011`/`014` must describe the OSS surface as
    | 2 | `host` | this machine vs any machine | fixed to "this machine"; org side is `instance` | this ADR, above |
    | 3 | `pool` | **four** — the org capacity pool, one daemon machine, the warm workarea cache, and this machine's local disk envelope | kept for the org capacity pool only; the other three renamed to **host**, **workarea cache**, and `capacity.workareaMaxDiskGb`. The `host` rename and the workarea-cache *prose* landed with `ADR-2026-08-07`'s acceptance; the wire/config half (daemon control paths, `--pool`, the disk-envelope key) is **authorized there and not yet implemented** | `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md` D2 |
    | 4 | `sandbox` | three — the provider family and execution-context kind, a deprecated composition-schema field, and a legacy per-project setting | narrowed to one *kind* of execution context (the ephemeral, provider-minted kind); the generic unit noun is **execution context**, wire noun `instance` | `ADR-2026-08-07` D1 |
+   | 5 | `engine` | two already — the workflow engine (`016`) and a standing gloss for the harness axis — with a third proposed for the shared per-class harness driver | **refused before adoption.** The new concept is named **shared driver**: a compound, so it does not collide with the bare `driver` `ADR-2026-06-06` D1 already spends on the harness family, and the term both shipped packages already use for themselves | `ADR-2026-08-08-harness-as-versioned-deliverable.md` D2 |
 
    Application 3 is the one that shows the rule has teeth: `pool` reached four
    referents precisely because nobody applied this rule to it, and three of the
    four lived in the OSS corpus. Application 4 lands the org-side `instance`
    vocabulary this rule already named — `ADR-2026-08-07` D1 supplies the noun
    (`execution context`) that `instanceKind` was already discriminating.
+   Application 5 is the first **preventive** one: applications 1–4 were all
+   cleanups of a collision that had already happened, and 5 is the rule refusing
+   a third referent at authoring time — which is the cheaper half of the rule and
+   the half that had never been exercised.
 2. **A leaf may be platform-only under a shared noun** (per
    `rensei-architecture/ADR-2026-05-06-tui-noun-consolidation-platform-extensions.md`
    § Addendum 2026-08-03). A **noun** may not mean different things in two

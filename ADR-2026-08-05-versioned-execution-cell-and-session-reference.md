@@ -8,7 +8,20 @@ split: inline-addenda
 # ADR-2026-08-05 — Versioned execution cell, admission receipt, SessionRef, and delegation edge
 
 **Status:** Accepted — architecture decision; implementation, generated
-contracts, migration, promotion, and release remain pending
+contracts, migration, promotion, and release remain pending.
+**The downstream authority-store realization of this contract is PARKED** as of
+2026-08-08 per
+[`ADR-2026-08-08-harness-authority-admission-plane-parked.md`](ADR-2026-08-08-harness-authority-admission-plane-parked.md)
+D1 — the contract below keeps its Accepted status; what is parked is the
+definition catalog, connection store, grant table, probe/promotion chain, and
+receipt ledger built on top of it. Two constraints from that ADR bind this one
+directly: **D3** — the granted capability set in D3's `ResolvedExecutionCell`
+MUST be the intersection of `requiredCapabilities` with an **executor-attested**
+inventory for the exact harness and version, not a copy of the request (as
+built, every receipt written to date granted a capability the runner then
+refuses to spawn); and **D3.4** — admission MUST NOT charge quota or write a
+durable commitment before the executor accepts, wherever refusal cannot be known
+at admission time.
 **Date:** 2026-08-05
 **Boundary:** shared (OSS-canonical contract here; the downstream control-plane
 implications live in the mirrored platform stub)
