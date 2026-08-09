@@ -369,6 +369,29 @@ transaction sample as signed integer `claimNowMs`; this operation metadata is
 not a ninth member of the D1 claim schema. The descriptor alone grants no
 execution or release authority.
 
+<!-- BOUNDARY-SYNC-START: adr-2026-07-18-terminal-claim-clock -->
+The cross-repository delivery/claim clock contract is:
+
+1. A downstream delivery transaction may reserve an invocation and `claimId` for
+   one consumer, but it MUST persist no `claimedAt`, `claimNowMs`, execution
+   deadline, result-transport deadline, or final-settlement deadline.
+2. Donmai then commits the exact D1 local claim. That transaction is the sole
+   authority for the claim clock: returned `claimNowMs` equals the transaction's
+   D7 `nowMs` and the integer Unix-millisecond value projected by canonical
+   `claimedAt`.
+3. The consumer sends an idempotent claim acknowledgement carrying the exact
+   canonical local claim and `claimNowMs`. A downstream claim-acknowledgement CAS
+   may derive and persist claimed-phase deadlines only after verifying that
+   equality and every delivery, lease, invocation, claim, session, terminal-
+   result, workarea, receiver, and origin binding.
+4. No command starts and no result is accepted until the consumer durably retains
+   the successful claim-acknowledgement response. Byte-identical replay is
+   read-only idempotent; any changed stable binding, local-claim byte, or
+   `claimNowMs` conflicts. A delivery timeout, lost acknowledgement, restart, or
+   rollback never invents a new claim origin, resamples `claimedAt`, extends a
+   deadline, or reassigns an invocation whose local-claim outcome is ambiguous.
+<!-- BOUNDARY-SYNC-END: adr-2026-07-18-terminal-claim-clock -->
+
 Acknowledgement and expiry/reaping are separate paths:
 
 **Acknowledgement path**
