@@ -198,6 +198,18 @@ named alternative: it may not assemble a cross-product from axes that appear in
 different alternatives. Applying an alternative produces a resolver decision
 that names the rejected choice, selected alternative, and reason.
 
+> **Forward annotation, 2026-08-12** —
+> `ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md` D2 keeps
+> every rule above and changes only where the named set comes from **for the
+> placement axis**: the alternatives are *computed* from the capacity profile at
+> resolve time — the ordered set that survived permission, viability and
+> preference — and written into the decision record **before** the first
+> acquisition is attempted, rather than hand-authored per intent. "Named in
+> advance" is therefore satisfied by construction, deny-by-default is unchanged,
+> and each candidate remains one complete cell, so the cross-product prohibition
+> still binds. The single fallback rule is: the next candidate in that ordered
+> surviving set, and nothing outside it.
+
 ### D4 — ResolvedExecutionCell and admission equation
 
 An execution cell is the exact result at the granularity known before enqueue:

@@ -32,6 +32,21 @@ This ADR addresses the representation layer only. It does not change binding/val
 
 2. **The host axis is orthogonal to harness and modelId.** A model is `(harness, modelId, hosts[])`. The same `modelId` under the same harness can appear once with the union of its hosts; the same model under two harnesses is two rows whose `hosts[]` may overlap. Consumers that want a deduped "one row per model identity, with its distinct hosts" view group by `modelId` and union the lists — host topology is a property of the identity, not of any single representation row.
 
+> **Forward annotation, 2026-08-12** — the "future scheduler" this ADR writes
+> for is now specified, and it reads `hosts[]` as a **constraint, not a
+> placement dimension**. Per
+> `ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md` D4, the
+> inference-host axis enters placement at the **viability** stage through the
+> serving-endpoint axis of the cell contract — reachable-or-not,
+> permitted-or-not, compatible-or-not with the requested auth binding — and
+> `PlacementRef.kind` stays a **closed** enum. Adding an inference host here
+> never widens it. That ADR also records the naming discipline this axis makes
+> necessary: `host` has two referents — the **execution host** (a machine
+> offering execution-context slots) and the **inference host** (where a model is
+> served) — and prose qualifies the noun wherever both are in scope. No wire is
+> renamed; the model-level list stays representation and the matrix cell stays
+> binding-authoritative, exactly as scoped below.
+
 3. **The OSS matrix/gen will emit a `Models[]` list whose entries carry `hosts[]`, derived from the matrix `HostDesc` cells.** Today the host fact is per-cell (`harnessEndpointCells[]`); the generator already knows, for each `(company, model)`, the set of hosts across its valid cells. Emitting that as a model-level `hosts[]` on a `Models[]` section of the generated matrix is the OSS half of this decision. **It is QUEUED as a follow-up workstream — NOT implemented in this ADR's commit** — so the generator change ships under the matrix-gen owner with its own parity-gate update, rather than racing the representation-layer adoption. Until it ships, the host lists are hand-curated by the consuming layer (see the mirrored platform stub).
 
 ## Consequences

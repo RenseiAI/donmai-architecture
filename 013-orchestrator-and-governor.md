@@ -180,6 +180,22 @@ The orchestrator admits a versioned `DispatchIntent` and selects one
 4. **Cost / latency hints** — routing may rank already-valid candidates but
    cannot invent an undeclared fallback.
 
+Item 4 is the ranking stage of the placement composition law
+(`ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md`, and
+`001` § "How the nouns compose"), and the law makes its two limits explicit.
+**Ranking orders and does nothing else:** the candidate set is the failover set,
+so ranking may not add, remove or substitute a candidate — anything that can
+empty a set is a gate, and gating happens in the permission, viability and
+preference stages before it. **Fallback is the next candidate in the ordered
+surviving set**, which is already permitted and already viable; there is no
+out-of-set substitution, no ambient default and no separately authored list, and
+an exhausted set is a typed failure carrying the per-candidate exclusion trace.
+Reaching capacity outside the set is a permission question that re-enters at the
+first stage as an entitlement grant, never a dispatch-time improvisation. The
+decision itself is emitted as one record shape — candidates, per-candidate
+exclusion stage and named rule, chosen target, ordering policy and scores,
+ruleset revision with exposed staleness, and the receipts chain below.
+
 Before enqueue, the orchestrator persists an immutable `AdmissionReceipt` and
 returns a `SessionRef`. A claim-bound pool writes a separate `ClaimReceipt`
 after host selection and the narrow-only gate; neither claim nor spawn mutates
@@ -463,12 +479,14 @@ Any future binary added to the OSS distribution channel inherits this rule. Its 
 | TUI fleet view | ✅ ships | extended |
 | Multi-tenant orchestrator | ❌ | ✅ owns |
 | Routing Intelligence panel | ❌ | ✅ owns |
+| Placement composition law + decision-record shape | ✅ owns contract + local emission | aggregates + extends |
+| Ordering policies beyond the authored order | ❌ (ships `declared` only) | ✅ owns |
 | Cross-machine fleet aggregation | partial (LAN) | ✅ owns (multi-tenant) |
 | macOS signing rule | ✅ ships (architectural commitment) | extends with operational state |
 
 The `Cross-machine fleet aggregation` row read `✅ owns (cloud-burst)` until 2026-08-07, and the paragraph below it listed `cloud-burst aggregation` among the hosted extensions. **Aggregation is real; the burst qualifier was not, and never was.** The hosted control plane does aggregate hosts across machines, and does so per tenant — that half stands. What it does not do is spill work from one pool to another: there is no overflow policy, no exhaustion trigger, and no schema for either. `ADR-2026-08-07` D7 records the absence as fact, and an audit of the hosted plane's dispatch history corroborated it — **no fall-back events, and no dispatch ever re-placed after its initial binding.** What does exist is a static capability-mismatch filter: it reads a provider's declared flags, and takes no capacity or availability input at all, so it cannot detect the exhaustion a burst would respond to. The same qualifier was deleted from `004-sandbox-capability-matrix.md`'s equivalent row in this ADR's accepting commit, with the epitaph *"neither side ships burst routing, and neither ever did."* This row is the second half of that deletion.
 
-Failure-triggered routing-around — honouring a capacity profile's existing order when a dispatch *fails* — is D7's named first iteration and is not yet built. Predictive burst is undesigned and needs its own ADR.
+Failure-triggered routing-around — honouring a capacity profile's existing order when a dispatch *fails* — is D7's named first iteration and is not yet built. **Made normative 2026-08-12** as the single fallback rule by `ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md` D2: fallback is the next candidate in the ordered surviving set and nothing else, so the mechanism the hosted plane must build is "continue down a set that permission and viability already approved", not "spill to somewhere new". Predictive escalation remains undesigned and needs its own ADR.
 
 OSS users get a fully working orchestrator + governor + worker fleet on their Mac Studio. The SaaS extensions (Topology view, Routing Intelligence panel, multi-tenant orchestration, multi-tenant fleet aggregation, the platform-merge-queue specifics) live in the platform-extensions doc.
 
