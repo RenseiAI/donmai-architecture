@@ -614,6 +614,46 @@ independent channels:
   homes, endpoint binding, and cleanup; and
 - mode-specific input, event, replay, resume, approval, and child adapters.
 
+##### Additional-extension delivery (harnesses with a host-side extension API)
+
+Where a harness loads host-side extensions, the spawn surface carries an
+**ordered list of additional extension deliveries**, per
+[`ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`](ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md).
+Each delivery is either an **absolute path** to an artifact the caller has
+already materialized, or **inline source** the runner materializes into the
+per-session state directory; both carry a **required source digest**. Order is
+the declared order, and where the harness's trust boundary is itself an
+injected extension that boundary is always first and cannot be displaced,
+reordered, or disabled by a delivery.
+
+Delivery is expressed entirely in the closed adaptation vocabulary above and
+introduces no new channel or delivery name: an injected pack's tools are
+native-tool-definition entries and its hooks are lifecycle-hook entries,
+delivered as a materialized artifact selected by an explicit load path, while a
+handshake-verified policy extension keeps its injected-boundary classification.
+A delivery whose capability was granted is `required`: failure to materialize,
+verify, or load denies spawn before credential delivery, with no warn-and-strip
+path. Every materialized artifact names its cleanup entry.
+
+Two constraints are contract, not implementation detail. First, **an
+operator-injected extension may bypass a harness's project-trust gate; a
+workspace-discovered extension may not**, and for an autonomous session
+workspace discovery is disabled outright. The bypass is sound only where the
+bytes are the runner's own (never read from the workarea, never fetched at
+spawn), the digest is verified *after* materialization with all other discovery
+disabled, and the runner owns the artifact's lifecycle and re-verifies rather
+than trusts it on resume. Second, **every injected tool must be safe with no
+interactive surface attached** — completing, or returning a typed refusal, but
+never waiting; a UI round-trip is legal only where the runner declares that it
+answers it. A hang carries no denial code and produces no terminal event, so it
+escapes the evidence the receipt exists to provide.
+
+A delivered extension may not widen the admitted cell's capability surface: it
+supplies tools *within* a capability already admitted, never a capability the
+cell lacks. There is no cross-harness "supports extensions" capability flag —
+delivery mechanisms differ per harness, and a flag spanning mechanisms it
+cannot name is a claim the executor may refuse.
+
 The plan is not another provider-wide generic spec. It is the auditable answer
 to “how will this exact harness/version apply each admitted session concern?”
 A role card owns role/purpose/output intent; it cannot silently replace the

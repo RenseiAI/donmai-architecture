@@ -218,6 +218,38 @@ cleanup. Runtime and cleanup outcomes append records to the initial receipt.
 Role intent cannot replace the harness operating protocol, and prompt guidance
 cannot stand in as evidence for a requested service.
 
+Where the selected harness loads host-side extensions, the pre-spawn sequence
+additionally **materializes, verifies, and — on session end — removes** every
+injected extension artifact, per
+[`ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`](ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md).
+The host writes each delivery (inline source, or a caller-supplied absolute
+path) into a runner-owned directory inside the session workarea, verifies each
+artifact's digest **after** the write and against what is actually loadable, and
+disables every other extension-discovery source in the same spawn invocation so
+nothing in the workspace can shadow or race the harness's trust boundary. A
+required delivery that cannot be materialized, verified, or loaded is a
+pre-spawn denial with zero credential-delivery side effects; there is no
+warn-and-strip path that starts a session having silently lost a capability its
+caller was told it had.
+
+Two lifecycle properties follow and belong to the host rather than the harness.
+**Cleanup is the workarea's**: injected artifacts are removed by the same
+lifecycle that owns the workarea, idempotently and with evidence, and an
+unevidenced cleanup quarantines the workarea from reuse rather than assuming
+it. **Resume re-verifies rather than trusts**: a resumed session inherits a
+directory that has been agent-writable for the whole intervening period, so
+every injected artifact's digest is checked again before the session continues.
+Treating the pre-spawn verification as still valid at resume would make the
+boundary a one-time formality — the same fail-closed posture the initial
+receipt already takes, applied to the second entry into the session.
+
+The offline and version-check posture for spawned sessions is part of this
+sequence: the host pins the harness's state and session directories per session
+and suppresses the child's catalog refresh and upstream version check, because
+the binary pin and the resolved model catalog are already the spawning side's
+to own. This applies to headless and interactive lanes alike, and is recorded
+as an environment-binding entry rather than acquired by omission.
+
 The orchestrator selects the runtime and initial model for the parent session.
 If an agent delegates, each child is resolved independently; a parent choice is
 inherited only when the edge explicitly requests it and the child receipt

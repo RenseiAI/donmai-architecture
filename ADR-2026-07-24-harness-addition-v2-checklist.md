@@ -84,6 +84,29 @@ manifest-only harness must not need its own Go test package to be certified.
 Row 6's *requirement* is unchanged and its *enforcement* moves; see that ADR's
 D4.3.
 
+### Amendment 2026-08-12 — a capability pack never satisfies rows 3 and 4
+
+[`ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`](ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md)
+generalizes the single injected policy extension one harness ships into a
+delivery seam that can carry N extensions, including capability packs
+contributed from outside this repository. That creates a confusion worth
+foreclosing here, in the checklist the rows live in.
+
+**Rows 3 and 4 are about the trust boundary, and a capability pack is not one.**
+An injected pack rides the same delivery mechanism, arrives in the same spawn
+invocation, and may even be authored by the same team — and it still enforces
+nothing. Row 3's policy injection and row 4's fail-closed boundary remain
+satisfied only by a boundary that is *verifiably active before the first prompt*
+and that *aborts the session when its integrity is lost mid-session*. A session
+whose pack loaded and whose boundary did not must not start, and a pack that
+loads may never relax, replace, or stand in for the boundary.
+
+The seam ADR's D2 states the corresponding delivery-side preconditions —
+runner-owned provenance, digest verified after materialization with all other
+extension discovery disabled, and re-verification on resume — which are what
+keep the trust *bypass* that seam relies on from becoming a way to reach rows 3
+and 4 from inside the workspace.
+
 ## Consequences
 
 ### Positive

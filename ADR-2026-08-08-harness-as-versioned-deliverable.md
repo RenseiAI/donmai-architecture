@@ -187,6 +187,22 @@ version.** Three rules, all fail-closed, none silent:
   latest-compatible rather than exact, that is a resolution-time choice recorded
   as a `ResolverDecision` before admission — never a spawn-time substitution.
 
+**D1.3a — a delivered capability pack moves the ADAPTER VERSION, and nothing
+else.** Recorded by
+[`ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`](ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md)
+D6, because it is the first case that exercises D1's namespace split from the
+outside. Where a harness loads host-side extensions and an operator-injected
+pack changes what that integration registers, the exact integration about to run
+has changed and its declared surface with it — which is precisely what the
+adapter version names. The **family ABI does not move** (the contract with the
+agent package is untouched) and the **binary pin does not move** (no upstream
+release is involved). Receipts pinning the pre-pack adapter version therefore
+deny at spawn through `DenialUnsupportedHarnessVersion`; per D1.3 that is the
+gate becoming capable of saying something and must not be answered by loosening
+the comparison. The pack's own arrival does not flip a capability boolean
+either: that flip is computed from a passing fixture under D4.2, not authored
+alongside the pack.
+
 **D1.4 — this is an additive enrichment on a frozen axis, not a re-freeze.**
 [`ADR-2026-06-14-sdk-axis-readiness-and-freeze-sequencing.md`](ADR-2026-06-14-sdk-axis-readiness-and-freeze-sequencing.md)
 froze the harness axis on 2026-06-14. Adding a manifest field and giving an
