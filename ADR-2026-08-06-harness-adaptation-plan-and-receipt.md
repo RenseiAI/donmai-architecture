@@ -290,6 +290,18 @@ Secret material is delivered only after a successful initial receipt. Plans and
 receipts contain secret/resource references and non-secret parameter digests,
 never keys, tokens, credential payloads, auth headers, or rendered secret files.
 
+**Addendum 2026-08-12 — host-side extension delivery adds no channel name.**
+[`ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`](ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md)
+D1.1 places injected extensions inside the vocabularies above rather than beside
+them: an injected pack's tools are `native_tool_definition` entries, its hooks
+are `lifecycle_hook` entries, both delivered as a materialized artifact selected
+by an explicit load path, while a handshake-verified policy extension keeps
+`injected_boundary`. No `AdaptationChannel` and no `DeliveryStrategy` is added.
+This is the closed schema doing its job: a delivery mechanism that needed a new
+channel name would be a capability arriving without passing the parity gate,
+and the seam is deliberately a plural on an existing channel rather than a new
+one.
+
 ### D4 — Applied receipt and truthful denial
 
 ```ts

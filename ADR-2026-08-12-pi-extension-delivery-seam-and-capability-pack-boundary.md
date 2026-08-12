@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-12
 boundary: shared
 split: inline-addenda
@@ -7,7 +7,9 @@ split: inline-addenda
 
 # ADR-2026-08-12 — The pi extension-delivery seam: operator-injected capability packs, and where the pack boundary falls
 
-**Status:** Proposed
+**Status:** Accepted (coordinator ratification 2026-08-12 under founder-delegated
+authority; D4's interactive-lane scope and D5.5's enforcement point were the two
+questions settled at acceptance — see D4.3 and D5.5)
 **Date:** 2026-08-12
 **Boundary:** shared (the seam contract, the trust rule, the headless-UI
 guarantee, the state-isolation defaults and the staging verdict are
@@ -282,15 +284,32 @@ This is the only assertion that distinguishes a correct variable name from a
 redundant one.
 
 **D4.3 — offline and version-check suppression are the default for every
-non-interactive spawn.** Two independent reasons, and the second is the
-architectural one. Operationally, a spawn that refreshes a catalog and checks
-for a new release has put a third-party service on the critical path of a fleet
-spawn whose binary is already pinned, and multiplied that cost by fan-out.
-Architecturally, `001`'s boundary rule says removing the control plane must
-leave a usable single-machine product; a spawn path that reaches the public
-internet to start a pinned local binary fails the same test against a different
-dependency. The default is a **default**, not a lock: an attended or
-interactive session may re-enable either, recorded as an explicit
+session the execution layer spawns — headless *and* interactive.** Two
+independent reasons, and the second is the architectural one. Operationally, a
+spawn that refreshes a catalog and checks for a new release has put a
+third-party service on the critical path of a fleet spawn whose binary is
+already pinned, and multiplied that cost by fan-out. Architecturally, `001`'s
+boundary rule says removing the control plane must leave a usable
+single-machine product; a spawn path that reaches the public internet to start
+a pinned local binary fails the same test against a different dependency.
+
+**The default covers the interactive PTY lane too, and the reason is
+ownership, not latency.** The spawning layer already owns both things the
+suppressed calls would fetch: the harness binary is pinned by `binaryPins`, and
+the model catalog is supplied by the resolved cell rather than discovered by
+the child. A catalog refresh in an interactive lane is therefore not a
+convenience the human gains — it is a second, unpinned source of truth for a
+model list the cell has already resolved, which is the multiple-producer defect
+[`ADR-2026-08-08`](ADR-2026-08-08-harness-as-versioned-deliverable.md) D1.2
+rules out one axis over. The headless/PTY split matters for *evidence*
+(`ADR-2026-08-06` D6) and does not matter here, because the property is a
+property of who resolved the catalog, and that is the same side in both lanes.
+
+**Scope.** This governs sessions the execution layer spawns. A session a human
+launches directly against the third-party CLI, outside the runner, is out of
+scope and keeps that program's own defaults — the OSS layer does not reach into
+a process it did not start. Within scope the default is a **default**, not a
+lock: a session may re-enable either, recorded as an explicit
 environment-binding entry rather than acquired by omission.
 
 **D4.4 — the isolation is a correctness property, not a performance one.** The
@@ -346,6 +365,18 @@ delivery declares it in its own adaptation profile, with its own evidence and
 its own mechanism. A shared boolean would be a capability claim spanning
 delivery mechanisms it cannot name — the precise shape `ADR-2026-08-06` D3
 rejects.
+
+*Enforcement point, stated so it is not left to memory.* The rule binds where
+capability booleans are validated: the **matrix generator's parity gate** in
+`donmai`, which must refuse a manifest declaring a generic extension-support
+capability, tested on its input. That gate is Go in the source repository, not
+a markdown rule here; this corpus deliberately does **not** add a
+`retired-claim-lint.sh` rule for it. Such a rule could only police the prose of
+this corpus, no site of the claim exists here to retire, and a corpus-side gate
+for a claim the corpus never makes is the gate-that-cannot-fail shape
+[`ADR-2026-08-08`](ADR-2026-08-08-harness-as-versioned-deliverable.md) already
+declined once, for the same reason. The generator check is named as follow-up
+work in § Implementation notes and is not a precondition of this ADR.
 
 ### D6 — Matrix implications: what a pack changes, and what it must not
 
@@ -506,24 +537,26 @@ The kit is the reason the door stays open, not a reason to walk through it.
 
 ## Affected documents
 
-This ADR is `Proposed`; the edits below land in the commit that flips it to
-`Accepted`, per this corpus's convention.
+All edits below landed in the commit that flipped this ADR to `Accepted`, per
+this corpus's convention.
 
-- `002-provider-base-contract.md` — the harness adaptation surface gains the
-  additional-extension delivery list (path and inline forms, required digest,
-  deterministic order, required-entry fail-closed semantics).
-- `013-orchestrator-and-governor.md` — the runner's pre-spawn sequence gains
-  materialization, verification and the workarea-owned cleanup of injected
-  artifacts, plus re-verification on resume.
-- `ADR-2026-07-24-harness-addition-v2-checklist.md` — a note on rows 3 and 4:
-  an injected capability pack never satisfies the policy-injection or
+- `002-provider-base-contract.md` § E "Harness adaptation surface" — the channel
+  list gains additional-extension delivery (path and inline forms, required
+  digest, deterministic order with the boundary extension first, required-entry
+  fail-closed semantics, and the trust rule).
+- `013-orchestrator-and-governor.md` § "Admission → adaptation → spawn" — the
+  pre-spawn sequence gains materialization, post-materialization verification,
+  workarea-owned cleanup of injected artifacts, and re-verification on resume.
+- `ADR-2026-07-24-harness-addition-v2-checklist.md` — amendment note on rows 3
+  and 4: an injected capability pack never satisfies the policy-injection or
   fail-closed-boundary rows (D2.1).
-- `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md` — a note that
-  extension delivery is expressed within the existing closed channel and
-  delivery vocabularies and adds no names (D1.1).
-- `ADR-2026-08-08-harness-as-versioned-deliverable.md` — a note that a pack
+- `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md` — note that extension
+  delivery is expressed within the existing closed channel and delivery
+  vocabularies and adds no names (D1.1).
+- `ADR-2026-08-08-harness-as-versioned-deliverable.md` — note that a pack
   changing a harness's declared surface is an **adapter-version** move, and
   neither a family-ABI nor a binary-pin move (D6).
+- `README.md` and `AGENTS.md` — generated index row and read-order entry.
 
 **Cited but deliberately unamended.** `007-intelligence-services.md` already
 states that service activation and usage guidance are separate receipted
@@ -561,5 +594,10 @@ this corpus's brand-neutral discipline.
   resolves it by observing where the process writes (D4.2), and the candidate
   set is deleted in the same change that names the real one — not left standing
   beside it.
+- **Follow-up work, named so it is tracked rather than remembered:** D5.5's rule
+  needs a check in the matrix generator's parity gate refusing a manifest that
+  declares a generic extension-support capability, written on its input and
+  watched to fail first. It is a `donmai` change, it is not a precondition of
+  this ADR, and it is deliberately not a lint rule in this corpus (D5.5).
 - Detailed implementation belongs in the `donmai` and `donmai-smokes`
   repositories, not here.
