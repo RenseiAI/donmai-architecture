@@ -180,6 +180,53 @@ difference between naming a pool and naming a context is a difference of *time*,
 not of kind — a pool is a placement resolved at claim, a context is a placement
 resolved exactly.
 
+##### How the nouns compose: the placement composition law
+
+The nouns say what exists. The **composition law** says who decides, in what
+order, and with what power. Canonical:
+[`ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md`](ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md).
+Six stages, each holding exactly one kind of power:
+
+```
+0 INTENT      what the author asked for       refs + preference posture
+1 PERMISSION  may this run there?             hard gate      fail-CLOSED
+2 VIABILITY   can this run there?             hard filter    loud, typed, on ∅
+3 PREFERENCE  where would we like it to run?  ordering only  never widens
+4 RANKING     which survivor is best?         ordering only  never gates
+5 BIND        make it so                      intersection   receipts
+```
+
+Power is monotone down the list: no stage may add a candidate an earlier stage
+removed, and no stage may substitute a target that was never a candidate. The
+order is an **authority** order, not an evaluation order — stages 1 and 2 are
+both hard filters and compose as an intersection, so an implementation may
+evaluate them in either order (`004` does capability before policy). What the
+order fixes is attribution: a candidate excluded by more than one stage is
+reported at the earliest stage that excludes it.
+
+Three rules fall out of the law and are stated here because every other doc
+depends on them:
+
+- **One fallback rule.** Fallback is *the next candidate in the ordered
+  surviving set* — already permitted, already viable. Out-of-set substitution
+  never happens, and an exhausted set is a typed failure carrying the
+  per-candidate exclusion trace, never a silent queue.
+- **A pin is hard within the law and only within it.** An explicit pin narrows
+  the candidate set; a pinned target that fails permission or viability fails the
+  decision loudly with the pin named. There is no non-strict pin.
+- **Every decision emits one record shape** — candidates considered,
+  per-candidate exclusion stage and named rule, chosen target, ordering policy
+  and scores, ruleset revision with exposed staleness, and the admission→claim
+  receipts chain. A decision that cannot be explained from its own record is a
+  defect.
+
+**Vocabulary, one noun per referent.** **Placement** decides where a *new
+execution context* lands; **selection** decides *which live peer* receives
+delegated work; **steering** is session-to-session communication between *live*
+sessions (a transport, not a decision); **routing** is the umbrella noun for
+placement plus selection; and the workflow DAG's gates and edges are **control
+flow**, not routing. Selection is the same law with `remote_peer` candidates.
+
 The executable unit is a **resolved execution cell**, not a fused provider id. A versioned `DispatchIntent` keeps harness, model identity, serving endpoint, auth binding, placement, session mode, and requested capabilities independent. Admission intersects declared compatibility with live inventory, auth/placement proof, and evidence tier, then persists an immutable receipt before enqueue. Autonomous and human-controlled sessions return the same `SessionRef`; human control is a capability/lease. Every child is admitted through the same contract, while its delegation transport (`native_harness`, `platform_dispatch`, `a2a`, or `host_cli`) belongs on the graph edge. Full contract: `ADR-2026-08-05-versioned-execution-cell-and-session-reference.md`.
 
 **The harness reference's version identifies the adapter, not the family contract.** Per [`ADR-2026-08-08-harness-as-versioned-deliverable.md`](ADR-2026-08-08-harness-as-versioned-deliverable.md) D1, four version namespaces are kept distinct and each has exactly one producer: the **family ABI** (the contract between the agent package and any harness implementation, which moves rarely and whose move is lock-step by definition), the **adapter version** (the exact integration about to run, for one harness, moving independently of every other harness), the **binary pin** (which releases of the third-party program the adapter is built and verified against), and the **conformance rung** (what has been proven, computed from gate outcomes and never authored). The cell's harness reference carries the *adapter version*, because what must not change across the admission→spawn boundary is the exact integration, not the family contract. A requested version absent from the generated set is refused; there is no downgrade path, and a latest-compatible choice is a resolution-time decision recorded before admission, never a spawn-time substitution.
@@ -205,6 +252,8 @@ A **Kit** declares:
 - **Composition rules** — ordering, scope, conflict resolution when multiple Kits apply.
 
 The killer architectural mechanic: **a Kit's toolchain demand is a signal to the SandboxProvider+WorkareaProvider scheduler.** Declaring `provide.toolchain = { java = "17" }` causes the scheduler to route to a warm workarea-cache entry, image, or snapshot that satisfies the demand. Kits never know about sandbox providers; sandbox providers never know about Kits. The toolchain spec is the contract between them.
+
+**The seam that signal arrives through** is stage 2 (viability) of the placement composition law — see Layer 3 § "How the nouns compose". Demands compile into the dispatch intent at composition time and occupy their own slot in the viability tuple alongside model, harness, auth binding, execution-host capabilities, lane, serving endpoint, and health. A demand is therefore a **hard filter**, not a scoring hint: a workload whose Kit declares an operating-system-locked command lane can only survive on candidates that declare that operating system, and if none does, the decision fails loud and typed naming the demand. This preserves the mutual ignorance above — the demand is still expressed in toolchain terms and still resolved by the scheduler — while giving it a defined evaluation point instead of an unspecified influence.
 
 This layer is where the strategic timing call lives: the AI ecosystem is converging on a buildpacks-shaped pattern (MCP Registry, Anthropic Skills, AgentStack, nori-skillsets), but no system today bundles all four required dimensions (manifest + detect + registry + composition) with host-driven introspection. Landing this layer with a real spec is a chance to set the standard rather than adopt one.
 

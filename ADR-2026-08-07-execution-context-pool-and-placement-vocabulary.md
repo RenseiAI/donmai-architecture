@@ -539,6 +539,17 @@ Sequencing note: D6.2 and D8 (grant enforcement) share a migration and must be
 planned together, but they are **not** the same decision — D6.2 creates the
 grantable object; D8 deliberately does not enforce grants yet.
 
+> **Forward annotation, 2026-08-12** — `ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md`
+> fills in two of the "how to choose among them" fields this decision left as a
+> shape: the profile carries an **ordering policy** (default: the authored
+> order, which is the only one the OSS layer implements — D3 there) and a
+> declared **escalation posture** governing whether capacity the profile does not
+> name may ever be reached (D2 there; escalation re-enters as a permission
+> question, never as a router improvisation). It also removes one candidate
+> field: a separately authored fallback list is retired, because the ordered
+> surviving set *is* the fallback set. D6.1, D6.2's four properties, both
+> invariants and the sequencing note are unchanged, and R2–R5 are not reopened.
+
 ### D7 — There is no burst; the three artifacts that say otherwise are corrected (two here, one in the paired change), and the first iteration is failure-triggered routing-around
 
 **Recorded as fact:** no accepted overflow policy, no local-exhaustion trigger,
@@ -630,6 +641,20 @@ have already misled a reader in this program:
   **first, always** — not on failure. Any profile policy that orders by load
   must fix that before it is offered, or failure-triggered routing-around
   becomes unconditional routing-to-metered-capacity.
+
+> **Forward annotation, 2026-08-12** — failure-triggered routing-around is made
+> **normative** and given its bound by
+> `ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md` D2:
+> fallback is *the next candidate in the ordered surviving set*, which is
+> already permitted and already viable, and out-of-set substitution never
+> happens. That ADR resolves the three competing fallback rules this corpus
+> carried into one, retires the separately authored fallback list, and inherits
+> the load-ratio precondition above verbatim as a gate on shipping any ordering
+> policy other than the authored order. The deferral of predictive escalation,
+> and the reason for it — the named trigger has no meter — are unchanged and are
+> not reopened; the only refinement is that reaching capacity the profile does
+> not name is classified as a **permission** question (an entitlement grant
+> evaluated before ordering), with the posture declared on the profile itself.
 
 ### D8 — Per-pool permission restrictions are NOT enforced yet, deliberately
 

@@ -283,6 +283,19 @@ re-derived per session from a scoring heuristic nobody can see.
 
 ### The routing algorithm
 
+> **Amended 2026-08-12** by
+> `ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md`. The
+> five steps below are this layer's projection of that ADR's six-stage
+> composition law: step 1 and step 3 are **viability** (stage 2), step 2 is
+> **permission** (stage 1), step 4 is **preference + ranking** (stages 3 and 4),
+> and step 5 is **bind** (stage 5) together with the single fallback rule. The
+> law fixes an *authority* order, not an evaluation order — permission and
+> viability are both hard filters, so evaluating capability before policy (as
+> below) is correct. What the authority order fixes is **attribution**: a
+> candidate excluded by more than one step is reported at the earliest
+> *stage* that excludes it, so a pool that is both forbidden and unviable reads
+> as forbidden in the decision record.
+
 The candidate set is **the pools named by the capacity profile the project is
 granted**, in the order the profile declares. Candidates are eliminated, never
 re-ranked by a hidden score.
@@ -309,16 +322,49 @@ re-ranked by a hidden score.
    - Drop pools whose provider reports `unhealthy` health.
    - Drop pools above 90% of `maxConcurrent` where a ceiling is known. **A pool whose configured membership is a provider configuration rather than enrolled machines has no ceiling at all** — capacity accounting exists only on the enrolled-host face (`ADR-2026-08-07` D4). Absence of a ceiling is not evidence of available capacity.
 
-4. **Take the first surviving pool in the profile's declared order.** There is no
-   cost/latency score and no cross-provider tie-break. Determinism comes from the
-   profile's order, which a human authored and can read back.
+4. **Order the survivors by the capacity profile's ordering policy, and take the
+   first.** The **default** ordering policy — and the only one the OSS layer
+   implements — is `declared`: the survivors in the order the profile's author
+   wrote, unscored. Determinism comes from that order, which a human authored and
+   can read back. Until 2026-08-12 this step read
+   `There is no cost/latency score and no cross-provider tie-break` as a property
+   of routing itself; per
+   `ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md` D3 that
+   is now the property of the **default policy**, not of the algorithm. Two
+   constraints bind any richer policy, and they are not waived:
 
-5. **Acquire an execution context from that pool, and route around failure.** If
-   acquisition *fails*, the profile is permitted to fall through to the next
-   surviving pool in its order. This is `ADR-2026-08-07` D7's failure-triggered
-   routing-around: reactive, bounded by the order the org already authored, and
-   requiring no telemetry that does not exist. It is **not** predictive burst,
-   which remains undesigned.
+   - **Ordering never gates.** An ordering policy is a *permutation* of the
+     surviving set. A policy that can drop a candidate is a filter mis-declared
+     as an order, and is refused at the contract level — filtering is steps 1–3.
+   - **The load-ratio inversion must be fixed first.** Because pool capacity is
+     derived by summing over enrolled machines, a provider-configured pool with
+     no enrolled machines scores as maximally idle and would rank **first,
+     always** (`ADR-2026-08-07` D7). Any load-ordering policy must fix that
+     before it is offered, or step 5's fallback becomes unconditional routing to
+     metered capacity.
+
+   Ordering policies beyond `declared` are a hosted extension point: a capacity
+   profile is hosted-owned (see § "OSS vs SaaS responsibilities"), and its
+   ordering policy inherits that verdict. The OSS layer defines the seam and
+   ships a working implementation of the default. The reasoning about which
+   provider belongs where in a profile still lives in **authoring**, exactly
+   where the rest of this section puts it; a policy declares *how* to traverse
+   what a human named, never *what* to name.
+
+5. **Acquire an execution context from that pool; on failure, take the next
+   candidate in the ordered surviving set.** This is the **single fallback rule**
+   (`ADR-2026-08-12` D2), and it is `ADR-2026-08-07` D7's failure-triggered
+   routing-around made normative: reactive, bounded by the set the profile
+   already produced, and requiring no telemetry that does not exist. The next
+   candidate is *already* permitted and *already* viable, because it survived
+   steps 1–3 — which is what makes continuing down the list safe without
+   re-asking. **Out-of-set substitution never happens:** no ambient default, no
+   implicit primary, and no separately authored list consulted after the set is
+   exhausted. An exhausted set is a typed failure carrying the full per-candidate
+   exclusion trace. Reaching capacity the profile does not name is a
+   **permission** question that re-enters at stage 1 as an entitlement grant
+   before ordering runs — never a router improvisation — and predictive
+   escalation remains undesigned.
 
 Cost and latency have not disappeared; they moved to where a human can see them.
 The reasoning that used to live in the scoring function — that agent workloads
@@ -360,6 +406,20 @@ would make a lovely scoring input. Three reasons, in increasing order of cost.
    metered capacity unconditionally, and it would look like a routing preference
    rather than a bug. Any future load-ordering policy on a profile has to fix
    this before it is offered.
+
+**How the 2026-08-12 ordering policy stays inside these three reasons.** A
+profile-declared ordering policy is not the per-session cross-provider scorer
+rejected above, and the difference is worth stating where the objection lives.
+Reason 1 objects to a *second* truth source that can override an authored order;
+an ordering policy is declared **on the profile itself**, so an operator reads
+the list and the traversal rule in the same object and the decision record names
+which policy ran. Reason 2 objects to ranking candidates that cannot substitute
+for one another; the lane split is a **filter** input (step 1 and § "Persistent
+and on-demand are lanes"), so every candidate reaching the ordering step can
+already serve the request. Reason 3 is accepted outright and is why `declared`
+stays the default and why the load-ratio inversion is a precondition on any
+alternative. What remains rejected, unchanged, is a scorer that picks a provider
+per session *across* what the profile named.
 
 What legitimately survives from the old design is the *shape* of the hint
 vocabulary — preferred and forbidden providers, region preference, budgets —
@@ -591,6 +651,8 @@ This pattern is currently absent from the platform's icebox parse — there's no
 | `Vercel` / `E2B` / `Modal` / `Daytona` impls | ❌ (cloud creds) | ✅ ships |
 | Capability-filtered routing | ✅ owns interface | ✅ ships hosted impl |
 | Capacity profiles (named policy over pools) | ❌ (single-tenant; no grant edge) | ✅ owns |
+| Ordering policies beyond the authored order | ❌ (ships `declared` only) | ✅ owns |
+| Placement decision record (shape) | ✅ owns contract + local emission | aggregates + extends |
 | Per-tenant regime config | ❌ (single-tenant) | ✅ owns |
 | Fleet observability dashboard | ❌ (basic logs) | ✅ owns |
 
@@ -601,7 +663,7 @@ The OSS layer can run a multi-Mac-Studio fleet on a LAN with the local provider 
 ## Open questions
 
 1. **Workarea provider pairing.** Should a `SandboxSpec` always carry a `workareaSpec`, or are there sandbox uses without workareas (e.g., GPU eval runs that don't touch a repo)? Default: yes-always for coding-agent flows; admit "no-workarea" mode for benchmarks/eval. Concrete in `006-cross-provider-interactions.md`.
-2. ~~**Scheduler bias function.**~~ **Closed 2026-08-07** by `ADR-2026-08-07` D6. There is no cost/latency scoring function to tune, because routing does not score providers per session — it filters, then honours the order a human authored in a capacity profile. The cost-sensitive-vs-latency-sensitive choice is expressed by *which* profile a project is granted and *how* its pools are ordered. What remains genuinely open is the shape of the profile object itself (its fields and verbs), which is D6.2 accepting-work, not a question about this doc.
+2. ~~**Scheduler bias function.**~~ **Closed 2026-08-07** by `ADR-2026-08-07` D6. There is no cost/latency scoring function to tune, because routing does not score providers per session — it filters, then honours the order a human authored in a capacity profile. The cost-sensitive-vs-latency-sensitive choice is expressed by *which* profile a project is granted and *how* its pools are ordered. What remains genuinely open is the shape of the profile object itself (its fields and verbs), which is D6.2 accepting-work, not a question about this doc. **Refined 2026-08-12** by `ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md` D3: the traversal rule is now a named field of the profile — its **ordering policy**, defaulting to the authored order — so the cost/latency posture is expressed by which profile a project is granted, how its pools are ordered, *and* which ordering policy it declares. The OSS layer implements only the default; a scorer that picks a provider per session across what the profile named stays rejected, and no policy may drop a candidate.
 3. **Health check semantics.** Do we treat a single failed `health()` as unhealthy, or require N consecutive? Default: fail-fast on `unhealthy`, two-strike on `degraded`. Tenants may override.
 4. **A2A capability shape.** A remote A2A agent doesn't expose VCpu/Memory ceilings — those are the remote's concern. Capabilities for A2A providers may need a `delegatedCapacity: true` flag and a fallback contract that the remote will refuse if it can't satisfy. Not yet specified; revisit when A2A becomes load-bearing.
 

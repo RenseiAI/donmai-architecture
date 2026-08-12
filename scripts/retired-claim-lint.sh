@@ -57,6 +57,9 @@ RULES=(
   'WORKAREA_POOL_MEMBERS%warm pool members%ADR-2026-08-07 D2.3%Referent-3 pool; cache entries, not pool members'
   'WORKAREA_PROVIDER_POOL%WorkareaProvider local pool%ADR-2026-08-07 D2.3%Referent-3 pool; the workarea cache'
   'CLOSED_BINARY_DAEMON%rensei-daemon%ADR-2026-06-02 brand-neutral runtime%The OSS daemon is donmai; this names the closed composing binary'
+  'STRICT_PIN_MODE%strictPinMode|strict pin mode%ADR-2026-08-12 D1.3%Pin strictness as a mode; a pin is hard within the law and there is no non-strict pin'
+  'FALLBACK_POOL_LIST%fallback pool (list|ids)%ADR-2026-08-12 D2%A separately authored fallback list; the ordered surviving set IS the fallback set'
+  'UNCONDITIONAL_NO_SCORE%[Tt]here is no cost/latency score%ADR-2026-08-12 D3%Unqualified "routing never scores"; the unscored authored order is the DEFAULT ordering policy, not the only one'
 )
 
 # ---- Parse args ----
