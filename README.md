@@ -202,6 +202,7 @@ renaming an ADR.
 | [`ADR-2026-08-07-onboarding-is-the-only-user-action.md`](ADR-2026-08-07-onboarding-is-the-only-user-action.md) | Accepted | shared | Onboarding is the only moment a user is required to act |
 | [`ADR-2026-08-08-harness-as-versioned-deliverable.md`](ADR-2026-08-08-harness-as-versioned-deliverable.md) | Accepted | shared | A harness is a versioned deliverable: two tiers, per-adapter versioning, and a deferred plugin ABI |
 | [`ADR-2026-08-08-harness-authority-admission-plane-parked.md`](ADR-2026-08-08-harness-authority-admission-plane-parked.md) | Accepted | shared | The harness-authority admission plane is parked; the vendored capability matrix is the production lane |
+| [`ADR-2026-08-11-dispatch-wire-endpoint-baseurl.md`](ADR-2026-08-11-dispatch-wire-endpoint-baseurl.md) | Proposed | shared | Dispatch-wire endpoint BaseURL |
 | [`ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md`](ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md) | Accepted | shared | The placement composition law: six stages, one authority each, one fallback rule |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
