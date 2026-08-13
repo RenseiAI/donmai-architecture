@@ -308,7 +308,12 @@ agent how to use it are separate operations. Per
 `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`, each selected service
 becomes a typed `service` entry in the `HarnessAdaptationPlan`; its concrete
 native-tool, MCP, gateway, in-box stdio, environment, file, or hook deliveries
-are linked entries. A usage partial is an ordered prompt contribution linked to
+are linked entries. Per
+`ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`,
+that linkage is a **registry lookup** — the service's **realization** on the
+exact harness adapter version — and not an assembly performed by the caller. Where
+the adapter version has no registered realization for a demanded service, the
+candidate is excluded at placement as unviable, before any plan is compiled. A usage partial is an ordered prompt contribution linked to
 the service, not activation evidence by itself.
 
 The applied receipt therefore answers three independent questions:
@@ -316,11 +321,21 @@ The applied receipt therefore answers three independent questions:
 1. Was the service granted and reachable for the admitted scope?
 2. Which exact harness delivery mechanism was installed and policy-bounded?
 3. Which bounded usage/context guidance was amended into the session?
+4. Which **surface was actually delivered** — the tool, server, and partial
+   identities observed after application, checked against the identities the
+   realization's recipe declared, and drawn from the artifact the executor itself
+   reads rather than the runner's record of what it wrote.
 
 When the service is required, failure of question 1 or 2 denies before spawn.
 An optional service may be denied or use only a pre-authorized named downgrade;
 the receipt records it. A prompt-only “use this CLI instead” path is not a
-silent substitute for required MCP or native tools. Capability companion
+silent substitute for required MCP or native tools, and a delivered surface
+shorter than the declared one is a **denial rather than a downgrade**. There is
+no advisory exemption: a realization consisting only of prompt contributions is a
+non-realization. The session-start context injection described above is not a
+counterexample — it is the *orchestrator* invoking
+`ArchitecturalIntelligence.query(...)` and rendering the result, a caller
+consuming a callable interface, not an agent-facing advisory realization. Capability companion
 partials attach automatically when their capability is active, so an author
 does not need to wire both a capability and its hidden enabling partial.
 

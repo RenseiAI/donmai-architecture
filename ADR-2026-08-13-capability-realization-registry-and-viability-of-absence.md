@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-13
 boundary: shared
 split: inline-addenda
@@ -7,7 +7,11 @@ split: inline-addenda
 
 # ADR-2026-08-13 — User-facing capabilities compile to per-harness realizations: the registry, the attested surface, and the viability of absence
 
-**Status:** Proposed
+**Status:** Accepted (coordinator ratification 2026-08-13 under founder-delegated
+authority; D1-D6 ratified as authored, with three questions settled at
+acceptance — the registry key stays capability x adapter version and gains an
+explicit bump rule (D1.6), the exclusion reason's closed-type shape is fixed in
+D4.1, and D4.3's advisory carve-out was **dropped entirely**)
 **Date:** 2026-08-13
 **Boundary:** shared (the realization object, the registry shape and its declaration
 rule, the delivered-surface attestation, the viability rule, the authoring
@@ -170,6 +174,20 @@ registry. Code that assembles channel entries for a capability by hand is out of
 contract, whether it sits in the OSS layer or downstream. This is the fix for F1
 and it is the whole reason the object needs a name.
 
+**D1.6 — an adapter-version bump re-registers or explicitly inherits; it never
+silently carries.** Because the registry is keyed on adapter version, a bump
+produces a new key with no entries under it. The bump MUST either **re-register**
+each realization against the new version, with its fixture re-run at that
+version, or carry an **explicit inheritance declaration** naming the version
+inherited from and the recipes inherited. Silent carry-forward is prohibited, and
+it is the single most likely way this registry would decay: it is the one move
+that lets a realization's evidence outlive the integration it was measured
+against, which is the authored-claim shape `ADR-2026-08-08` D4 replaced with a
+computed rung. An inheritance declaration is itself evidence, and the generator's
+parity gate (D6.3) refuses one whose inherited fixture never ran at the
+inheriting version. This is the corollary of D1.1: keying on the adapter version
+is only honest if the bump is a real event with a required action.
+
 **D1.5 — there is no cross-harness "realizes capability X" boolean.** Realization
 is per adapter version with its own evidence, exactly as extension delivery is
 per harness under `ADR-2026-08-12` D5.5, and for the same reason: a flag spanning
@@ -266,11 +284,19 @@ registered realization for C at a production-eligible evidence tier, **the
 candidate is not viable**. It is excluded at stage 2 of the placement composition
 law with a per-candidate exclusion record.
 
-**D4.1 — the exclusion reason is a closed, named type.** Not a formatted
-sentence. The resolver that emits it, the CLI that displays it, the operator who
-reads it and the test that asserts it must all be naming the same value. This
-closes F4, and it is the precondition for every other clause in this decision
-being testable rather than aspirational.
+**D4.1 — the exclusion reason is a closed, named type, and its prose is
+display-only.** Not a formatted sentence. The resolver that emits it, the CLI
+that displays it, the operator who reads it and the test that asserts it must all
+be naming the same value. Concretely: the exclusion carries a **closed reason
+enum** and a **stable rule id**, both typed on both sides of the wire; any
+human-readable `detail` is **display-only, and no consumer may branch on it**. A
+consumer that parses `detail` has re-derived the exclusion, which is F4 restored
+underneath a type rather than fixed by one. The reason for a missing realization
+names the capability and the adapter version it was evaluated against, so the
+operator's next action — register the realization, or choose a different
+candidate — is legible from the record alone. This closes F4, and it is the
+precondition for every other clause in this decision being testable rather than
+aspirational.
 
 **D4.2 — it is a hard filter, and it may empty the set.** Realization demand
 enters at stage 2 and nowhere else: never as a stage-3 preference that a ranker
@@ -281,15 +307,31 @@ considered and the named rule that removed it. A dispatch demanding a capability
 no available harness realizes **fails, visibly, at placement** — which is the
 correct and useful outcome, and the one an operator can act on.
 
-**D4.3 — prompt guidance is not a realization.** A recipe consisting only of
-prompt contributions realizes a capability only where that capability's own
-contract is advisory. Where the contract is a **callable surface**, a
-partial-only recipe is a **non-realization** and produces the exclusion of this
-decision rather than a plan. This is the specific mechanism by which the bug
-class operated: text describing a faculty is indistinguishable, to the agent, from
-the faculty — right up to the first call. `007` and `ADR-2026-08-06` D3 both
+**D4.3 — prompt guidance is never a realization, and there is no advisory
+exemption.** A recipe consisting only of prompt contributions is a
+**non-realization**: it produces the exclusion of this decision rather than a
+plan, unconditionally.
+
+An earlier draft of this ADR carved out capabilities "whose own contract is
+advisory". **That carve-out was dropped at ratification**, and the reason is
+worth recording because it will be proposed again. The class has no members:
+every capability this corpus defines exposes a callable surface, and the one
+case that looks like a counterexample is not one — `007` § "Active context
+injection at session start" is the **orchestrator** invoking
+`ArchitecturalIntelligence.query(...)` and rendering the result into the session
+prompt, which is a caller consuming a callable interface, not an agent-facing
+advisory realization. A class closed at zero members is not a carve-out; it is a
+laundering surface, and the only thing it can ever do is admit the first
+capability that wants to skip its fixture. Fail-closed beats a door with nothing
+behind it.
+
+Prompt contributions ride **alongside** a realization as its companion partial
+(D5.2). They never constitute one. This is the specific mechanism by which the
+bug class operated: text describing a faculty is indistinguishable, to the agent,
+from the faculty — right up to the first call. `007` and `ADR-2026-08-06` D3 both
 already say prompt guidance never evidences a service; this states the
-consequence for the resolver.
+consequence for the resolver, without an exemption that would quietly restore
+it.
 
 **D4.4 — the only alternative to exclusion is a named, pre-authorized alternative
 realization.** Registered in advance, admitted in advance, and recorded as a
@@ -417,11 +459,16 @@ generator consumes it as the fixture's assertion. Nothing else re-derives it.
   detail field that consumers start parsing, restoring F4 underneath a type.
   Mitigation: the named value is the contract; detail is display-only and no
   consumer may branch on it.
-- **Advisory-capability laundering** — a capability declared advisory (D4.3) so
-  that a partial-only recipe counts as a realization, converting the fix back
-  into the bug. Mitigation: advisory is a property of the capability's own
-  contract in `007`-family docs, fixed at capability definition, never asserted by
-  a recipe.
+- **A capability defined with an empty declared surface**, reintroducing D4.3's
+  dropped exemption from the capability-definition side rather than the recipe
+  side. Mitigation: D6.1 — a capability bit requires a passing fixture, and a
+  fixture over an empty declared surface asserts nothing, so the bit cannot
+  compute true. The laundering attempt fails at the gate rather than at review.
+- **Silent inheritance on an adapter-version bump** (D1.6), which would let a
+  realization's evidence outlive the integration it was measured against.
+  Mitigation: the bump requires re-registration or an explicit inheritance
+  declaration, and the parity gate refuses an inheritance whose fixture never ran
+  at the inheriting version.
 - **Registry-as-allowlist creep** — a compiler branch keyed on a capability
   identity, arriving as one reasonable special case. Mitigation: D2.3 states it
   as a rule with a binary consequence rather than as a preference.
@@ -466,6 +513,22 @@ and the session that follows it is exactly the session this ADR exists to
 prevent. There is no warn-and-strip path for a required entry
 (`ADR-2026-08-06` D4) and this is that rule's natural extension.
 
+**Carve out "advisory" capabilities, for which a partial-only recipe would count
+as a realization.** Considered and **rejected at ratification** (D4.3). The class
+turned out to have no members — the apparent counterexample, session-start
+architectural context injection, is the orchestrator consuming a callable
+interface rather than an advisory realization — and a class closed at zero is a
+laundering surface rather than a carve-out. Keeping it would have preserved
+exactly the escape hatch the ADR exists to close, in exchange for no capability
+that needs it.
+
+**Key the registry on adapter version but let a bump inherit silently**, so
+routine upstream bumps do not require re-registration. Rejected per D1.6: it
+detaches a realization's evidence from the integration the evidence was measured
+against, which is the same defect as an authored capability bit, arriving through
+a maintenance path instead of an authoring one. Explicit inheritance costs one
+declaration and keeps the evidence chain intact.
+
 **Ship the capability catalog and its recipes in the open.** Rejected for the
 recipes whose tools speak a hosted control plane, per D2.2 and `001` rule 2 —
 the same verdict, for the same reason, as `ADR-2026-08-12` D5.2. The registry
@@ -473,10 +536,8 @@ the same verdict, for the same reason, as `ADR-2026-08-12` D5.2. The registry
 
 ## Affected documents
 
-**Not applied in this commit.** This ADR is `Proposed`; per this corpus's
-convention the reference-doc edits below land in the commit that flips it to
-`Accepted`. They are enumerated here so the accepting change is a mechanical
-application rather than a rediscovery.
+**All edits below landed in the commit that flipped this ADR to `Accepted`**, per
+this corpus's convention.
 
 - `001-layered-execution-model.md` § "Capability flags as the abstraction
   technique" — the limit paragraph gains its delivery-time application: a flag
@@ -525,9 +586,7 @@ application rather than a rediscovery.
   note that a capability pack is one harness's realization backend of a shared
   capability, generalizing D5 and D6 from one pack on one harness to N
   capabilities across M harnesses.
-- `README.md` and `AGENTS.md` — generated index row and read-order entry. **These
-  two land in the proposing commit**, per the precedent for a `Proposed` ADR in
-  this corpus.
+- `README.md` and `AGENTS.md` — generated index row and read-order entry.
 
 This ADR does **not** touch the `BOUNDARY-SYNC` region in
 `001-layered-execution-model.md`; `scripts/check-boundary-sync.sh` reports no

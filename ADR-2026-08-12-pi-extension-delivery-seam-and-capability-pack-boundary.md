@@ -601,3 +601,30 @@ this corpus's brand-neutral discipline.
   this ADR, and it is deliberately not a lint rule in this corpus (D5.5).
 - Detailed implementation belongs in the `donmai` and `donmai-smokes`
   repositories, not here.
+
+## Addendum 2026-08-13 — the pack is one harness's realization backend of a shared capability
+
+[`ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`](ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md) generalizes D5 and D6 from one pack on one harness to **N
+capabilities across M harnesses**, and in doing so retires this ADR's remaining
+special-case framing. A capability pack is not a pi-shaped exception to how
+capabilities are delivered; it is **pi's realization backend** of a capability
+that realizes as a prompt partial plus an MCP server on one harness and as a
+config-file MCP entry on another. The user selects the capability; the platform
+compiles the realization.
+
+D5's boundary generalizes intact: the registry, the compiler and the OSS
+realizations are OSS and satisfy `001` rule 2 by construction; recipes whose
+tools speak a hosted control plane are downstream deliverables registered through
+the same interface; the registry never names one (D5.3 one level up); and a
+realization may never widen the admitted surface (D5.4 one level up). D6's
+computed `tools` bit generalizes to every capability bit, on an axis distinct
+from the channel bits — which is why this harness's `tools: false`/`mcp: false`
+row stays truthful about channels while saying nothing about capabilities. D5.5's
+"no cross-harness supports-extensions boolean" becomes "no cross-harness
+realizes-capability-X boolean", for the same reason and with the same enforcement
+point.
+
+What that ADR adds is the case this one had no occasion to answer: what happens
+on a harness where the capability has **no** realization at all. The answer is a
+typed stage-2 viability exclusion — never a silent downgrade, and never satisfied
+by prompt guidance.

@@ -696,3 +696,23 @@ corpus's companion ADR:
   assembles the intent and calls the resolver at one seam. A per-node-type
   hand-rolled intent is how the headless and interactive paths diverged in the
   first place, and the divergence is what makes a pin mean two different things.
+
+## Addendum 2026-08-13 — capability realization is a named stage-2 term with a typed exclusion reason
+
+[`ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`](ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md) names a further signal arriving through D1.2's viability tuple,
+on the same footing as the kit and toolchain demands named there: whether a
+demanded **capability** is realized on the candidate's harness adapter version.
+It is a hard filter at stage 2 — never a stage-3 preference a pin could bend,
+never a stage-4 score a ranker could trade away — and it may empty the surviving
+set, in which case D1.2's loud, typed unsatisfiable decision record applies
+unchanged. A capability demand a ranker could trade away is a capability demand
+the caller cannot rely on, which is the whole content of the request.
+
+That ADR also fixes the shape of the per-candidate exclusion reason this decision
+requires. D1.2 already requires the record to name the stage and the rule that
+excluded each candidate; D6 already requires one decision-record shape. What was
+missing is a type: the reason is a **closed reason enum plus a stable rule id**,
+typed on both sides of the wire, with any human-readable detail **display-only
+and no consumer permitted to branch on it**. A consumer that parses prose has
+re-derived the exclusion, and a re-derived exclusion is where a silent downgrade
+re-enters after being evicted from the resolver.

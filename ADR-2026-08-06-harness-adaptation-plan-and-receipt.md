@@ -302,6 +302,25 @@ channel name would be a capability arriving without passing the parity gate,
 and the seam is deliberately a plural on an existing channel rather than a new
 one.
 
+**Addendum 2026-08-13 — the capability→channel binding is a registry lookup, and
+the receipt attests the delivered surface.**
+[`ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`](ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md)
+names the object this decision's three-way distinction has always been about. The
+binding from a granted capability to the channel entries that deliver it is a
+**realization**, looked up in a registry keyed on capability × harness adapter
+version — never assembled by whichever caller built the spec, which is a fact
+with more than one producer. A realization composes only from the channel and
+delivery vocabularies of D2, so it adds no name here either.
+
+That ADR also strengthens D4's `installed` outcome for entries a realization
+produced: `installed` requires the surface **observed** after application to
+contain every identity the recipe declared, drawn from the artifact the executor
+itself reads rather than from the runner's record of what it wrote. A short
+surface is `required_entry_denied`, never `downgraded` — `downgraded` keeps
+exactly the meaning D4 gives it, a pre-authorized named alternative present in the
+plan. No channel, delivery strategy, phase, outcome, or denial code is added; the
+attestation is additional evidence on existing entries.
+
 ### D4 — Applied receipt and truthful denial
 
 ```ts

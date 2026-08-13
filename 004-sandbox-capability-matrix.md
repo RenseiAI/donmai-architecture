@@ -272,6 +272,19 @@ profile already names**. What the profile names is authored by a human who
 weighed cost and latency once, at authoring time, with a name attached; it is not
 re-derived per session from a scoring heuristic nobody can see.
 
+> **Amended 2026-08-13** by
+> `ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`.
+> The eligibility filter admits a second class of demand alongside the substrate
+> capability declarations this doc specifies: a **capability realization** demand
+> — whether the capability a session asked for is realized on the candidate's
+> harness adapter version. It filters with the same authority, at the same stage,
+> and carries the same consequence: a candidate with no registered realization is
+> excluded, never silently downgraded, and never rescued by prompt guidance. The
+> exclusion reason is a **closed named type plus a stable rule id**, with any
+> human-readable detail display-only and no consumer branching on it. This doc
+> stays sandbox-scoped and gains the *shape* of the rule, not a harness table; the
+> registry itself is specified in that ADR.
+
 > **Operator surface forward-reference.** The routing decision for a session is
 > surfaced through the local daemon's HTTP control API at
 > `GET /api/daemon/routing/explain/<sessionID>` (and the rolling-config

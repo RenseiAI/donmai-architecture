@@ -236,3 +236,25 @@ is D1's per-cell narrowing rule (`cell.caps ⊆ harness.caps`) applied one level
 down, and both are the narrow-only, fail-closed shape of D5's per-machine
 invariant. Nothing in the tier model needs a fourth mechanism, and anything that
 appears to should be read as a design error first.
+
+## Addendum 2026-08-13 — a manifest may not hand-declare a capability bit
+
+[`ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`](ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md) D6 closes the last hand-authored input to the generated matrix
+D3 specifies. A harness manifest may declare the **channels** it can deliver; it
+may **not** hand-author a per-harness **capability** bit. That bit is computed —
+a realization registered for the capability at this adapter version, and its
+fixture passing — so there is no literal for an author to set ahead of the
+evidence, which is the durable form of the fix D3 reached for.
+
+Capability bits and channel bits are **separate axes and neither derives from the
+other**. A capability may be realized on a harness whose MCP channel bit is
+false; that is not an anomaly but the normal case for any harness with a
+host-side extension API, where the realization registers tools natively and no
+MCP hop exists. Reading either axis off the other is the channel-claim error
+`ADR-2026-08-06` D3 forbids in terms.
+
+Enforcement is the matrix generator's parity gate, written on its **input**: the
+gate must refuse a manifest that hand-declares a capability bit, and refuse a
+capability bit whose realization has no passing fixture. Registering, changing,
+or removing a realization is an **adapter-version** move; the family ABI and the
+binary pin do not move.
