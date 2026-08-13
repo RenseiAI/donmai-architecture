@@ -623,3 +623,22 @@ this corpus's brand-neutral discipline.
   outcome is `registry_gen.go` a second time.
 - Detailed implementation belongs in the `donmai` and `donmai-smokes` repos, not
   here.
+
+## Addendum 2026-08-13 — the registered realization set is part of what the adapter version names
+
+[`ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`](ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md) adds a second population to D1's **adapter version**: alongside
+the exact integration that will run and the surface it declares, the adapter
+version names the set of **capability realizations** registered against it.
+Registering, changing, or removing a realization is therefore an adapter-version
+move, and neither a family-ABI nor a binary-pin move.
+
+That ADR's D1.6 makes explicit a consequence D1 already implies. Because the
+realization registry is keyed on adapter version, a bump produces a **new key
+with no entries under it**. The bump must therefore either **re-register** each
+realization, with its fixture re-run at the new version, or carry an **explicit
+inheritance declaration** naming what it inherits and from where. Silent
+carry-forward is prohibited: it is precisely the move that lets a realization's
+evidence outlive the integration the evidence was measured against — the
+authored-claim shape D4 replaced with a computed rung, arriving through a
+maintenance path rather than an authoring one. The parity gate refuses an
+inheritance declaration whose fixture never ran at the inheriting version.

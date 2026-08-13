@@ -228,6 +228,8 @@ type ProviderCapabilities<F extends ProviderFamily> =
 
 **Discrepancy detection:** the host SHOULD verify, at activation, that runtime behavior matches declared capabilities (e.g., a sandbox declaring `supportsPauseResume: true` must respond to the pause verb). Mismatches should fail activation with a clear error and never silently degrade. Tenants can opt to mark a provider as quarantined rather than disabled when verification fails repeatedly — useful for partial-rollout debugging.
 
+**Discrepancy detection at delivery, not only at activation.** The same commitment extends from a provider's declared flags to a capability's **delivered surface**. Per [`ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`](ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md), an adaptation entry may record `installed` only when the surface *observed* after application contains every identity the capability realization's recipe declared — the observation drawn from the artifact the executor itself reads, never from the runner's own record of what it wrote. A surface shorter than the declaration is a **denial**, not a downgrade; `downgraded` remains valid only for a pre-authorized named alternative. "Never silently degrade" means the same thing in both places, and this is what it costs at the delivery layer.
+
 ## Native-rich UX, typed-internal contract
 
 The capability struct above governs the *typed-internal* contract surface — what the scheduler, dispatch hot path, OAuth/webhook plumbing, and Layer 6 hooks reason about across providers. It does NOT govern the user-visible surface. Workflow nodes, workflow verbs, CLI subcommands, templates, and editor palettes are **native-rich per provider** — each provider exposes its full differentiating affordances, not a shared lowest-common-denominator shape.
@@ -613,6 +615,10 @@ independent channels:
 - credential-reference binding, environment, config files, isolated config
   homes, endpoint binding, and cleanup; and
 - mode-specific input, event, replay, resume, approval, and child adapters.
+
+##### Capability realizations compile into these channels
+
+A channel is *how bytes move*; a **capability** is what the user selected. The binding between the two is a **realization** — one capability on one harness adapter version — and per [`ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`](ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md) it is a **registry lookup**, never an assembly performed by whichever caller happened to build the spec. The registry is keyed on capability × adapter version; each recipe composes only from the channel and delivery vocabularies above, so a realization never adds a channel name; and each carries a content-addressed digest that enters the plan and is echoed in the receipt. An adapter-version bump re-registers each realization with its fixture re-run, or declares its inheritance explicitly — it never carries one forward silently. Where no realization is registered for a demanded capability, the candidate is not viable and is excluded before any plan is compiled.
 
 ##### Additional-extension delivery (harnesses with a host-side extension API)
 

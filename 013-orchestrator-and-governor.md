@@ -174,7 +174,12 @@ The orchestrator admits a versioned `DispatchIntent` and selects one
 
 1. **Explicit intent and config** — requested harness/model/endpoint/auth/
    placement, or documented defaults whose provenance is recorded.
-2. **Declared compatibility** — the harness/endpoint matrix is the ceiling.
+2. **Declared compatibility** — the harness/endpoint matrix is the ceiling. Per
+   `ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`,
+   the matrix's per-harness **capability** bits are computed from realization
+   presence plus a passing fixture, on an axis distinct from its channel bits; a
+   capability whose realization is unregistered on a candidate's harness adapter
+   version puts that candidate below the ceiling.
 3. **Live proof** — runtime inventory, auth binding, placement reachability,
    requested mode/capabilities, and evidence tier all satisfy the intent.
 4. **Cost / latency hints** — routing may rank already-valid candidates but
@@ -195,6 +200,11 @@ first stage as an entitlement grant, never a dispatch-time improvisation. The
 decision itself is emitted as one record shape — candidates, per-candidate
 exclusion stage and named rule, chosen target, ordering policy and scores,
 ruleset revision with exposed staleness, and the receipts chain below.
+Per-candidate exclusion reasons are **typed** — a closed reason enum plus a
+stable rule id, with human-readable detail display-only and no consumer permitted
+to branch on it. An unrealizable capability is named as such against the adapter
+version it was evaluated on, so an operator's next action is legible from the
+record without re-deriving the exclusion.
 
 Before enqueue, the orchestrator persists an immutable `AdmissionReceipt` and
 returns a `SessionRef`. A claim-bound pool writes a separate `ClaimReceipt`
