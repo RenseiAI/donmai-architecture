@@ -235,6 +235,16 @@ after host selection and the narrow-only gate; neither claim nor spawn mutates
 the first receipt. Secret delivery remains after admission/claim. Full contract:
 `ADR-2026-08-05-versioned-execution-cell-and-session-reference.md`.
 
+Every launch class reaches that identity through one transaction-aware admission
+boundary. Per
+[`ADR-2026-08-16-one-session-substrate-and-typed-event-spine.md`](ADR-2026-08-16-one-session-substrate-and-typed-event-spine.md),
+the boundary atomically commits the canonical `SessionRef`, truthful typed
+admission evidence, initial lifecycle event, and outbox before enqueue/spawn.
+Class-specific rows and live transports are projections. The append-only typed
+execution-event spine is durable before Redis/SSE/relay nudges, supports strict
+session/project/workflow subjects and exclusive replay cursors, and remains
+separate from agent-to-agent coordination messages.
+
 Admission/claim is followed by exact-harness adaptation, not immediate spawn.
 Per `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`, the orchestrator
 and execution host compile a versioned `HarnessAdaptationPlan`, apply every

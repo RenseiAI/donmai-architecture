@@ -27,6 +27,13 @@ These resolve the sub-issue / coordination friction the legacy system has accumu
 
 The system MUST NOT create Linear sub-issues for cost-efficiency decomposition. When a coordinator delegates a sub-task, it may use a harness-native child primitive or launch an independently admitted child through the orchestrator, A2A, or the host CLI. Both forms are represented by a typed parent/child edge and a child `SessionRef`; native child support is an optimization, not the eligibility gate. Linear sub-issues exist only when a human (or an agent at a human's explicit instruction during refinement) decides the work merits separate intent tracking.
 
+Every such `SessionRef` resolves one tenant-scoped lifecycle identity. Per
+[`ADR-2026-08-16-one-session-substrate-and-typed-event-spine.md`](ADR-2026-08-16-one-session-substrate-and-typed-event-spine.md),
+`(org_id, session_id)` is authoritative; graph, workflow, room, relay, shim,
+public-hash, tracker, provider, conversation, database, and transport ids are
+typed aliases or fencing values only. Workflow/interactive/bridge/provider rows
+are projections and may not mint a second session or own canonical phase.
+
 ### Principle 2 — Decomposition is a session-graph concern, not a workflow-level fork.
 
 The legacy `-coordination` work types (`development-coordination`, `inflight-coordination`, `qa-coordination`, `acceptance-coordination`) are deprecated. Coordinators are agents using child delegation heavily; they are not a different work type. A native child may share a process; an orchestrated/A2A/host-CLI child may run in its own session and execution cell. Both remain under the parent session graph rather than becoming a hidden workflow fork. Work types collapse from eight to five: `development`, `qa`, `acceptance`, `refinement`, `research`. Backlog-writer is elevated to a first-class agent (separate from work types) in `012`; it is the linchpin agent that determines downstream parallelism by writing issues with clear dependencies and haiku-executable scope.
