@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-17
 boundary: shared
 split: synchronized-mirror
@@ -7,7 +7,8 @@ split: synchronized-mirror
 
 # ADR-2026-08-17 — Per-session shim ownership and daemon adoption
 
-**Status:** Proposed
+**Status:** Accepted — architecture decision; implementation, release, migration,
+and activation remain pending behind the proof obligations below.
 **Date:** 2026-08-17
 **Boundary:** shared (the per-session process boundary, local shim wire,
 adoption protocol, sequence ownership, crash semantics, registry safety,
@@ -15,6 +16,16 @@ quarantine contract, and migration law are OSS-canonical here; hosted relay,
 restart-fence persistence, and control-plane reaper integration live in the
 platform mirror)
 **Authors:** session-continuity design lane
+
+> **Accepted 2026-08-18.** Acceptance fixes the ownership, identity, adoption,
+> fencing, gap, quarantine, orphan, and restart-fence contracts. It does not
+> claim a shim binary, service-manager survival, hosted restart fence, release,
+> migration, or activation. Those require the real-binary and cross-layer proof
+> obligations in this ADR.
+> The three review amendments are ratified decisions: planned hosted restarts
+> use the platform-pre-announced durable fence in D9 (not a measured-gap option),
+> relay identity rides the generic optional carrier-extension point in D3, and
+> quarantined shims are always visible capacity in D7.
 
 ## Context
 
@@ -527,7 +538,7 @@ to quarantine instead.
 
 ## Affected documents
 
-The following edits land only in the commit that flips this ADR to `Accepted`:
+The accepting commit carries these reference-document amendments:
 
 - `001-layered-execution-model.md` — Layer 3 session ownership: the daemon is a
   controller of per-session shims rather than the owner of long-lived harnesses.
@@ -542,16 +553,16 @@ The following edits land only in the commit that flips this ADR to `Accepted`:
   versioned rather than silently added to frozen v1.
 
 The platform mirror names its own reaper, relay, and host-heartbeat amendments.
-No affected reference document is edited while this ADR remains Proposed.
 
 ## Affected work items
 
-The platform mirror carries the private tracker mapping. The delivery remains
-blocked on this ADR's acceptance.
+The platform mirror carries the private tracker mapping. Architecture acceptance
+unblocks implementation sequencing; delivery remains gated by the proof
+obligations and activation gates in this ADR and its platform mirror.
 
 ## Implementation notes
 
-- Proposed OSS packages: `shimwire` (codec and closed message types),
+- Planned OSS packages: `shimwire` (codec and closed message types),
   `sessionshim` (process/registry/adoption implementation), and a hidden
   `session-shim` binary mode. The exact package layout may change; the ownership
   and protocol boundaries above may not.

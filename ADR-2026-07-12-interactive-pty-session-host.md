@@ -45,6 +45,16 @@ split: synchronized-mirror
 > delivered only when a live peer leg received the frame — the room existing is
 > not the frame arriving. None of this touches the synchronized region in § 4.
 
+> **Amended by ADR-2026-08-17 (Accepted 2026-08-18) — the PTY host lives in a
+> stable per-session shim.** The PTY-owning shim process, not the replaceable
+> daemon/controller or attach carrier, owns the host stream epoch, output
+> sequence, ring, VT, recorder, and terminal observation. A daemon restart,
+> controller adoption, relay-generation change, or carrier reconnect preserves
+> the epoch while that shim process remains live. Replacing the PTY-owning shim
+> advances it. The frozen attach wire gains no unversioned gap event; a local
+> shimwire ring miss maps to the existing resynchronization/snapshot behavior,
+> and any new viewer-visible gap representation requires a new protocol version.
+
 ## Context
 
 The OSS `donmai` runtime is **headless by design**. A session clones a repo, spawns
@@ -91,7 +101,8 @@ the `agy` PTY precedent and generalizing it to `claude`/`codex`/shell:
 - **Spawn-under-PTY.** Own the PTY master; the child's stdio is the PTY slave.
   This reuses the `agycli` mechanics (`pty.Start`, master fd, read loop) but
   generalizes them into an interactive host rather than an ANSI-stripping
-  event source.
+  event source. Under `ADR-2026-08-17-session-shim-adoption.md`, this host runs
+  inside the stable per-session shim rather than the replaceable daemon.
 - **Ring buffer.** Maintain a bounded, sequence-numbered ring buffer of output
   frames so late/multiple viewers and reconnects are served without replaying
   history from byte zero.
@@ -198,11 +209,13 @@ Outbound-stream mandate (amends the 2026-06-22 pull-model decision):
 4. The stream carries only framed session bytes and the control frames the
    interactive-attach protocol defines. It is authenticated by a short-lived,
    per-session token carrying a dedicated **host role** and a monotonic
-   **host-process epoch** claim, verified by the relay against a dedicated
+   **PTY-host process epoch** claim, verified by the relay against a dedicated
    asymmetric key. The token's nonce is single-use for initial room admission;
    a reconnect-with-resume within the token's lifetime may re-present it, so
    the data path touches the control plane only at fresh admission or token
-   expiry. The stream is torn down when the session ends.
+   expiry. Daemon/controller and carrier restarts preserve this epoch while the
+   PTY-owning process remains live. The stream is torn down when the session
+   ends.
 5. Removing the relay leaves the host with no inbound surface and no live attach —
    the single-machine product is unchanged and the outbound-only posture is
    preserved. Inbound listeners remain forbidden.

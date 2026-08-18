@@ -161,11 +161,34 @@ Two modes per `004` and `011`:
 
 The daemon and the worker are not the same process. The daemon is a long-running supervisor that:
 - Registers the *machine's* capacity once at boot
-- Spawns child worker processes per session on demand
-- Forwards work claims to children
-- Heartbeats on behalf of children
+- Creates or adopts a stable per-session shim for long-lived interactive work
+- Forwards work claims and controller operations to the owning process
+- Reports adopted and quarantined session state on host heartbeats
 
-A child worker is a short-lived process that runs one session. When the session ends, the child exits; the daemon reaps and reports completion.
+A one-shot child worker remains a short-lived process that runs one session. A
+long-lived interactive session instead runs behind the per-session shim accepted
+by `ADR-2026-08-17-session-shim-adoption.md`: the shim owns the harness process
+group and PTY state, while the daemon is a replaceable controller. Direct
+daemon-owned interactive sessions exist only during the additive migration and
+drain rather than being transplanted across process boundaries.
+
+### Per-session shim ownership and restart fencing
+
+The daemon enters `recovering` on startup and does not advertise capacity or
+claim work until it has validated every shim registry record, adopted every
+compatible live shim, classified every remaining record, and charged both
+adopted and quarantined shims against capacity. Adoption advances a monotonic
+controller generation at the shim; stale controllers cannot send input, resize,
+stop, terminal acknowledgement, or tombstone-disposal operations.
+
+A planned restart obtains an acknowledged fence for the exact session set before
+the controller exits. While the fence is held, no stale-claim, heartbeat,
+duration, host-loss, queue-repair, or terminalization path may release or
+requeue those sessions. Fence expiry is not proof of process death: without an
+ordinary terminal receipt or an adopted shim tombstone proving process-group
+reap, the claim remains in visible reconciliation quarantine. This fence is an
+optional composing callback for the single-machine OSS deployment, which has no
+remote reaper; the shim-owned orphan deadline still bounds local execution.
 
 ## AgentRuntime dispatch
 
@@ -321,7 +344,7 @@ Fields requiring agent judgment (`work_result`, `comment_posted`) cannot be back
 
 **Fail-closed is paired with a signal, never with silence.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D5, a pre-spawn check that refuses to start a session — an unresolvable credential, a scope the worker is not authorized for, a project it cannot route — is right to fail closed, because a wrong answer there crosses a tenant boundary. What it may not do is abort the claim quietly or loop on it. The claim is NACKed back to the queue so another host can take it, and the host reports that it cannot serve, so the condition is visible off the machine (D7). A fail-closed rail with no signal converts a routing problem into an invisible one.
 
-**An unreachable session does not hold capacity indefinitely.** If a session's control or attach transport terminates and cannot be re-established within a bounded retry budget, the session terminates or emits a condition. It does not stay alive, occupy a concurrency slot, and accrue wall-clock while being reachable from nowhere. Supervising a local process is not evidence that the session still serves anyone; bounded-retry-then-signal is the contract (D5 with D7, never D5 alone).
+**An unreachable session does not hold capacity indefinitely.** If a session's control or attach transport terminates and cannot be re-established within a bounded retry budget, the session terminates or emits a condition. For a shim-owned session, controller loss starts the shim-owned orphan deadline and preserves the external claim until terminal evidence arrives; a replacement daemon may adopt during that bound. A quarantined live shim remains visibly charged to capacity rather than being treated as unreachable free space. Supervising a local process is not terminal evidence, and elapsed fence time is not release authority: bounded-retry-then-signal composes with the restart fence and tombstone contract (D5 with D7, never D5 alone).
 
 ### The turn-result manifest is the agent-owned half of the contract (ADR-2026-06-15)
 
@@ -536,7 +559,13 @@ OSS users get a fully working orchestrator + governor + worker fleet on their Ma
 
 ## Open questions
 
-1. **Worker draining when daemon updates.** Per `011`, the daemon drains in-flight work before self-update. Native and independently admitted children count as in-flight; do we wait for them too? Default: yes — child completion rolls up to parent session completion unless its edge is explicitly detached.
+1. ~~**Worker draining when daemon updates.**~~ **Resolved by
+   `ADR-2026-08-17-session-shim-adoption.md`.** Shim-owned interactive sessions
+   survive a fenced controller update and are adopted before readiness; they do
+   not wait for child completion merely to replace the daemon. Direct-owned and
+   not-yet-shimmed modes still drain, with native and independently admitted
+   attached children counted as in flight. A deliberately detached child keeps
+   its own lifecycle identity and ownership contract.
 2. **Workflow authoring surface for graph delegation.** The execution contract now admits cross-machine and cross-transport child sessions through typed edges. Whether workflow authors receive one generic delegation verb or transport-specific nodes remains an authoring decision; the runtime contract must not expose an implicit fork.
 3. **Workflow-engine vs orchestrator-vs-governor boundary clarity.** Three things are involved in turning a Linear issue into a session: workflow trigger fires, governor (or workflow engine?) creates a SessionSpec, orchestrator dispatches. Today the boundary is fuzzy — the legacy SDLC YAML implements logic that arguably belongs in the governor. As workflows mature, more logic migrates from governor to workflow definition, and the governor shrinks toward "fire workflow on trigger event." Worth tracking; not blocking.
 
