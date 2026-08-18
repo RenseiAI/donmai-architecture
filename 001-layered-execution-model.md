@@ -233,6 +233,17 @@ The executable unit is a **resolved execution cell**, not a fused provider id. A
 
 A **Worker** may run two kinds of work over the same poll/claim loop: **agent work** (a `SessionSpec` that drives an `AgentRuntimeProvider`) or **batch work** (a `BatchJobSpec` discriminated by `workType`, executed by a registered batch handler that does **NOT** invoke an `AgentRuntimeProvider`). Batch work still composes `SandboxProvider`/`WorkareaProvider` as its handler needs, and may even invoke an LLM under a resolved auth mode (`host-session`/`local`) as a single non-interactive turn — but it is not an agent session (no tracker issue, no `activeSessions`/quota entry). See `ADR-2026-06-03-batch-work-type-category.md` (first instance: code-survival scans, `ADR-2026-06-01`; second: KG extraction).
 
+For a long-lived interactive agent session, the worker's replaceable controller
+process is not the process-lifetime owner. Per
+[`ADR-2026-08-17-session-shim-adoption.md`](ADR-2026-08-17-session-shim-adoption.md),
+one stable per-session shim owns the harness process group, PTY master, output
+sequence, replay ring, snapshot/recording state, and terminal observation. The
+daemon creates or adopts that shim and may restart without creating a new
+session or PTY-host epoch. `(org_id, session_id)` remains the sole lifecycle
+identity; shim ids, process epochs, controller generations, PIDs, sockets, and
+carrier generations are correlation or fencing values only. Adoption and
+quarantine accounting finish before the host advertises capacity.
+
 The split between SandboxProvider and WorkareaProvider is critical. They are not the same concern — even on a perfectly fresh K8s pod, if you reuse it for a second session without resetting filesystem state, you get the false-positive QA bug that motivated this entire architecture. SandboxProvider gives you *compute*; WorkareaProvider guarantees *filesystem determinism inside that compute*; AgentRuntimeProvider says *which LLM speaks the protocol the orchestrator expects*.
 
 The codebase's existing `AgentProvider` (`packages/core/src/providers/types.ts`) is the OSS reference implementation of `AgentRuntimeProvider`. The renaming is corpus-only; the type stays the same.

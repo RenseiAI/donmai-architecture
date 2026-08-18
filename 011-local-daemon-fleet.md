@@ -26,7 +26,12 @@ Concretely, the user's day:
 1. **Once at install:** `brew install donmai && donmai daemon install` (or equivalent on Linux). Daemon starts; registers as a system service.
 2. **Once per project:** `donmai project allow github.com/foo/bar`. Daemon now accepts work for that project. Credentials are picked up from system keychain or per-project config.
 3. **Day-to-day:** open VSCode for any allowed project, or don't. Linear webhooks → orchestrator → daemon. The daemon clones the repo on first session, warms its workarea cache, and runs sessions. No window-switching, no per-workspace fleet management.
-4. **On release:** daemon auto-updates on configured channel. Drains in-flight work, restarts cleanly. User sees a single notification or nothing at all.
+4. **On release:** daemon auto-updates on the configured channel. Under the
+   accepted session-shim architecture, it fences the exact live session set,
+   restarts only the replaceable controller, adopts the surviving shims before
+   advertising capacity, and resumes attach/heartbeat carriers. Until that
+   architecture ships, the current direct-owned path drains in-flight work.
+   Either way the user sees one notification or nothing at all.
 
 ## Installation paths
 
@@ -220,25 +225,78 @@ Two constraints bind the watcher that implements this:
 
 `capacity.*`, `autoUpdate.*`, and `orchestrator.url` are the deliberate exceptions: they describe the process itself rather than what it serves, so a change to them may require a drain-aware restart. Everything describing *what the host serves* may not.
 
-## Drain semantics
+## Session-shim adoption (Accepted architecture; implementation pending)
 
-When the daemon needs to restart (auto-update, manual stop, system reboot scheduled), it drains:
+Per `ADR-2026-08-17-session-shim-adoption.md`, one stable process owns each
+long-lived interactive harness process group, PTY master, VT/snapshot state,
+recorder, output sequence, replay ring, and final exit observation. The daemon
+is the replaceable controller and carrier. On startup it enters `recovering`,
+validates every bounded secret-free registry record, adopts every compatible
+shim, classifies stale or incompatible records, and charges both adopted and
+quarantined shims against capacity before returning to `ready` or claiming work.
+
+The local status/doctor surfaces and every host heartbeat expose the same
+bounded quarantine projection: session identity, shim/process correlation,
+protocol range, typed reason, age, and `consumes_capacity:true`. An incompatible
+shim is never killed merely to make an upgrade fit; it drains under a compatible
+controller or reaches its shim-owned orphan deadline. A controller loss starts
+that deadline, after which the shim owns process-group termination and persists
+a terminal tombstone. Missing contact or elapsed time alone never proves a
+terminal session.
+
+Architecture acceptance does not claim this path is shipped. Activation waits
+for the real installed-service survival smoke, old-controller fencing, gap and
+snapshot honesty, no-secret registry proof, quarantine visibility, and orphan
+bound required by the ADR.
+
+## Drain and restart semantics
+
+When the daemon needs to stop or restart (auto-update, manual stop, system
+reboot scheduled), it drains or fences according to the intended outcome:
 
 1. **Stop accepting new work.** Daemon updates its registered status to `draining` and reports it on the next heartbeat; a compliant orchestrator reads it and stops routing new sessions to the host. This depends on the heartbeat request actually carrying the status field on the wire, not just computing it internally — see `ADR-2026-08-03-daemon-host-status-signal-completion.md`, which closes a prior gap where the daemon computed this status every beat and silently dropped it before serialization. Until a daemon build including that fix is in use, treat "the orchestrator routes new sessions elsewhere" as aspirational rather than guaranteed.
-2. **Wait for in-flight sessions.** Up to `drainTimeoutSeconds` (default 600). Sessions get a SIGTERM at the timeout. Unleased workareas follow the configured post-mortem release policy. Under the accepted, implementation-pending terminal-lease architecture, every `active` or `release-pending` workarea remains unavailable until provider disposition is complete and `released` is durably saved; acknowledgement and expiry only select a release path.
+2. **Conserve in-flight ownership.** On the current direct-owned path, wait up
+   to `drainTimeoutSeconds` (default 600), then send SIGTERM. On a shim-enabled
+   upgrade/restart, enumerate adopted and quarantined sessions, obtain the
+   optional composing plane's durable fence for that exact set, and stop only
+   after its byte-equivalent acknowledgement. The restart does not SIGTERM an
+   adopted shim. A true stop with no replacement sends a generation-fenced
+   `Stop` to every adopted shim and waits for terminal observations; a
+   quarantined shim remains under its orphan deadline. An unleased workarea
+   follows the configured post-mortem release
+   policy. Under the accepted, implementation-pending terminal-lease
+   architecture, every `active` or `release-pending` workarea remains
+   unavailable until provider disposition is complete and `released` is
+   durably saved; acknowledgement and expiry only select a release path.
 3. **Release eligible workarea-cache entries.** Cache entries in `ready` or `warming` state are torn down; `acquired` entries follow the policy above. Drain never overrides a non-released terminal workarea lease or acquisition-quarantine guard.
-4. **Restart.** New process boots, re-registers, status returns to `ready`.
+4. **Restart and adopt.** The new controller boots in `recovering`, adopts live
+   shims and terminal tombstones, restores external carriers, classifies every
+   remaining registry entry, computes capacity including quarantine, and only
+   then re-registers as `ready`. Fence expiry without terminal proof changes the
+   external state to reconciliation quarantine; it never releases or requeues a
+   possibly live session.
 
 For graceful planned restarts (e.g., a reboot), `donmai daemon drain` returns when drain completes. CI scripts or shutdown hooks can wait on it.
 
-**A scope change is not on this list.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D3, adding or removing a project or an organization on a host is a runtime operation, so no user-facing instruction is ever "restart the service." The restarts that remain — auto-update, an operator stop, a reboot — always drain first, because a configuration change must never cost in-flight work.
+**A scope change is not on this list.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D3, adding or removing a project or an organization on a host is a runtime operation, so no user-facing instruction is ever "restart the service." The stops/restarts that remain — auto-update, an operator stop, a reboot — always enter the drain-or-fence protocol first, because a configuration change must never cost in-flight work.
 
 ## Recovery from crash
 
 If the daemon process dies unexpectedly:
 
 1. **System service auto-restart.** launchd / systemd brings it back. Default backoff: immediate, then 30s, 5m for repeated crashes.
-2. **In-flight sessions become orphans.** Their workareas remain on disk. Under the accepted, implementation-pending terminal-lease architecture, the new daemon loads the separate acquisition-quarantine journal first, then every durable `active` and `release-pending` lease, before classifying orphan workareas. Any guarded, quarantined, non-released, or unreconciled exact workarea remains unavailable under its originating session identity; only an unleased, unguarded orphan follows the ordinary post-mortem policy.
+2. **Shim-owned sessions enter bounded orphaning.** Their harness and PTY keep
+   running while the shim waits for adoption; output accumulates in its bounded
+   ring. A replacement daemon adopts before advertising capacity. If no
+   controller returns before the orphan deadline, the shim terminates and reaps
+   its own process group and persists a terminal tombstone. Direct-owned legacy
+   sessions still become ordinary orphans during migration. Workareas remain on
+   disk. Under the accepted, implementation-pending terminal-lease architecture,
+   the new daemon loads the separate acquisition-quarantine journal first, then
+   every durable `active` and `release-pending` lease, before classifying orphan
+   workareas. Any guarded, quarantined, non-released, or unreconciled exact
+   workarea remains unavailable under its originating session identity; only an
+   unleased, unguarded orphan follows the ordinary post-mortem policy.
 3. **Workarea-cache state survives.** Cache entries are filesystem state; they are rediscovered only after quarantine, lease, session, and cache-catalog reconciliation. An entry with a quarantine record or non-released lease cannot be admitted to an available state.
 4. **Logs preserve crash context.** macOS: `~/Library/Logs/donmai/daemon.log`; Linux: `journalctl --user -u donmai-daemon`. The daemon emits a final crash dump to the same path before exiting (when possible).
 
@@ -377,6 +435,9 @@ Three observability surfaces:
 
 - **`donmai daemon logs`** — tail the daemon log. NDJSON by default. Pretty-printed when stdout is a TTY.
 - **`donmai daemon stats`** — current capacity, sessions in flight, workarea-cache state per (repo, toolchain), recent acquire/release latencies.
+- **`donmai daemon status` / `doctor`** — adopted and quarantined shim counts,
+  typed quarantine reasons, controller generation, and the capacity charge for
+  every quarantined session.
 - **Prometheus metrics** at `http://localhost:9101/metrics` (configurable). Scrape into your own monitoring if running multi-machine.
 
 Key NDJSON fields the daemon emits (consumed by Layer 6 observability per `006`):

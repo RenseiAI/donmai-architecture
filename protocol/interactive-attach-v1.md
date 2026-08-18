@@ -348,11 +348,19 @@ ignore the header `seq` on relay-forwarded `Input` (§ 2).
 The host output sequence and `rel_time` are meaningful only relative to **one
 host stream epoch**: the lifetime of one PTY-owning host process.
 
+The PTY-owning process is the epoch authority. Under
+`ADR-2026-08-17-session-shim-adoption.md`, that process is the stable per-session
+shim, not the replaceable daemon/controller and not an attach-carrier loop. A
+daemon restart, controller adoption, relay-generation change, WSS redial, or
+carrier fallback/upgrade preserves the epoch while the shim remains live. Only
+replacement of the PTY-owning shim process creates a new host stream epoch.
+
 - The **epoch** is a monotonic non-negative integer, assigned by the control
   plane at host-token mint and carried as the `epoch` claim in the host's JWT
-  (§ 15). It increments on every new host process for the session (restart,
-  respawn, sandbox re-provision) and is preserved across token re-mints for the
-  same still-running process. The host also echoes it in its `subscribe`
+  (§ 15). It increments on every new PTY-owning shim process for the session
+  (shim respawn or sandbox re-provision) and is preserved across daemon restarts,
+  controller adoption, carrier changes, and token re-mints for the same
+  still-running shim. The host also echoes it in its `subscribe`
   payload (§ 7); a mismatch between the claim and the echo is an auth error.
 - **Within one epoch**, `seq` and `rel_time` are continuous for the life of the
   epoch — including across dropped-and-redialed WSS connections. A host WSS
@@ -370,6 +378,12 @@ host stream epoch**: the lifetime of one PTY-owning host process.
   sequence numbers.
 - How the relay decides which host connection owns the room — the
   **(sessionId, epoch) compare-and-swap** — is § 6.2.
+
+The frozen v1 event set gains no `Gap` frame from the local shim-adoption wire.
+A shimwire ring miss is translated into the existing ring truncation plus
+`snapshot_request(reason:"resync")` behavior. A distinct viewer-visible gap
+representation, if needed, requires a versioned successor protocol rather than
+an unannounced v1 event.
 
 ---
 
