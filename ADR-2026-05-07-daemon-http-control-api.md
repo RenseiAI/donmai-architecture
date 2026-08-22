@@ -87,6 +87,58 @@ were aspirational pointers to a SaaS platform contract that never landed and
 have no place in a localhost daemon API. All client code paths in the
 migrated `afclient` methods MUST hit `/api/daemon/*`.
 
+#### 2026-08-22 amendment — planned restart preflight
+
+`ADR-2026-08-17-session-shim-adoption.md` adds one lifecycle route in the same
+localhost-only namespace:
+
+```text
+POST   /api/daemon/restart/prepare
+```
+
+This is the only authoritative preflight for a planned service-manager restart
+while session-shim ownership is active. The handler atomically enters
+`draining`, prevents new claims, freezes the exact multi-scope shim-correlation
+snapshot under one server-minted preparation/fence identity, invokes the
+configured restart-fence callbacks, and returns success
+only after every non-empty authority scope has supplied its exact durable
+acknowledgement. Repeating the request against the same prepared state is
+idempotent: partial retries reuse the same identity and byte-exact per-scope
+requests, never a caller id or a new snapshot.
+
+A caller treats only this closed response union as permission:
+
+```json
+{
+  "protocol": "session-shim-restart-preflight-v1",
+  "state": "prepared | not_required",
+  "preparationId": "server-owned opaque id",
+  "scopeCount": 0
+}
+```
+
+`not_required` is returned only after the daemon has entered `draining` and
+proved shim adoption/ownership is disabled with no shim occupants, or the
+frozen snapshot is empty. It is the explicit default-off/zero-shim result.
+Unknown/empty `2xx` bodies, `404`, typed `409 restart_preflight_refused`, `5xx`,
+timeout, and transport failure are refusals. The response exposes no fence
+selector and clients never parse per-scope receipts.
+
+The route prepares but does not terminate the daemon. The daemon-owned
+`POST /api/daemon/update` path invokes the same preflight internally before
+package swap or exit. If service-manager invocation fails after preparation,
+the daemon remains `draining`; no error handler reopens claims. An explicit
+operator/reconciler call to `POST /api/daemon/resume` must durably mark the local
+preparation abandoned, invalidate only its stop authorization, and prove every
+external hold remains intact before claims may reopen. A later preflight mints a
+new identity and snapshot. A direct signal or
+service-manager stop that did not follow a successful response has unplanned
+crash semantics. Deferring fence persistence to a signal handler is forbidden:
+the service manager may escalate termination before remote durability finishes.
+The generic `afclient`/`afcli` lifecycle client is the public consumer seam;
+downstream composing binaries call it rather than defining a second local
+restart protocol.
+
 ### D2 — Auth model: localhost-only, no bearer
 
 The daemon binds to `127.0.0.1` exclusively. The `Authorization: Bearer …`

@@ -237,6 +237,16 @@ quarantined shims against capacity before returning to `ready` or claiming work.
 Duplicate lifecycle identities preserve every shim/process correlation; none is
 overwritten merely because its session identity collides.
 
+After an authenticated shim `Hello`, an optional composing carrier receives the
+exact live correlation and resolves its own durable preparation state. The
+replacement daemon never supplies or reconstructs a remote fence id/revision or
+host-adoption revision from local files. A planned restart receipt authorizes
+the old controller's stop; it is not required recovery state. No applicable
+fence is the ordinary unplanned-crash case, while any conflicting host or
+shim/process/controller correlation keeps startup fail-closed. The durable
+last-forwarded sequence is composing-carrier state, not a `Hello` field; a
+remote store validates it against durable ingress and zero safely over-replays.
+
 The local status/doctor surfaces and every host heartbeat expose the same
 bounded quarantine projection: session identity, shim/process correlation,
 protocol range, typed reason, age, and `consumes_capacity:true`. An incompatible
@@ -259,12 +269,19 @@ reboot scheduled), it drains or fences according to the intended outcome:
 1. **Stop accepting new work.** Daemon updates its registered status to `draining` and reports it on the next heartbeat; a compliant orchestrator reads it and stops routing new sessions to the host. This depends on the heartbeat request actually carrying the status field on the wire, not just computing it internally — see `ADR-2026-08-03-daemon-host-status-signal-completion.md`, which closes a prior gap where the daemon computed this status every beat and silently dropped it before serialization. Until a daemon build including that fix is in use, treat "the orchestrator routes new sessions elsewhere" as aspirational rather than guaranteed.
 2. **Conserve in-flight ownership.** On the current direct-owned path, wait up
    to `drainTimeoutSeconds` (default 600), then send SIGTERM. On a shim-enabled
-   upgrade/restart, take one deterministic snapshot of adopted and quarantined
-   shim correlations, partition it by authority scope, obtain the optional
+   upgrade/restart, every installed caller first invokes
+   `POST /api/daemon/restart/prepare`. That daemon-owned edge enters `draining`,
+   prevents new claims, and takes one deterministic snapshot of adopted and
+   quarantined shim correlations, partitions it by authority scope, and obtains
+   the optional
    composing plane's byte-exact durable acknowledgement for **every** partition,
-   and stop only after all partitions acknowledge with non-empty revisions.
+   then stops only after all partitions acknowledge with non-empty revisions.
    One physical multi-organization host therefore performs one authenticated
    fence operation per organization; a partial success refuses the restart.
+   The caller invokes the service manager only after preflight success; a
+   timeout, connection failure, or non-success response refuses the planned
+   action. A direct signal or service-manager stop that skipped preflight has
+   unplanned-crash semantics and may not be reported as restart-fenced.
    The stable host id never falls back to a replaceable controller/worker id,
    and `controller_generation` appears only on each shim row, never as a fence
    scalar. The restart does not SIGTERM an
@@ -281,7 +298,9 @@ reboot scheduled), it drains or fences according to the intended outcome:
    shims and terminal tombstones, restores external carriers through the
    prepare-before-`Welcome`/commit-after-`Adopted` sequence, classifies every
    remaining registry entry, computes capacity including quarantine, and only
-   then re-registers as `ready`. Fence expiry without terminal proof for every
+   then re-registers as `ready`. Preparation is resolved from each authenticated
+   live correlation, not from an inherited local fence ledger. Fence expiry
+   without terminal proof for every
    covered shim/process correlation changes the
    external state to reconciliation quarantine; it never releases or requeues a
    possibly live session.
@@ -297,7 +316,10 @@ If the daemon process dies unexpectedly:
 1. **System service auto-restart.** launchd / systemd brings it back. Default backoff: immediate, then 30s, 5m for repeated crashes.
 2. **Shim-owned sessions enter bounded orphaning.** Their harness and PTY keep
    running while the shim waits for adoption; output accumulates in its bounded
-   ring. A replacement daemon adopts before advertising capacity. If no
+   ring. A replacement daemon adopts before advertising capacity even though an
+   unplanned crash created no restart fence and left no local fence receipt to
+   inherit. Its composing carrier resolves any durable obligations from the
+   authenticated post-`Hello` correlation; the daemon does not guess them. If no
    controller returns before the orphan deadline, the shim terminates and reaps
    its own process group and persists a terminal tombstone. Direct-owned legacy
    sessions still become ordinary orphans during migration. Workareas remain on
@@ -580,6 +602,7 @@ POST   /api/daemon/pause
 POST   /api/daemon/resume
 POST   /api/daemon/stop
 POST   /api/daemon/drain
+POST   /api/daemon/restart/prepare
 POST   /api/daemon/update
 POST   /api/daemon/capacity
 GET    /api/daemon/pool/stats
@@ -600,6 +623,15 @@ in-process `WorkerSpawner.StopSession` primitive. Full contract — the in-band 
 signal, the `FailureOperatorCancelled` / `FailureNoProgress` terminal modes, and
 the no-progress watchdog — is in
 `ADR-2026-06-22-daemon-per-session-cancel-wire.md`.
+
+`POST /api/daemon/restart/prepare` is the mandatory preflight for a planned
+service-manager restart or update while shim ownership is active. It enters
+`draining`, prevents new claims, and returns success only after every authority
+scope has durably acknowledged the exact immutable correlation snapshot. It is
+idempotent for the same prepared state. Any non-success response prohibits the
+caller from invoking the service manager. It does not itself terminate the
+daemon; a signal or service-manager action that arrives without a successful
+preflight is classified as an unplanned crash.
 
 #### The `pool` wire spellings on this surface: what they mean, and the rename that is authorized but not yet shipped
 
