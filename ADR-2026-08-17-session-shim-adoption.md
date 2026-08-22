@@ -575,3 +575,32 @@ obligations and activation gates in this ADR and its platform mirror.
 - Release sequencing is OSS protocol/library first, composing binary second,
   platform fence/relay integration third, followed by the real installed-service
   smoke before default-on.
+
+## Amended 2026-08-22 — adoption binds one session-owned workarea root
+
+`ADR-2026-08-22-session-owned-multi-repository-workarea.md` (Accepted
+architecture; implementation and migration pending) makes a session's filesystem
+state a single session-owned directory, `workareaRoot`, at
+`<worktree-root>/<session-id>/`, with one repository per leaf inside it. Three
+consequences for this ADR, none of which touches the synchronized region above:
+
+- **D2 is unchanged.** `(org_id, session_id)` remains the sole lifecycle
+  identity. `workareaRoot` is a correlation value of exactly the same class as
+  `shim_id`, `process_epoch`, PID, and socket path: it can never create, release,
+  terminalize, or re-key a session.
+- **D3's discovery record gains one optional field.** A record MAY carry
+  `workarea_root`. Because the root is derived from the session identity the
+  adopting controller can compute it, so the field is a convenience and an
+  integrity cross-check, never a requirement — an old record without it is
+  adopted normally, and the additive-only rule of the local wire holds.
+- **D6 stays true, and this is the constraint that shapes the field.** A
+  repository URL may carry embedded auth (`ADR-2026-07-07`), which makes it a
+  bearer secret. The discovery record therefore persists a **path** and never a
+  repository URL; the same rule binds the workarea's own declaration record.
+  Persisting the more convenient thing would have written credentials into a
+  registry this ADR proved secret-free.
+
+Adoption is correspondingly simpler rather than harder: a replacement controller
+adopting a shim under D4 computes one root from the identity it already has,
+performs no filesystem walk to discover what the session held, and reads the
+root's declaration record — never a directory listing — for the repository set.

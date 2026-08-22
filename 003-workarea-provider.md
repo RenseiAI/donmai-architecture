@@ -2,7 +2,7 @@
 
 **Status:** Reference
 **Last updated:** 2026-08-07
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `011-local-daemon-fleet.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `011-local-daemon-fleet.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`, `ADR-2026-08-22-session-owned-multi-repository-workarea.md`
 
 ## Why this exists
 
@@ -53,11 +53,20 @@ interface WorkareaProvider extends Provider<'workarea'> {
 
 interface WorkareaSpec {
   // Source — what code does the workarea contain?
+  // This legacy-compatible field always names the primary repository. When a
+  // repository declaration is present its primary entry MUST match this source;
+  // a mismatch is a typed pre-admission error, never a precedence rule.
   source: {
     repository: string                 // git URL, atomic remote, etc.
     ref: string                        // branch/tag/commit/patch-set
     paths?: string[]                   // sparse-checkout if supported
   }
+
+  // Additive multi-repository carrier. The orchestrator emits this only after
+  // the bound executor attests the exact protocol version; old executors receive
+  // only the singular source above. URLs exist only in this ephemeral provision
+  // input and are never copied into the durable declaration or shim records.
+  repositoryDeclaration?: RepositoryDeclarationV1
 
   // Platform — required OS/arch (kits may demand specific platforms,
   // e.g., an iOS kit only applies on macos/arm64)
@@ -79,6 +88,31 @@ interface WorkareaSpec {
   scope: ProviderScope
 }
 
+interface RepositoryDeclarationV1 {
+  protocol: 'session-root-v1'
+  repositories: DeclaredRepositoryV1[]
+  select?: RepositoryFilter             // absent means { kind: 'primary' }
+}
+
+interface DeclaredRepositoryV1 {
+  source: {
+    repository: string                  // ephemeral provision input; may carry auth
+    ref: string
+    paths?: string[]
+  }
+  name?: string                         // otherwise URL basename minus .git
+  role: 'primary' | 'secondary' | 'context'
+  authority: 'read-only' | 'mutable'   // explicit on the executor wire; authoring
+                                       // defaults are normalized by the producer
+                                       // before admission
+}
+
+type RepositoryFilter =
+  | { kind: 'primary' }
+  | { kind: 'named'; name: string }
+  | { kind: 'role'; role: 'primary' | 'secondary' | 'context' }
+  | { kind: 'all' }
+
 interface ToolchainDemand {
   // Kits declare these; provider satisfies them
   java?: string                        // semver range or pinned version
@@ -93,7 +127,16 @@ interface ToolchainDemand {
 
 interface Workarea {
   readonly id: WorkareaId
-  readonly path: string                // absolute filesystem path
+  readonly path: string                // absolute filesystem path — the SELECTED
+                                       // repository, i.e. repositoryWorktreePath
+                                       // and the harness working directory
+  readonly workareaRoot?: string       // absolute path of the session-owned
+                                       // directory containing every repository
+                                       // leaf. Accepted architecture, pending
+                                       // implementation: ADR-2026-08-22. Equal to
+                                       // `path` only for a retained legacy flat
+                                       // workarea (that ADR's D9.1); never derive
+                                       // one from the other.
   readonly providerId: string          // which provider gave us this
   readonly ref: string                 // commit/patch-set actually checked out
   readonly cleanStateChecksum: string  // sha256 of declared-clean files
@@ -108,7 +151,8 @@ type WorkareaId = string                // provider-namespaced
 
 type ReleaseMode =
   | { kind: 'destroy' }                  // tear down completely
-  | { kind: 'return-to-pool' }           // available for reuse, scoped clean
+  | { kind: 'return-to-pool' }           // retain/update reusable cache seed;
+                                         // end and remove this session generation
   | { kind: 'pause' }                    // memory + fs preserved (E2B-style)
   | { kind: 'archive'; label?: string }  // cold storage (Daytona-style)
 
@@ -133,6 +177,13 @@ interface WorkareaProviderCapabilities {
   supportsSnapshot: boolean             // FS-level snapshot
   supportsPauseResume: boolean          // memory+FS preserved
   supportsResume: boolean               // resume from prior pause/archive
+
+  // Versioned multi-repository protocol understood by this provider. An empty
+  // list OR an absent field is the honest declaration for every current/legacy
+  // implementation. A producer may emit RepositoryDeclarationV1 only when the
+  // exact bound executor positively attests 'session-root-v1'; this is a
+  // protocol gate, never a feature hint.
+  multiRepositoryWorkareaProtocols?: ('session-root-v1')[]
 
   // Sharing model
   supportsSharedMode: boolean           // multiple sessions in one workarea
@@ -263,12 +314,17 @@ The daemon's control surface for this cache is `GET /api/daemon/pool/stats` and 
 
 ### `acquire(spec)` — fast path
 
-1. Find a `ready` cache entry matching `(spec.source.repository, spec.toolchain)`.
-2. Validate its `ref` is reachable from `spec.source.ref`; if not, `git fetch` and `git checkout`.
-3. Run scoped clean: `rm -rf .next .turbo node_modules/.cache dist coverage` (configurable per project).
-4. Verify lockfile hasn't drifted; if it has, mark the entry `invalid`, fall through to slow path.
-5. Compute `cleanStateChecksum` over a set of canonical files (lockfile + selected configs); store in `Workarea`.
-6. Mark the entry `acquired`, return.
+1. Find a `ready` **cache seed** matching `(spec.source.repository, spec.toolchain)`.
+2. Validate its `ref` is reachable from `spec.source.ref`; if not, `git fetch` and update the seed.
+3. Materialise the seed into a **fresh session generation** at the session-owned
+   root. The seed is not the returned `Workarea`, is never a harness CWD, and
+   never carries a session lease, cursor, or identity.
+4. Run scoped clean in the new generation: `rm -rf .next .turbo node_modules/.cache dist coverage` (configurable per project).
+5. Verify lockfile hasn't drifted; if it has, mark the seed `invalid`, destroy the
+   incomplete generation, and fall through to slow path.
+6. Compute `cleanStateChecksum` over a set of canonical files (lockfile + selected configs); store in `Workarea`.
+7. Mark the session generation `acquired`, return. The seed remains a separate
+   cache object and is never adopted as a live session.
 
 P95 target: < 5 seconds when a warm entry exists.
 
@@ -278,16 +334,23 @@ P95 target: < 5 seconds when a warm entry exists.
 2. Detect toolchain (kit-driven, see `005`); install via `mise`/`asdf`/equivalent.
 3. `pnpm install --frozen-lockfile` (or family equivalent).
 4. Run any kit-declared post-install steps.
-5. Mark `acquired`, return.
+5. Mark the fresh session generation `acquired`, return. A cold acquire may also
+   publish a separate reusable seed, but the session root itself never becomes it.
 
 P95 target: < 90 seconds for typical TS monorepo. Background warmer creates additional cache entries in anticipation.
 
 ### `release(workarea, mode)`
 
-- `destroy` — `git worktree remove`, delete the cache entry.
-- `return-to-pool` — scoped clean, mark `ready`. The default for most sessions.
-- `pause` — local provider has no memory-pause primitive; degrades to `return-to-pool` and emits a warning.
-- `archive` — tar to a configurable location, mark the cache entry `retired`. Useful for forensic preservation.
+- `destroy` — remove the session generation. Any independent seed is unchanged.
+- `return-to-pool` — optionally validate/update or publish a **separate cache
+  seed**, then remove the session generation. This is the default for most
+  sessions. Neither the root path, `Workarea.id`, declaration record, lease, nor
+  observation cursor transfers to a later session.
+- `pause` — preserve this session generation for the same session identity when
+  the provider supports it; the local provider otherwise performs the
+  `return-to-pool` behavior above and emits a warning.
+- `archive` — capture the whole session root for restore under the same session
+  identity, then mark that generation retired. It is not a reusable cache seed.
 
 > **The type literals are deliberately unchanged.** `ReleaseMode`'s
 > `'return-to-pool'` and the `acquire_path` values `'pool-warm'` /
@@ -358,7 +421,9 @@ When `release(pause)` and a later `resume()` happen, naive replay would double-e
 1. Workarea capabilities declare `emitsObservationEvents: true` if the provider integrates with the FS event capture stream.
 2. The `Workarea` handle carries an opaque `observationCursor` that represents "all events up to this point have been delivered to the memory writer."
 3. `snapshot()` MUST capture the cursor; `resume()` MUST restore it. Replays from a snapshot start delivering events from the cursor forward, not from the beginning.
-4. When a workarea is reused (`return-to-pool`), the cursor is RESET — a returned cache entry starts fresh on its next acquire, because the prior session is logically over.
+4. A cache seed carries no observation cursor. `return-to-pool` ends the session
+   generation and its cursor; the next acquire creates a new root, workarea ID,
+   and cursor even when it materialises from the same seed.
 
 This is one of the seams (`006-cross-provider-interactions.md`) where a small contract detail prevents a class of cross-layer bugs. If we miss it, eval reproducibility and proactive memory both surface duplicate observations.
 
@@ -393,6 +458,17 @@ Provider responsibilities in shared mode:
 - Locking semantics are NOT enforced at this layer — sub-agents are still expected to respect "only modify files relevant to your sub-issue" (existing rule in `CLAUDE.md`). The provider doesn't try to be a filesystem multiplexer.
 
 A provider that doesn't support shared mode (`capabilities.supportsSharedMode: false`) returns an error if a shared spec is requested; the scheduler falls through to a provider that does, or rejects the spec.
+
+> **Amended 2026-08-22 by `ADR-2026-08-22-session-owned-multi-repository-workarea.md`
+> (Accepted architecture; implementation pending).** Under the session-owned
+> multi-repository layout, `mode: 'shared'` with `parentWorkareaId` joins the
+> parent's **`workareaRoot`** and inherits its whole repository leaf set; a
+> sub-agent may then select a different `repositoryWorktreePath` within that
+> shared root. Reference counting on `release` is at the root, unchanged in
+> substance from the rules above. Ownership, lease, archive, disk accounting, and
+> restart adoption all bind the root and never a single leaf — a per-leaf lease
+> is deliberately not defined (D7). Until that ADR's provisioner ships a workarea
+> holds exactly one repository, and every rule in this section reads as written.
 
 ## Capability profile by sandbox
 

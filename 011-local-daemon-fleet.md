@@ -3,7 +3,7 @@
 **Status:** Reference (initial draft)
 **Last updated:** 2026-07-22
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/011-local-daemon-fleet-platform-extensions.md`)
-**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md` (superseded in part), `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`), `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md`.
+**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md` (superseded in part), `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`), `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md`, `ADR-2026-08-22-session-owned-multi-repository-workarea.md`.
 
 > **Command surface note (2026-08-03):** `ADR-2026-05-06-tui-noun-consolidation.md` called for the daemon CLI lifecycle commands (install, status, doctor, drain, update) to be invoked as `<binary> host *` on both binaries via a shared `afcli.RegisterCommands` tree. That never shipped in the OSS binary: as verified against the code on 2026-08-03, `donmai` still exposes these under `daemon *` (`donmai daemon install`, `donmai daemon status`, …), with no exported `host` command. The example fences below use this shipped OSS form. `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` D2 commits `afcli` to exporting a real `host` parent with `daemon` demoted to a hidden deprecated alias — once that OSS release ships, `donmai host install` etc. become correct and `daemon *` becomes the alias. Until then, treat `host *` forms as the target, not the current command. (The platform binary already exposes its own hand-assembled `host` tree today; see that ADR's Finding 3.)
 
@@ -296,7 +296,12 @@ If the daemon process dies unexpectedly:
    every durable `active` and `release-pending` lease, before classifying orphan
    workareas. Any guarded, quarantined, non-released, or unreconciled exact
    workarea remains unavailable under its originating session identity; only an
-   unleased, unguarded orphan follows the ordinary post-mortem policy.
+   unleased, unguarded orphan follows the ordinary post-mortem policy. Under the
+   accepted, implementation-pending multi-repository layout the unit classified
+   here is the session's `workareaRoot`, not a repository directory: the root is
+   computed from the session identity, so adoption needs no filesystem walk, and
+   its declaration record — never the directory listing — says what the session
+   had. See § "Session-owned multi-repository workarea".
 3. **Workarea-cache state survives.** Cache entries are filesystem state; they are rediscovered only after quarantine, lease, session, and cache-catalog reconciliation. An entry with a quarantine record or non-released lease cannot be admitted to an available state.
 4. **Logs preserve crash context.** macOS: `~/Library/Logs/donmai/daemon.log`; Linux: `journalctl --user -u donmai-daemon`. The daemon emits a final crash dump to the same path before exiting (when possible).
 
@@ -304,7 +309,7 @@ If the daemon refuses to start, common causes:
 
 - **Bad credentials** for a configured project. Daemon logs the project ID and exits. Fix via `donmai project credentials github.com/foo/bar`.
 - **Port collision** for the local exec endpoint. Daemon picks a free port by default; explicit `localExecPort` in config can hit collisions. Run `donmai daemon doctor` to detect.
-- **Disk full** in the workarea-cache directory. Cache entries are scratch FS; running out of disk halts acquires. Default cleanup: warn at 80%, refuse new cache entries at 90%. The configured envelope is the daemon setting `capacity.poolMaxDiskGb` — a `pool`-spelled key for a workarea-cache concern; see § "The `pool` wire spellings on this surface".
+- **Disk full** in the workarea-cache directory. Cache entries are scratch FS; running out of disk halts acquires. Default cleanup: warn at 80%, refuse new cache entries at 90%. The configured envelope is the daemon setting `capacity.poolMaxDiskGb` — a `pool`-spelled key for a workarea-cache concern; see § "The `pool` wire spellings on this surface". Under the accepted, implementation-pending multi-repository layout a live session's charge against that envelope is its whole `workareaRoot`, every repository leaf included; see § "Session-owned multi-repository workarea".
 
 `donmai daemon doctor` runs a scripted health check (config valid, credentials work, orchestrator reachable, disk available, workarea cache sane) and prints the failing condition.
 
@@ -312,6 +317,95 @@ Every remediation string above is an admission that the daemon could not heal it
 
 - **A hint naming a command the binary does not register is a gate failure, not a typo.** Assert every user-facing remediation string against the registered command set.
 - **A condition that stops the host from serving does not live only in this log file.** It rides the host-status signal outward so it is visible wherever the user actually is — D7, on the signal completed by `ADR-2026-08-03-daemon-host-status-signal-completion.md`.
+
+## Session-owned multi-repository workarea (Accepted architecture; implementation and migration pending)
+
+`ADR-2026-08-22-session-owned-multi-repository-workarea.md` accepts the layout
+and ownership contract below as architecture. Implementation and migration
+remain pending: the daemon still provisions one repository per session, and
+every other section of this doc describes that shipped behaviour truthfully.
+
+**The layout.** A session owns one directory, and repositories live inside it:
+
+```
+<worktree-root>/                 host-owned, under the injectable state home; unchanged
+  <root-owner-session-id>/       = workareaRoot   (session-owned)
+    .workarea/                   reserved metadata leaf: the declaration record
+    <repo-leaf>/                 one repository   (= repositoryWorktreePath when selected)
+    <repo-leaf>/
+```
+
+`workareaRoot` is the session-owned directory. An exclusive session's id names
+the root; a shared participant follows its durable `parentWorkareaId` to the
+parent-owned root rather than substituting the child id. `repositoryWorktreePath` is the
+selected repository's leaf and the harness working directory. Where a host serves
+more than one scope, the scope qualifies `<worktree-root>`; it never becomes a
+fourth path segment.
+
+**What binds the root, and what does not.** Every lifecycle authority this daemon
+holds binds `workareaRoot`; none binds a repository leaf:
+
+| Authority | Unit | Consequence |
+|---|---|---|
+| Cleanup / release | `workareaRoot` | One disposition covers every leaf. Destroy/return ends the session generation; pause/archive preserve it only for the same session identity. |
+| Terminal lease | `workareaRoot` | The exact-identity invariant of `ADR-2026-07-18` reads on the root. A per-leaf lease is not defined and must not be introduced. |
+| Archive / restore | `workareaRoot` | The capture includes every leaf and the declaration record. A single-leaf capture is not a workarea archive. |
+| Disk accounting | cache seed + `workareaRoot` generation | Reusable seed storage and the session-attributable root allocation have different owners. One physical allocation is never charged twice. |
+| Restart adoption | `workareaRoot` | The owner root is computed from `(org_id, session_id)`; shared participants follow durable `parentWorkareaId`. Neither path searches or reconciles leaf-by-leaf. |
+
+**Ownership decisions read the declaration record, never a directory listing.**
+The reserved `.workarea/` leaf records each repository's leaf name, role
+(`primary` / `secondary` / `context`), declared authority (`mutable` /
+`read-only`, defaulting closed), and resolved ref. A directory present but
+undeclared is an inventory finding, not a repository.
+
+**The record holds no repository URL.** `ADR-2026-07-07` permits a sibling URL to
+carry embedded auth, which makes such a URL a bearer secret. Neither the
+declaration record nor the shim discovery record persists one; URLs are
+re-supplied at provision and freshen time from where credentials already live.
+That is what keeps `ADR-2026-08-17` D6's secret-free registry true once adoption
+needs to know about repositories at all.
+
+**Warm cache seeds never become live session identity.** A ready cache object is
+a base clone, prepared dependency tree, snapshot, or copy-on-write seed outside
+every `<session-id>` root. Acquire materialises it into a fresh root with a new
+`Workarea.id`, declaration, lease generation, accounting record, and observation
+cursor. `return-to-pool` may validate/update or publish a separate seed and then
+removes the session generation; it never marks the old session root ready for a
+new owner. A seed is not a harness CWD, is not adopted as a session, and carries
+no session cursor. This preserves warm acquisition without making a prior
+session's path or lease identity reusable.
+
+**Repository authority is an executor admission gate, not a convention.** The
+exact bound cell must attest both the versioned `session-root-v1` workarea
+protocol and, whenever any leaf is declared `read-only`,
+`repositoryAuthorityEnforcement: 'isolated-read-only-v1'`. The latter means the
+harness cannot write, rename, remove, change permissions on, or remount that
+leaf while a mutable sibling remains writable. Same-uid `chmod`, prompt policy,
+and post-hoc dirty checks do not qualify. A daemon that cannot prove the
+boundary excludes the cell with a typed viability reason before claim; it never
+materialises the requested read-only repository as writable.
+
+**Operator-visible consequences.**
+
+- `GET /api/daemon/workareas` and `…/<id>` address a **root**. Root and per-leaf
+  detail are additive optional fields; no existing field is renamed and none
+  changes meaning.
+- `SessionHandle.worktreePath` keeps both its meaning and its value — the harness
+  working directory, now `repositoryWorktreePath`. An optional `workareaRoot`
+  sits beside it. Existing readers, including anything deriving `projectName`
+  from it, are unaffected.
+- A retained **legacy flat workarea** (a repository checkout directly at
+  `<worktree-root>/<leaf>`) is adopted in place as a one-repository workarea
+  whose root and repository path coincide. It is never moved and never extended;
+  a multi-repository item provisions a new-layout root beside it. Migration is by
+  natural turnover.
+- Context clones already sitting in a shared parent from the pre-migration
+  placement are **not** adopted, charged, or deleted — deleting one could delete
+  another live session's context. They surface as an **unowned-legacy** condition
+  in host disk accounting and ride the host-status signal outward per
+  `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D7, rather than living
+  only in `daemon.log`, and are reclaimed by explicit operator action.
 
 ## Terminal workarea lease recovery and reaping (Accepted architecture; implementation and release pending)
 

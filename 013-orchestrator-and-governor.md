@@ -3,7 +3,7 @@
 **Status:** Reference (initial draft)
 **Last updated:** 2026-07-22
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/013-orchestrator-and-governor-platform-extensions.md`)
-**Related:** `001-layered-execution-model.md`, `004-sandbox-capability-matrix.md`, `015-plugin-spec.md`, `016-workflow-engine.md`, `011-local-daemon-fleet.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`.
+**Related:** `001-layered-execution-model.md`, `004-sandbox-capability-matrix.md`, `015-plugin-spec.md`, `016-workflow-engine.md`, `011-local-daemon-fleet.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, `ADR-2026-08-22-session-owned-multi-repository-workarea.md`.
 
 ## Why this exists
 
@@ -329,6 +329,60 @@ Per `001` Principle 1, the system **must not create Linear sub-issues for cost-e
 
 When a work item's `env` carries `DONMAI_SIBLING_REPOS` (comma-separated `<git-url>[#ref]` entries), the runner shallow-clones each entry as a **read-only sibling of the session worktree** after workspace provisioning — so agents find their governing architecture corpus at `../<name>` exactly as repo `AGENTS.md` contracts promise. Existing siblings are freshened best-effort (`pull --ff-only`); failures are logged and never fatal to the session; agents without a pre-cloned sibling fall back to cloning it themselves. Full contract: `ADR-2026-07-07-sibling-context-repos.md`.
 
+### The session-owned multi-repository workarea (ADR-2026-08-22, Accepted architecture)
+
+`ADR-2026-08-22-session-owned-multi-repository-workarea.md` accepts the target
+contract below as architecture. Implementation and migration remain pending; the
+paragraph above describes current runner behaviour and stays correct until the
+new provisioner ships.
+
+Two names replace one overloaded path. **`workareaRoot`** is the session-owned
+directory at `<worktree-root>/<root-owner-session-id>/`; a shared participant
+joins it through durable `parentWorkareaId` rather than deriving a child-named
+path. **`repositoryWorktreePath`** is the
+selected repository's leaf inside it, and is the directory the harness is spawned
+in. The orchestrator selects that repository through the ADR's closed
+`RepositoryFilter` grammar; an absent filter means the `primary` repository, and
+`primary` is a **default selection only** — it confers no authority, no lifetime,
+and no cleanup precedence over any other repository.
+
+Selection never degrades silently: an undeclared name, a zero-match filter, or a
+multi-match filter where exactly one repository is required is a typed pre-spawn
+error carrying a closed reason code and a stable rule id (the exclusion shape of
+`ADR-2026-08-13` D4.1) — never a fallback to `primary`.
+
+The orchestrator/work-item assembler is the **declaration producer** and the
+exact bound executor/runner is the **consumer**. Repository intent participates
+in viability before the executor payload is assembled. The producer emits
+`003`'s versioned `repositoryDeclaration` or a non-default `RepositoryFilter`
+only after bind/claim re-checks that the paired workarea provider attests
+`session-root-v1`. An unsupported executor receives only the existing singular
+primary source; any droppable read-only context is omitted from both the
+declaration and `DONMAI_SIBLING_REPOS`, so the old runner is not asked to clone
+an authority-constrained repository writable. If the request selects anything non-default or includes a
+non-primary `mutable` repository, that executor is excluded and an empty
+candidate set is a typed pre-admission refusal — the old runner is never asked
+to ignore a field and silently run the primary instead.
+
+Capability fields are additive on executor registration: absent
+`multiRepositoryWorkareaProtocols` means `[]`, and absent
+`repositoryAuthorityEnforcement` means `none`. Those absences preserve legacy
+registration and the singular default-primary path; neither is positive
+attestation at placement or the bind/claim re-check.
+
+Read-only authority is a second viability input on the same exact cell. Any
+declared `read-only` leaf requires executor attestation of
+`repositoryAuthorityEnforcement: 'isolated-read-only-v1'`; without it the cell
+is excluded rather than given a writable clone. This filesystem boundary is
+executor-owned and non-widenable by the harness. Repository filters and the
+completion backstop remain defense in depth, not substitutes for enforcement.
+
+`DONMAI_SIBLING_REPOS` entries become `context`-role repositories materialised as
+per-session leaves under `workareaRoot` rather than clones in a shared parent.
+Because a context leaf and the selected repository's leaf are siblings under the
+same root, `../<name>` resolves exactly as before and no repo's `AGENTS.md`
+changes.
+
 ## Completion contracts and backstop
 
 Per the existing `packages/core/src/orchestrator/completion-contracts.ts`, each work type has required outputs:
@@ -351,6 +405,19 @@ The orchestrator's session-end backstop (`packages/core/src/orchestrator/session
 - Detects existing PRs not captured in agent output
 
 Fields requiring agent judgment (`work_result`, `comment_posted`) cannot be backstopped — the orchestrator posts a diagnostic comment and blocks status promotion. This contract survives the architecture reframe; it's already provider-agnostic.
+
+**The repository-shaped rows are evaluated per mutable repository (ADR-2026-08-22, Accepted architecture).** The rows above that name commits, a branch, or a pull request read in the singular because a session has exactly one repository today. Under the accepted multi-repository workarea they are evaluated **once per repository whose declared authority is `mutable`**, and the backstop's three recoveries act per mutable repository. Three rules bound that, all fail-closed:
+
+- **A `read-only` repository is outside the completion contract, not outside
+  enforcement.** It is never required to carry commits, never backstopped, and
+  never a reason for a session to fail. The executor must still make its
+  filesystem leaf non-writable before spawn. `context`-role repositories are
+  `read-only` by default, so the reference corpora a session reads cannot fail
+  completion and cannot be mutated by the harness.
+- **Authority is declared, never inferred.** Absence of a declaration is `read-only`, and selecting a repository as `repositoryWorktreePath` grants no write to it. A session needing authority it was not granted fails closed with the typed error, paired with a signal per `ADR-2026-08-07` D5 — never silently.
+- **The turn-result manifest extension is additive.** The agent-owned manifest gains an optional per-repository member; when it is absent the verdict applies to the selected repository, so `schemaVersion` stays `1` and an old reader keeps resolving exactly what it resolved before.
+
+Until that ADR's provisioner ships, every session has one `mutable` repository and the per-repository evaluation collapses to the singular rows above.
 
 **Fail-closed is paired with a signal, never with silence.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D5, a pre-spawn check that refuses to start a session — an unresolvable credential, a scope the worker is not authorized for, a project it cannot route — is right to fail closed, because a wrong answer there crosses a tenant boundary. What it may not do is abort the claim quietly or loop on it. The claim is NACKed back to the queue so another host can take it, and the host reports that it cannot serve, so the condition is visible off the machine (D7). A fail-closed rail with no signal converts a routing problem into an invisible one.
 
