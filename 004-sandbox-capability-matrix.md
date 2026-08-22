@@ -2,7 +2,7 @@
 
 **Status:** Reference
 **Last updated:** 2026-08-07
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `014-tui-operator-surfaces.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`.
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `014-tui-operator-surfaces.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`, `ADR-2026-08-22-session-owned-multi-repository-workarea.md`.
 
 > **Vocabulary note (2026-08-07).** This doc predates
 > `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`, which
@@ -192,6 +192,12 @@ interface SandboxProviderCapabilities {
   supportsCustomNetworkPolicy: boolean
   egressDefault: 'allow-all' | 'deny-all' | 'allowlist'
 
+  // Repository authority enforcement. 'isolated-read-only-v1' means the
+  // executor can make declared read-only leaves non-writable to the harness
+  // process through an isolation boundary the process cannot undo. chmod under
+  // the same uid, prompt policy, and post-hoc git checks do not qualify.
+  repositoryAuthorityEnforcement: 'none' | 'isolated-read-only-v1'
+
   // A2A / federated work
   // A2A is "execute work in someone else's workarea+sandbox"
   // — modeled here as a transport flavor, not a separate plugin family
@@ -221,9 +227,22 @@ The platform ships against multiple cloud providers (Blaxel, Cloudflare, Daytona
 | `maxMemoryMb` | host | 16384 / 65536 | tier | tier | tier | host | cluster |
 | `supportsGpu` | ❌ (typically) | ❌ | ❌ | ✅ | ❌ | host-dep | cluster |
 | `egressDefault` | allow-all | allow-all (configurable) | allow-all | allow-all | allow-all | allow-all | cluster-policy |
+| `repositoryAuthorityEnforcement` | none | none | none | none | none | none | none |
 | `isA2ARemote` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 The seventh row — A2A as transport flavor — is its own provider implementation in code (`A2ASandboxProvider`), declaring `isA2ARemote: true` and `transportModel: 'dial-in'` (the orchestrator dials into the remote A2A peer). Treating remote A2A agents as a substrate provider unifies "where does work execute" reasoning regardless of whether the work lives on our infra or someone else's. *(Substrate provider, not "sandbox provider": an A2A peer is a `remote_peer` placement, never the ephemeral kind — `ADR-2026-08-07` D1/D10.1. The code identifier `A2ASandboxProvider` and the `Sandbox` Provider Family name are unchanged, per D10.5.)*
+
+> **Amended 2026-08-22 by
+> `ADR-2026-08-22-session-owned-multi-repository-workarea.md`.** The current
+> table truthfully declares `none` for every provider because no exact released
+> executor has yet passed that ADR's read-only negative proof. A provider flips
+> to `isolated-read-only-v1` only when the **executor**, not merely the pool
+> configuration, attests an isolation boundary that denies harness `write`,
+> `rename`, `remove`, permission-change, and remount attempts on a read-only leaf
+> while leaving a mutable sibling writable. An unsandboxed process running as
+> the owning uid cannot attest it: `chmod` is reversible by that same process.
+> Prompt instructions and commit/backstop filtering are likewise not a
+> filesystem permission boundary.
 
 The capability flags above are the *declared* shape — what a provider/host advertises at registration time. The corresponding *runtime view* is `LiveCapacityInstance.capabilities` in the live execution capacity contract (`014-tui-operator-surfaces.md` § "Live capacity contract" and `ADR-2026-05-06-tui-noun-consolidation.md` Addendum 2026-05-06). Each live row carries the capability tags currently in force on that specific instance — the operator-facing reflection of what this doc specifies as the provider's capability schema.
 
@@ -322,6 +341,15 @@ re-ranked by a hidden score.
    - `resources.gpu` requires `supportsGpu: true`.
    - `maxDurationSeconds` ≤ `maxSessionDurationSeconds`.
    - Workarea pairing: the provider supports the requested workarea provider's snapshot/pause-resume needs (e.g., a session asking for `release(pause)` requires `supportsPauseResume: true`).
+   - Multi-repository workarea: a declaration using protocol
+     `session-root-v1` requires the paired workarea provider's exact
+     `multiRepositoryWorkareaProtocols` attestation. The producer emits the
+     declaration only after this candidate is bound; an old executor never sees
+     a field it is expected to ignore.
+   - Repository authority: any declared `read-only` leaf requires
+     `repositoryAuthorityEnforcement: 'isolated-read-only-v1'` on the exact
+     executor. Absence is a typed viability exclusion with a stable rule id,
+     never permission to materialise that leaf writable.
    - Session mode: an interactive or otherwise persistent-lane session is eligible only for pools whose provider can host persistently-enrolled hosts (see § "Persistent and on-demand are lanes").
 
 2. **Filter by policy.** Layer 6 policy hooks may reject a candidate (e.g., "this

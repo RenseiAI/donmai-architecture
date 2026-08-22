@@ -329,13 +329,15 @@ every other section of this doc describes that shipped behaviour truthfully.
 
 ```
 <worktree-root>/                 host-owned, under the injectable state home; unchanged
-  <session-id>/                  = workareaRoot   (session-owned)
+  <root-owner-session-id>/       = workareaRoot   (session-owned)
     .workarea/                   reserved metadata leaf: the declaration record
     <repo-leaf>/                 one repository   (= repositoryWorktreePath when selected)
     <repo-leaf>/
 ```
 
-`workareaRoot` is the session-owned directory. `repositoryWorktreePath` is the
+`workareaRoot` is the session-owned directory. An exclusive session's id names
+the root; a shared participant follows its durable `parentWorkareaId` to the
+parent-owned root rather than substituting the child id. `repositoryWorktreePath` is the
 selected repository's leaf and the harness working directory. Where a host serves
 more than one scope, the scope qualifies `<worktree-root>`; it never becomes a
 fourth path segment.
@@ -345,11 +347,11 @@ holds binds `workareaRoot`; none binds a repository leaf:
 
 | Authority | Unit | Consequence |
 |---|---|---|
-| Cleanup / release | `workareaRoot` | One disposition removes every leaf. No leaf outlives its session. |
+| Cleanup / release | `workareaRoot` | One disposition covers every leaf. Destroy/return ends the session generation; pause/archive preserve it only for the same session identity. |
 | Terminal lease | `workareaRoot` | The exact-identity invariant of `ADR-2026-07-18` reads on the root. A per-leaf lease is not defined and must not be introduced. |
 | Archive / restore | `workareaRoot` | The capture includes every leaf and the declaration record. A single-leaf capture is not a workarea archive. |
-| Disk accounting | `workareaRoot` | A session is charged its whole root. A leaf materialised from a cache entry is charged once, to the holding session. |
-| Restart adoption | `workareaRoot` | The root is computed from `(org_id, session_id)`, so adoption needs no search and no leaf-level reconciliation. |
+| Disk accounting | cache seed + `workareaRoot` generation | Reusable seed storage and the session-attributable root allocation have different owners. One physical allocation is never charged twice. |
+| Restart adoption | `workareaRoot` | The owner root is computed from `(org_id, session_id)`; shared participants follow durable `parentWorkareaId`. Neither path searches or reconciles leaf-by-leaf. |
 
 **Ownership decisions read the declaration record, never a directory listing.**
 The reserved `.workarea/` leaf records each repository's leaf name, role
@@ -363,6 +365,26 @@ declaration record nor the shim discovery record persists one; URLs are
 re-supplied at provision and freshen time from where credentials already live.
 That is what keeps `ADR-2026-08-17` D6's secret-free registry true once adoption
 needs to know about repositories at all.
+
+**Warm cache seeds never become live session identity.** A ready cache object is
+a base clone, prepared dependency tree, snapshot, or copy-on-write seed outside
+every `<session-id>` root. Acquire materialises it into a fresh root with a new
+`Workarea.id`, declaration, lease generation, accounting record, and observation
+cursor. `return-to-pool` may validate/update or publish a separate seed and then
+removes the session generation; it never marks the old session root ready for a
+new owner. A seed is not a harness CWD, is not adopted as a session, and carries
+no session cursor. This preserves warm acquisition without making a prior
+session's path or lease identity reusable.
+
+**Repository authority is an executor admission gate, not a convention.** The
+exact bound cell must attest both the versioned `session-root-v1` workarea
+protocol and, whenever any leaf is declared `read-only`,
+`repositoryAuthorityEnforcement: 'isolated-read-only-v1'`. The latter means the
+harness cannot write, rename, remove, change permissions on, or remount that
+leaf while a mutable sibling remains writable. Same-uid `chmod`, prompt policy,
+and post-hoc dirty checks do not qualify. A daemon that cannot prove the
+boundary excludes the cell with a typed viability reason before claim; it never
+materialises the requested read-only repository as writable.
 
 **Operator-visible consequences.**
 

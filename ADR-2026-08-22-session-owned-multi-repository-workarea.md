@@ -15,7 +15,9 @@ migration remain pending behind the proof obligations below.
 > **Accepted 2026-08-22.** Acceptance fixes the ownership boundary, the two path
 > names, the on-disk layout, the role/authority/filter semantics, the
 > root-bound lifecycle, the mixed-version compatibility law, and the migration
-> posture. It does **not** claim a shipped multi-repository provisioner, a
+> posture. The accepting correction also fixes the executor-negotiation gate,
+> the cache-seed/session-generation split, and the executor-owned read-only
+> enforcement boundary. It does **not** claim a shipped multi-repository provisioner, a
 > shipped declaration record, or an activated migration. The rest of the corpus
 > continues to describe the current single-repository provisioning truthfully
 > wherever it is described; this ADR is the target contract, not a report of
@@ -103,7 +105,10 @@ typed, non-degrading choice inside it.
 Two names replace the one overloaded path, and the corpus uses them exactly:
 
 - **`workareaRoot`** — the absolute path of the **session-owned directory**.
-  Exactly one per session. It is the unit of ownership: what a lease holds, what
+  Exactly one associated root per session. An exclusive session owns its root;
+  a shared participant associates to the parent's root through the durable
+  `parentWorkareaId` mapping (D7.6), so one root may have multiple participants
+  without acquiring multiple owners. It is the unit of ownership: what a lease holds, what
   a release disposes of, what an archive captures, what disk accounting charges,
   and what a replacement daemon adopts. It is not a repository and is never a
   working directory.
@@ -139,10 +144,12 @@ about which machine holds the bytes.
   it. Where a host serves more than one scope, the scope qualifies
   `<worktree-root>`; it never becomes a fourth segment, so the three-segment
   shape above is invariant.
-- `<session-id>` is the session's lifecycle identity under an injective,
-  filesystem-safe encoding. Because adoption keys on the same identity
-  (`ADR-2026-08-17` D2), a replacement daemon computes the root rather than
-  searching for it.
+- `<session-id>` is the **root-owner session's** lifecycle identity under an
+  injective, filesystem-safe encoding. For an exclusive acquire that is the
+  acquiring session; for shared mode it remains the parent's identity. A shared
+  participant resolves the same root through its durable `parentWorkareaId`
+  descriptor, never by substituting the child id and never by searching the
+  filesystem.
 - `<repo-leaf>` is one repository. Leaf names live in a namespace that is
   **per session**, which is the whole substance of the change: two sessions
   materialising the same repository get two leaves that cannot alias.
@@ -294,17 +301,39 @@ Each declared repository carries an explicit `authority` of `read-only` or
    it was not granted fails closed with the D4 typed error, paired with a
    signal — never silently, per
    `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D5.
+6. **The executor enforces authority at the filesystem boundary.** The selected
+   execution cell must attest `repositoryAuthorityEnforcement:
+   'isolated-read-only-v1'` before any declared `read-only` leaf is
+   materialised. That attestation means the harness process cannot write,
+   rename, remove, change permissions on, or remount the leaf while a declared
+   `mutable` sibling remains writable. The typed mutation filters in D4 are
+   defense in depth; they are not the permission boundary for arbitrary shell
+   and file-edit tools.
+7. **Same-identity permissions are not enforcement.** A writable checkout made
+   superficially read-only with `chmod` while the harness runs as the owning uid
+   does not satisfy rule 6: the process can undo it. Prompt instructions,
+   post-hoc dirty checks, and completion-contract exclusion likewise do not
+   qualify. The boundary must be an executor-owned mount, sandbox policy, or
+   equivalent isolation primitive the harness cannot widen.
+8. **No enforcement means no viable candidate.** A cell unable to attest rule 6
+   is excluded with a closed reason code and stable rule id before admission. It
+   never receives a read-only declaration and never "degrades" by cloning the
+   repository writable. This is a stage-2 viability exclusion under
+   `ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md`.
 
 ### D7 — Cleanup, leases, archives, disk accounting, and restart adoption all bind the session root
 
 This is the clause the rest of the ADR exists to support. Every lifecycle
 authority binds `workareaRoot`; none binds a leaf.
 
-1. **Cleanup is one operation on the root.** `release(workarea, mode)` disposes
-   of the root and every leaf inside it in a single disposition. No leaf is
-   removed independently while the session lives, and no leaf can outlive the
-   session that owns it. This is what makes the orphaned-context-clone class
-   unreachable rather than merely discouraged.
+1. **Cleanup is one operation on the root.** `release(workarea, mode)` applies
+   one disposition to the root and every leaf inside it. `destroy` and
+   `return-to-pool` end and remove the session generation; `pause` and `archive`
+   may preserve it only for resume/restore under the **same** session identity.
+   No leaf is removed independently while the session lives, no live leaf
+   transfers to another session, and no leaf can outlive its owning generation
+   as reusable workspace state. This is what makes the orphaned-context-clone
+   class unreachable rather than merely discouraged.
 2. **The terminal lease holds the root.**
    `ADR-2026-07-18-bounded-terminal-workarea-leases.md` invariant 2 ("exact
    identity is preserved") reads on `workareaRoot`: the lease binds one root
@@ -318,29 +347,45 @@ authority binds `workareaRoot`; none binds a leaf.
    the root. A capture of one leaf is not a workarea archive and must not be
    presented as one, because restoring it would produce a workarea whose
    declaration record and filesystem disagree.
-4. **Disk accounting charges the root to exactly one session.** A session's
-   charge is the size of `workareaRoot` including every leaf. A leaf
-   materialised from a workarea-cache entry is charged once, to the session root
-   that holds it, for as long as that session holds it; cache accounting for
-   unheld entries is unchanged. Context clones move from charged-to-nobody to
-   charged-to-exactly-one-session, which is the point.
-5. **Restart adoption adopts a root, not a search.** Because the root is named
-   by the session's lifecycle identity (D2), a daemon adopting a shim under
-   `ADR-2026-08-17` D3 computes the root path directly. Adoption performs no
-   leaf-level reconciliation and no filesystem walk to discover what the session
-   had; the declaration record answers that. Identity remains `(org_id,
-   session_id)` — `workareaRoot` is a correlation value and can never create,
+4. **Disk accounting separates seeds from generations.** A session's charge is
+   the physical storage attributable to `workareaRoot`, every leaf included.
+   A reusable cache seed has its own cache identity and charge and is never
+   charged as a session. For a full copy, seed bytes and copied bytes are two
+   physical allocations and are charged to their respective owners; for
+   copy-on-write materialisation, shared base blocks are charged to the seed and
+   private blocks to the session generation. The same physical allocation is
+   never charged twice. Context clones move from charged-to-nobody to a named
+   seed or exactly one session generation, which is the point.
+5. **Restart adoption adopts a root, not a search.** For an owning session the
+   root is computed from its lifecycle identity (D2). For a shared participant
+   the adopting daemon follows the already-durable `parentWorkareaId` descriptor
+   to that same root. Neither path performs a filesystem walk or leaf-level
+   reconciliation; the declaration record answers what the root held. Each
+   participant's lifecycle identity remains its own `(org_id, session_id)` —
+   `parentWorkareaId` and `workareaRoot` are correlations and can never create,
    release, terminalise, or re-key a session.
 6. **Shared mode joins the root.** `003`'s `mode: 'shared'` with
    `parentWorkareaId` joins the parent's `workareaRoot` and inherits its whole
    leaf set. A sub-agent may select a different `repositoryWorktreePath` within
-   that shared root. Reference counting on release is at the root, unchanged in
-   substance from `003` § "Sharing model".
+   that shared root. The durable participant descriptor records
+   `parentWorkareaId`; the root path continues to use the owner/parent session
+   id, never the child id. Reference counting on release is at the root,
+   unchanged in substance from `003` § "Sharing model".
 7. **Ownership decisions are ordered.** At boot the daemon reads the
    acquisition-quarantine journal, then leases, then the declaration record —
    the order `011` already prescribes — and only then classifies the root. A
    quarantined, leased, or unreconciled root is never partially reclaimed leaf
    by leaf.
+8. **A cache seed is not a workarea.** The local warm cache may retain a base
+   clone, prepared dependency tree, snapshot, or copy-on-write seed outside all
+   session roots. `acquire` materialises that seed into a fresh
+   `<session-id>` root with a new `Workarea.id`, declaration record, lease
+   generation, accounting record, and observation cursor. `return-to-pool` may
+   validate/update or publish a separate seed, then removes the session root; it
+   never marks that root `ready` for another session. A seed is never a harness
+   CWD, never adopted by a daemon as a session, and never carries a session
+   cursor. The `return-to-pool` wire literal keeps its intent — retain reusable
+   prepared state — without transferring filesystem identity across sessions.
 
 ### D8 — Mixed-version compatibility is additive, and droppable iff read-only
 
@@ -353,23 +398,32 @@ authority binds `workareaRoot`; none binds a leaf.
    readers read a new optional `workareaRoot` beside it. Repurposing
    `worktreePath` to mean the root would silently change what every shipped
    reader displays, and derived values like `projectName` are computed from it.
-3. **An old peer degrades to a smaller correct workarea, never a mis-shaped
-   one.** An old runner receiving a multi-repository declaration ignores the
-   unknown field and provisions the primary alone. A new runner receiving an old
-   single-repository work item synthesises a one-entry declaration
-   (`primary`, `mutable`) so there is exactly one code path and no
-   "legacy shape" branch.
-4. **Droppable iff read-only.** A `read-only` repository that a peer cannot
-   represent may be dropped, matching `ADR-2026-07-07`'s never-fatal posture: the
-   session runs with less reference material and the agent falls back to cloning
-   it. A **`mutable`** repository that a peer cannot represent is a **typed
-   refusal, not a truncation** — silently dropping a repository the caller was
-   told it could write to loses work, and loses it in the one place no log
-   records, because nothing failed.
+3. **The producer negotiates before it emits.** The orchestrator/work-item
+   assembler is the declaration producer; the exact bound executor/runner is the
+   consumer. Executor registration attests a versioned workarea protocol, and
+   the paired workarea provider advertises
+   `multiRepositoryWorkareaProtocols`. The producer emits a
+   `repositoryDeclaration` or non-default `RepositoryFilter` only after the
+   selected execution cell attests the exact `session-root-v1` protocol. The
+   attestation is re-checked at bind/claim; it is never inferred from binary
+   version, pool membership, or a remembered host capability.
+4. **An old peer receives only representable legacy intent.** A request whose
+   effective intent is the default mutable primary may be encoded using the
+   existing singular source fields. Droppable `read-only` context is omitted
+   entirely for that executor, including removal of the corresponding
+   `DONMAI_SIBLING_REPOS` entry; the producer never asks an old runner to clone
+   a new authority-constrained repository writable. A non-default selection,
+   any non-primary `mutable` repository, or any non-droppable declaration whose
+   read-only authority requires rule D6.6 is not sent to an old/unsupported
+   executor: that candidate is excluded and, when no candidate survives,
+   admission fails with a typed reason. An old runner is never asked to inspect
+   a field it does not understand, so silent primary fallback is structurally
+   unavailable.
 5. **Concrete additive surfaces**, each optional, each with the old field
    retained:
-   - the work item gains an optional repository declaration beside its existing
-     single-repository fields;
+   - `003`'s `WorkareaSpec` gains an optional versioned
+     `repositoryDeclaration` beside its existing singular `source`; the primary
+     entry must match `source`, and mismatch is typed rather than precedence;
    - `SessionHandle` gains optional `workareaRoot` beside `worktreePath` (rule 2);
    - `GET /api/daemon/sessions` / `…/<id>` and `GET /api/daemon/workareas` /
      `…/<id>` gain optional root and leaf detail; `<id>` addresses a root;
@@ -382,7 +436,11 @@ authority binds `workareaRoot`; none binds a leaf.
    comma-separated `<git-url>[#ref]` grammar, same never-fatal posture. Only the
    destination directory and its owner change. An old runner honouring it puts
    the clone in the shared parent; a new runner puts it in a `context` leaf; the
-   agent sees `../<name>` either way (D2.1).
+   agent sees `../<name>` either way (D2.1). A legacy work item authored solely
+   with this env retains current behavior before activation; that behavior is
+   not an `isolated-read-only-v1` attestation and cannot satisfy a new
+   authority-constrained declaration. When rule 4 drops such context for an old
+   executor, the producer omits the env entry as well.
 
 ### D9 — Retained legacy flat workareas are adopted degenerately, never rewritten
 
@@ -443,8 +501,9 @@ Named so they are not read in by implication:
 
 Acceptance ratifies the contract. Activation requires all of:
 
-1. A provisioner that materialises the D2 layout, writes the D2.2 declaration
-   record, and refuses D5 duplicates with both offending entries named.
+1. A provisioner that consumes `003`'s versioned declaration carrier,
+   materialises the D2 layout, writes the D2.2 declaration record, and refuses
+   D5 duplicates with both offending entries named.
 2. A fixture proving D2.1: from `repositoryWorktreePath`, a declared `context`
    leaf resolves at `../<name>`, for a declaration whose entries arrived via
    `DONMAI_SIBLING_REPOS` unchanged.
@@ -456,16 +515,30 @@ Acceptance ratifies the contract. Activation requires all of:
    closed reason code and stable rule id — not a fallback to `primary`.
 5. A fixture proving D6.3: a session whose only failure is an untouched
    `read-only` repository passes its completion contract.
-6. A release/adoption test proving D7.1 and D7.5: one release disposes of every
-   leaf, and a restarted daemon adopts the root from identity alone with no
-   filesystem walk.
-7. A mixed-version matrix proving D8.3 and D8.4 in both directions, including
-   the typed refusal for an unrepresentable `mutable` repository.
+6. A release/adoption test proving D7.1, D7.5, and D7.6: one release disposes of
+   every leaf; a restarted daemon computes an owner's root from identity; and a
+   shared participant reaches the same root through its durable
+   `parentWorkareaId` descriptor, all with no filesystem walk.
+7. A mixed-version matrix proving D8.3 and D8.4 in both directions: an old
+   executor sees no declaration field; default-primary intent still runs; a
+   non-default or non-primary-mutable request is refused before admission; and
+   removing the executor's `session-root-v1` attestation makes that refusal RED
+   for the exact reason.
 8. A migration test proving D9.1 and D9.3: a legacy flat workarea is adopted
    degenerately, and a multi-repository item provisions a new root beside it
    rather than extending it.
+9. A cache-generation test proving D7.8: two sessions materialised from one seed
+   have different root paths, `Workarea.id` values, declarations, leases,
+   accounting records, and observation cursors; `return-to-pool` removes the
+   first root and never makes it adoptable by the second.
+10. A read-only authority negative proof: from the real harness, write, rename,
+    remove, permission-change, and remount attempts fail on a read-only leaf
+    while a mutable sibling accepts a write. Replacing the executor enforcement
+    with same-uid `chmod` or `none` must make viability or the fixture fail. The
+    test must run through the production executor binding, not a helper that
+    re-implements the policy.
 
-Until 1–8 pass against the exact released artefacts, no consumer capability may
+Until 1–10 pass against the exact released artefacts, no consumer capability may
 be advertised as depending on a multi-repository workarea.
 
 ## Consequences
@@ -476,6 +549,10 @@ be advertised as depending on a multi-repository workarea.
   one owner, one release, one charge.
 - Cross-repository work becomes expressible for the first time, with authority
   declared per repository and defaulting closed.
+- Old executors cannot silently erase non-default or mutable intent: the
+  versioned protocol gate runs before admission and before declaration emission.
+- Warm-cache performance remains available without reusing a prior session's
+  root, lease, or observation cursor.
 - Disk accounting stops lying by omission — every byte a session put on disk is
   charged to that session.
 - Restart adoption gets simpler, not harder: one root computed from identity
@@ -493,6 +570,9 @@ be advertised as depending on a multi-repository workarea.
   short limits, and deeply nested toolchain directories already sit near them.
 - Per-session context clones trade shared-copy disk savings for correctness. A
   host running N sessions against the same corpus now stores N copies.
+- Cells without a genuine filesystem isolation primitive cannot host declared
+  read-only leaves, including unsandboxed same-uid local execution. That reduces
+  eligible capacity until the executor ships and proves the boundary.
 
 ### Risks
 
@@ -509,6 +589,9 @@ be advertised as depending on a multi-repository workarea.
 - **Migration never finishes** because D9's turnover has no forcing function.
   D9.5's exit condition is the countermeasure; without it the degenerate case
   becomes permanent by inattention.
+- **A producer trusts a stale capability snapshot.** D8.3 requires an exact
+  bind/claim re-check. Without it, a host can lose the protocol or enforcement
+  capability after placement and still receive a declaration it cannot honor.
 
 ## Alternatives considered
 
@@ -538,8 +621,13 @@ be advertised as depending on a multi-repository workarea.
 Updated in the accepting commit:
 
 - `003-workarea-provider.md` — § "The interface": `Workarea.path` is fixed as
-  `repositoryWorktreePath` and an optional `workareaRoot` is added; § "Sharing
-  model" gains the root-join rule (D7.6).
+  `repositoryWorktreePath`, an optional `workareaRoot` and the versioned
+  declaration carrier are added, and the local cache becomes seed material
+  rather than reusable session identity; § "Sharing model" gains the root-join
+  rule (D7.6).
+- `004-sandbox-capability-matrix.md` — executor-owned read-only enforcement is a
+  typed viability capability; current providers truthfully attest `none` until
+  the negative proof passes.
 - `011-local-daemon-fleet.md` — new § "Session-owned multi-repository workarea",
   plus root-bound amendments to § "Recovery from crash" and the disk-full
   remediation.
@@ -562,12 +650,21 @@ the sibling `rensei-architecture` extension docs, never in OSS-canonical text.
 
 ## Implementation notes
 
-The provisioner is the single load-bearing change: it grows from "clone one repo
-to a path" into "materialise a declared set under a root and write the
+The producer/executor handshake and provisioner are the load-bearing changes.
+The producer retains repository intent before placement, filters for a cell
+that attests `session-root-v1` plus any required read-only enforcement, and only
+then emits `003`'s declaration carrier. The provisioner grows from "clone one
+repo to a path" into "materialise a declared set under a root and write the
 declaration record". `ADR-2026-07-07`'s sibling loop becomes the `context`-role
 branch of that provisioner rather than a separate post-provision step, which is
 what lets its per-target-directory mutex disappear — the leaf namespace is
 per-session, so there is no shared target to serialise on.
+
+The local provider's warm object is a seed/base, not an acquired workarea. Every
+acquire creates a new session generation; every terminal return ends that
+generation. The executor applies repository authority while binding the
+generation, before the harness starts, and refuses the cell if it cannot make a
+read-only leaf non-widenable by that harness.
 
 The change that implements D2 adds the `retired-claim-lint.sh` rule this ADR
 deliberately withholds, retiring the shared-parent sibling placement at the

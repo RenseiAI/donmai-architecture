@@ -337,7 +337,9 @@ paragraph above describes current runner behaviour and stays correct until the
 new provisioner ships.
 
 Two names replace one overloaded path. **`workareaRoot`** is the session-owned
-directory at `<worktree-root>/<session-id>/`; **`repositoryWorktreePath`** is the
+directory at `<worktree-root>/<root-owner-session-id>/`; a shared participant
+joins it through durable `parentWorkareaId` rather than deriving a child-named
+path. **`repositoryWorktreePath`** is the
 selected repository's leaf inside it, and is the directory the harness is spawned
 in. The orchestrator selects that repository through the ADR's closed
 `RepositoryFilter` grammar; an absent filter means the `primary` repository, and
@@ -348,6 +350,26 @@ Selection never degrades silently: an undeclared name, a zero-match filter, or a
 multi-match filter where exactly one repository is required is a typed pre-spawn
 error carrying a closed reason code and a stable rule id (the exclusion shape of
 `ADR-2026-08-13` D4.1) — never a fallback to `primary`.
+
+The orchestrator/work-item assembler is the **declaration producer** and the
+exact bound executor/runner is the **consumer**. Repository intent participates
+in viability before the executor payload is assembled. The producer emits
+`003`'s versioned `repositoryDeclaration` or a non-default `RepositoryFilter`
+only after bind/claim re-checks that the paired workarea provider attests
+`session-root-v1`. An unsupported executor receives only the existing singular
+primary source; any droppable read-only context is omitted from both the
+declaration and `DONMAI_SIBLING_REPOS`, so the old runner is not asked to clone
+an authority-constrained repository writable. If the request selects anything non-default or includes a
+non-primary `mutable` repository, that executor is excluded and an empty
+candidate set is a typed pre-admission refusal — the old runner is never asked
+to ignore a field and silently run the primary instead.
+
+Read-only authority is a second viability input on the same exact cell. Any
+declared `read-only` leaf requires executor attestation of
+`repositoryAuthorityEnforcement: 'isolated-read-only-v1'`; without it the cell
+is excluded rather than given a writable clone. This filesystem boundary is
+executor-owned and non-widenable by the harness. Repository filters and the
+completion backstop remain defense in depth, not substitutes for enforcement.
 
 `DONMAI_SIBLING_REPOS` entries become `context`-role repositories materialised as
 per-session leaves under `workareaRoot` rather than clones in a shared parent.
@@ -380,7 +402,12 @@ Fields requiring agent judgment (`work_result`, `comment_posted`) cannot be back
 
 **The repository-shaped rows are evaluated per mutable repository (ADR-2026-08-22, Accepted architecture).** The rows above that name commits, a branch, or a pull request read in the singular because a session has exactly one repository today. Under the accepted multi-repository workarea they are evaluated **once per repository whose declared authority is `mutable`**, and the backstop's three recoveries act per mutable repository. Three rules bound that, all fail-closed:
 
-- **A `read-only` repository is outside the contract.** It is never required to carry commits, never backstopped, and never a reason for a session to fail. `context`-role repositories are `read-only` by default, so the reference corpora a session reads cannot fail its contract.
+- **A `read-only` repository is outside the completion contract, not outside
+  enforcement.** It is never required to carry commits, never backstopped, and
+  never a reason for a session to fail. The executor must still make its
+  filesystem leaf non-writable before spawn. `context`-role repositories are
+  `read-only` by default, so the reference corpora a session reads cannot fail
+  completion and cannot be mutated by the harness.
 - **Authority is declared, never inferred.** Absence of a declaration is `read-only`, and selecting a repository as `repositoryWorktreePath` grants no write to it. A session needing authority it was not granted fails closed with the typed error, paired with a signal per `ADR-2026-08-07` D5 — never silently.
 - **The turn-result manifest extension is additive.** The agent-owned manifest gains an optional per-repository member; when it is absent the verdict applies to the selected repository, so `schemaVersion` stays `1` and an old reader keeps resolving exactly what it resolved before.
 
