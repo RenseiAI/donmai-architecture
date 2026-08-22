@@ -178,15 +178,23 @@ The daemon enters `recovering` on startup and does not advertise capacity or
 claim work until it has validated every shim registry record, adopted every
 compatible live shim, classified every remaining record, and charged both
 adopted and quarantined shims against capacity. Adoption advances a monotonic
-controller generation at the shim; stale controllers cannot send input, resize,
-stop, terminal acknowledgement, or tombstone-disposal operations.
+controller generation at each shim; no host- or fence-level generation exists.
+Stale controllers cannot send input, resize, stop, terminal acknowledgement, or
+tombstone-disposal operations. Duplicate lifecycle identities preserve and
+charge every live shim/process correlation rather than selecting one owner by
+map overwrite.
 
-A planned restart obtains an acknowledged fence for the exact session set before
-the controller exits. While the fence is held, no stale-claim, heartbeat,
+A planned restart obtains one deterministic, byte-exact durable acknowledgement
+per authority scope for the exact shim-correlation set before the controller
+exits. The stable host identity is distinct from the replaceable controller and
+worker-registration ids. While the fence is held, no stale-claim, heartbeat,
 duration, host-loss, queue-repair, or terminalization path may release or
 requeue those sessions. Fence expiry is not proof of process death: without an
 ordinary terminal receipt or an adopted shim tombstone proving process-group
-reap, the claim remains in visible reconciliation quarantine. This fence is an
+reap for **every** covered correlation, the claim remains in visible
+reconciliation quarantine. The shared predicate reads proof/fence state and
+performs release, requeue, terminalization, or fence consumption under the same
+transaction or revision CAS. This fence is an
 optional composing callback for the single-machine OSS deployment, which has no
 remote reaper; the shim-owned orphan deadline still bounds local execution.
 
@@ -421,7 +429,7 @@ Until that ADR's provisioner ships, every session has one `mutable` repository a
 
 **Fail-closed is paired with a signal, never with silence.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D5, a pre-spawn check that refuses to start a session — an unresolvable credential, a scope the worker is not authorized for, a project it cannot route — is right to fail closed, because a wrong answer there crosses a tenant boundary. What it may not do is abort the claim quietly or loop on it. The claim is NACKed back to the queue so another host can take it, and the host reports that it cannot serve, so the condition is visible off the machine (D7). A fail-closed rail with no signal converts a routing problem into an invisible one.
 
-**An unreachable session does not hold capacity indefinitely.** If a session's control or attach transport terminates and cannot be re-established within a bounded retry budget, the session terminates or emits a condition. For a shim-owned session, controller loss starts the shim-owned orphan deadline and preserves the external claim until terminal evidence arrives; a replacement daemon may adopt during that bound. A quarantined live shim remains visibly charged to capacity rather than being treated as unreachable free space. Supervising a local process is not terminal evidence, and elapsed fence time is not release authority: bounded-retry-then-signal composes with the restart fence and tombstone contract (D5 with D7, never D5 alone).
+**An unreachable session does not hold capacity indefinitely.** If a session's control or attach transport terminates and cannot be re-established within a bounded retry budget, the session terminates or emits a condition. For a shim-owned session, controller loss starts the shim-owned orphan deadline and preserves the external claim until terminal evidence arrives; a replacement daemon may adopt during that bound. Every quarantined or duplicate live shim remains visibly charged to capacity rather than being treated as unreachable free space. Supervising one local process is not terminal evidence for another correlation, and elapsed fence time is not release authority: bounded-retry-then-signal composes with the restart fence and per-correlation tombstone contract (D5 with D7, never D5 alone).
 
 ### The turn-result manifest is the agent-owned half of the contract (ADR-2026-06-15)
 
