@@ -2,7 +2,7 @@
 
 **Status:** Reference
 **Last updated:** 2026-08-07
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `011-local-daemon-fleet.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `004-sandbox-capability-matrix.md`, `011-local-daemon-fleet.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`, `ADR-2026-08-22-session-owned-multi-repository-workarea.md`
 
 ## Why this exists
 
@@ -93,7 +93,16 @@ interface ToolchainDemand {
 
 interface Workarea {
   readonly id: WorkareaId
-  readonly path: string                // absolute filesystem path
+  readonly path: string                // absolute filesystem path — the SELECTED
+                                       // repository, i.e. repositoryWorktreePath
+                                       // and the harness working directory
+  readonly workareaRoot?: string       // absolute path of the session-owned
+                                       // directory containing every repository
+                                       // leaf. Accepted architecture, pending
+                                       // implementation: ADR-2026-08-22. Equal to
+                                       // `path` only for a retained legacy flat
+                                       // workarea (that ADR's D9.1); never derive
+                                       // one from the other.
   readonly providerId: string          // which provider gave us this
   readonly ref: string                 // commit/patch-set actually checked out
   readonly cleanStateChecksum: string  // sha256 of declared-clean files
@@ -393,6 +402,17 @@ Provider responsibilities in shared mode:
 - Locking semantics are NOT enforced at this layer — sub-agents are still expected to respect "only modify files relevant to your sub-issue" (existing rule in `CLAUDE.md`). The provider doesn't try to be a filesystem multiplexer.
 
 A provider that doesn't support shared mode (`capabilities.supportsSharedMode: false`) returns an error if a shared spec is requested; the scheduler falls through to a provider that does, or rejects the spec.
+
+> **Amended 2026-08-22 by `ADR-2026-08-22-session-owned-multi-repository-workarea.md`
+> (Accepted architecture; implementation pending).** Under the session-owned
+> multi-repository layout, `mode: 'shared'` with `parentWorkareaId` joins the
+> parent's **`workareaRoot`** and inherits its whole repository leaf set; a
+> sub-agent may then select a different `repositoryWorktreePath` within that
+> shared root. Reference counting on `release` is at the root, unchanged in
+> substance from the rules above. Ownership, lease, archive, disk accounting, and
+> restart adoption all bind the root and never a single leaf — a per-leaf lease
+> is deliberately not defined (D7). Until that ADR's provisioner ships a workarea
+> holds exactly one repository, and every rule in this section reads as written.
 
 ## Capability profile by sandbox
 

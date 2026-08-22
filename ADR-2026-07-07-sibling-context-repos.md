@@ -66,3 +66,47 @@ completion contracts do not consider them.
   unsupported (accepted; git URLs do not contain commas in practice).
 
 Amends `013-orchestrator-and-governor.md` (§ Sibling context repos).
+
+## Amended 2026-08-22 — the destination moves under the session root
+
+`ADR-2026-08-22-session-owned-multi-repository-workarea.md` (Accepted
+architecture; implementation and migration pending) changes **where a sibling
+lands and who owns it**, and nothing else about this ADR.
+
+What changes, once that ADR's D2 ships:
+
+- The destination is a per-session `context` leaf at
+  `<workareaRoot>/<name>` — inside the session-owned directory — instead of a
+  directory beside the session worktree in a shared parent.
+- The per-target-directory mutex above becomes unnecessary. It exists because
+  "concurrent sessions may share a parent directory"; under a per-session leaf
+  namespace there is no shared target to serialise on. It also only ever covered
+  provisioning, never concurrent *use* of the shared copy — the defect that
+  motivated the move.
+- The "collision with the session worktree itself" rejection is subsumed by that
+  ADR's D5 leaf-name rules (validation, reserved names, and duplicate-leaf
+  refusal naming both entries rather than auto-renaming).
+- Cleanup, disk accounting, archive, and restart adoption reach the clone for
+  the first time, because it is now inside the object those authorities bind
+  (D7). A context clone can no longer outlive the session that created it, and is
+  charged to exactly one session.
+
+What is preserved verbatim:
+
+- **The wire.** `DONMAI_SIBLING_REPOS`, its comma-separated `<git-url>[#ref]`
+  grammar, and the `work[].env` carrier with process-env fallback are unchanged.
+- **The `../<name>` promise.** A context leaf sits beside the selected
+  repository's leaf under the same root, so the relative path from the harness
+  working directory is `../<name>` exactly as before. No repo's `AGENTS.md`
+  changes.
+- **Read-only by default, never fatal, freshen best-effort.** A `context`
+  repository defaults to `read-only` authority, freshen failure keeps the stale
+  copy, and sibling failure never fails the session.
+- **The old placement stays correct until D2 ships.** A runner without the new
+  provisioner honours this ADR as written above; that is current behaviour and
+  this text describes it truthfully.
+
+Pre-existing clones already sitting in a shared parent are **not** adopted,
+charged, or deleted by that ADR — deleting one could delete another live
+session's context. They are reported as an unowned-legacy condition and
+reclaimed by explicit operator action (D9.4).
