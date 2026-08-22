@@ -234,6 +234,8 @@ is the replaceable controller and carrier. On startup it enters `recovering`,
 validates every bounded secret-free registry record, adopts every compatible
 shim, classifies stale or incompatible records, and charges both adopted and
 quarantined shims against capacity before returning to `ready` or claiming work.
+Duplicate lifecycle identities preserve every shim/process correlation; none is
+overwritten merely because its session identity collides.
 
 The local status/doctor surfaces and every host heartbeat expose the same
 bounded quarantine projection: session identity, shim/process correlation,
@@ -257,9 +259,15 @@ reboot scheduled), it drains or fences according to the intended outcome:
 1. **Stop accepting new work.** Daemon updates its registered status to `draining` and reports it on the next heartbeat; a compliant orchestrator reads it and stops routing new sessions to the host. This depends on the heartbeat request actually carrying the status field on the wire, not just computing it internally — see `ADR-2026-08-03-daemon-host-status-signal-completion.md`, which closes a prior gap where the daemon computed this status every beat and silently dropped it before serialization. Until a daemon build including that fix is in use, treat "the orchestrator routes new sessions elsewhere" as aspirational rather than guaranteed.
 2. **Conserve in-flight ownership.** On the current direct-owned path, wait up
    to `drainTimeoutSeconds` (default 600), then send SIGTERM. On a shim-enabled
-   upgrade/restart, enumerate adopted and quarantined sessions, obtain the
-   optional composing plane's durable fence for that exact set, and stop only
-   after its byte-equivalent acknowledgement. The restart does not SIGTERM an
+   upgrade/restart, take one deterministic snapshot of adopted and quarantined
+   shim correlations, partition it by authority scope, obtain the optional
+   composing plane's byte-exact durable acknowledgement for **every** partition,
+   and stop only after all partitions acknowledge with non-empty revisions.
+   One physical multi-organization host therefore performs one authenticated
+   fence operation per organization; a partial success refuses the restart.
+   The stable host id never falls back to a replaceable controller/worker id,
+   and `controller_generation` appears only on each shim row, never as a fence
+   scalar. The restart does not SIGTERM an
    adopted shim. A true stop with no replacement sends a generation-fenced
    `Stop` to every adopted shim and waits for terminal observations; a
    quarantined shim remains under its orphan deadline. An unleased workarea
@@ -270,9 +278,11 @@ reboot scheduled), it drains or fences according to the intended outcome:
    durably saved; acknowledgement and expiry only select a release path.
 3. **Release eligible workarea-cache entries.** Cache entries in `ready` or `warming` state are torn down; `acquired` entries follow the policy above. Drain never overrides a non-released terminal workarea lease or acquisition-quarantine guard.
 4. **Restart and adopt.** The new controller boots in `recovering`, adopts live
-   shims and terminal tombstones, restores external carriers, classifies every
+   shims and terminal tombstones, restores external carriers through the
+   prepare-before-`Welcome`/commit-after-`Adopted` sequence, classifies every
    remaining registry entry, computes capacity including quarantine, and only
-   then re-registers as `ready`. Fence expiry without terminal proof changes the
+   then re-registers as `ready`. Fence expiry without terminal proof for every
+   covered shim/process correlation changes the
    external state to reconciliation quarantine; it never releases or requeues a
    possibly live session.
 
@@ -530,8 +540,9 @@ Three observability surfaces:
 - **`donmai daemon logs`** — tail the daemon log. NDJSON by default. Pretty-printed when stdout is a TTY.
 - **`donmai daemon stats`** — current capacity, sessions in flight, workarea-cache state per (repo, toolchain), recent acquire/release latencies.
 - **`donmai daemon status` / `doctor`** — adopted and quarantined shim counts,
-  typed quarantine reasons, controller generation, and the capacity charge for
-  every quarantined session.
+  typed quarantine reasons, each shim's controller generation, duplicate
+  shim/process correlations, stable-host versus controller ids, and the capacity
+  charge for every quarantined session.
 - **Prometheus metrics** at `http://localhost:9101/metrics` (configurable). Scrape into your own monitoring if running multi-machine.
 
 Key NDJSON fields the daemon emits (consumed by Layer 6 observability per `006`):

@@ -385,6 +385,16 @@ A shimwire ring miss is translated into the existing ring truncation plus
 representation, if needed, requires a versioned successor protocol rather than
 an unannounced v1 event.
 
+The generic shimwire `carrier_epoch` is deliberately **not** this host stream
+epoch and is absent from v1's exact JWT claim set (§ 15). Consequently v1 cannot
+authenticate a second live carrier takeover while preserving the same
+PTY-owning process epoch. The equal-epoch rule in § 6.2 remains rejection while
+a live leg is bound; it must never be weakened into a same-epoch eviction
+heuristic. A composing carrier that needs daemon-adoption takeover must ship a
+versioned successor with a separately authenticated, strictly increasing
+`carrier_epoch`, or keep carrier binding daemon-side until that successor is
+available.
+
 ---
 
 ## 5. Input frames — `v1-frozen`

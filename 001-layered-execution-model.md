@@ -248,8 +248,12 @@ sequence, replay ring, snapshot/recording state, and terminal observation. The
 daemon creates or adopts that shim and may restart without creating a new
 session or PTY-host epoch. `(org_id, session_id)` remains the sole lifecycle
 identity; shim ids, process epochs, controller generations, PIDs, sockets, and
-carrier generations are correlation or fencing values only. Adoption and
-quarantine accounting finish before the host advertises capacity.
+carrier generations are correlation or fencing values only. Stable physical
+host identity is a separate durable authority, never a daemon/controller or
+worker-registration id. Controller generation is per shim, not a host scalar;
+duplicate lifecycle identities retain every live shim/process correlation.
+Adoption, external-carrier commit, terminal-tombstone handoff, and quarantine
+accounting finish before the host advertises capacity.
 
 The split between SandboxProvider and WorkareaProvider is critical. They are not the same concern — even on a perfectly fresh K8s pod, if you reuse it for a second session without resetting filesystem state, you get the false-positive QA bug that motivated this entire architecture. SandboxProvider gives you *compute*; WorkareaProvider guarantees *filesystem determinism inside that compute*; AgentRuntimeProvider says *which LLM speaks the protocol the orchestrator expects*.
 

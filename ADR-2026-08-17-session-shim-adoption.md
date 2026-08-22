@@ -27,6 +27,18 @@ platform mirror)
 > relay identity rides the generic optional carrier-extension point in D3, and
 > quarantined shims are always visible capacity in D7.
 
+> **Corrected 2026-08-22.** The accepting text left three ambiguities that are
+> unsafe at implementation time. `controller_generation` is per shim and is
+> never a host- or fence-level scalar; a stable host identity is independent of
+> a daemon/controller or worker-registration correlation; and one physical
+> multi-scope restart requires one exact durable acknowledgement per authority
+> scope before stop. Duplicate lifecycle identities retain every observed live
+> shim/process correlation, exact request and output bytes remain lossless, and
+> release stays held until every covered correlation has positive terminal
+> proof. Carrier setup now has an explicit prepare-before-`Welcome`,
+> commit-after-`Adopted` order. This correction is normative and does not change
+> the pending implementation/release/activation status.
+
 ## Context
 
 An interactive session is currently only as durable as the daemon process that
@@ -98,21 +110,25 @@ control plane must implement consistently.
 2. **Identity:** `(org_id, session_id)` is the sole lifecycle identity.
    `shim_id`, `process_epoch`, PID, socket path, and controller generation are
    correlation or fencing values only; none can create, release, terminalize,
-   or re-key a session.
+   or re-key a session. Stable host identity is a separate durable machine
+   authority; daemon/controller ids and worker-registration ids are replaceable
+   process correlations and may never substitute for it.
 3. **Adoption before advertisement:** a starting daemon discovers and classifies
    every registry entry, adopts every compatible live shim, rehydrates its
    external carriers by session identity, and accounts for every quarantined
    shim before it advertises ready capacity or claims new work.
-4. **Single controller:** every successful adoption advances a monotonic
-   `controller_generation`. Every mutating controller frame carries that
-   generation. The shim rejects stale generations, so an old daemon can never
-   regain the input, resize, stop, or acknowledgement authority after a newer
-   daemon adopts.
-5. **Sequence truth:** the shim is the sole allocator of host output sequence.
-   Adoption resumes from an acknowledged sequence. If the requested position
-   has fallen out of the ring, the shim emits an explicit `Gap` followed by a
-   snapshot; no daemon or carrier may invent missing output or reset sequence
-   while claiming continuity.
+4. **Single controller:** every successful adoption advances that shim's own
+   monotonic `controller_generation`; there is no host-wide or fence-wide
+   controller generation. Every mutating controller frame carries the target
+   shim's generation. The shim rejects stale generations, so an old daemon can
+   never regain the input, resize, stop, or acknowledgement authority after a
+   newer daemon adopts.
+5. **Sequence and byte truth:** the shim is the sole allocator of host output
+   sequence, and its length-delimited output payload is transported losslessly
+   as bytes. Adoption resumes from an acknowledged sequence. If the requested
+   position has fallen out of the ring, the shim emits an explicit `Gap`
+   followed by a snapshot; no daemon or carrier may normalize bytes, invent
+   missing output, or reset sequence while claiming continuity.
 6. **Registry safety:** discovery records are atomic, bounded, mode `0600` under
    a mode `0700` directory, and contain no bearer, provider credential, prompt,
    terminal bytes, or other secret. External credentials are rehydrated after
@@ -125,15 +141,19 @@ control plane must implement consistently.
    orphan deadline. Expiry makes the shim terminate and reap its own harness
    process group, persist the terminal observation, and retain a tombstone for
    later adoption. It never authorizes a claim release by itself.
-9. **Fence before restart:** a planned daemon restart obtains a durable,
-   acknowledged fence covering the exact adoptable session identities before
-   stopping. While fenced, heartbeat, stale-claim, and session reapers may
-   observe but may not release, requeue, or terminalize those sessions.
+9. **Fence before restart:** a planned daemon restart deterministically
+   partitions every adopted and quarantined shim correlation by authority
+   scope, obtains a durable byte-exact acknowledgement for every partition, and
+   stops only after all acknowledgements succeed. Duplicate lifecycle
+   identities remain separate correlation rows. While fenced, heartbeat,
+   stale-claim, and session reapers may observe but may not release, requeue, or
+   terminalize any unresolved correlation.
 10. **Expiry is not proof of death:** fence expiry never releases a claim merely
-    because time elapsed. Release requires an adopted live owner to report a
-    terminal receipt, or a durable shim terminal tombstone proving the harness
-    process group was reaped. Without either, the session and claim enter visible
-    reconciliation quarantine.
+    because time elapsed. Every covered correlation requires either an ordinary
+    terminal receipt from its adopted live owner or a durable shim terminal
+    tombstone proving that exact harness process group was reaped. Without proof
+    for all correlations, the session and claim enter visible reconciliation
+    quarantine.
 <!-- BOUNDARY-SYNC-END: adr-2026-08-17-session-shim-core-contract -->
 
 ### D1 — Process ownership moves to a per-session shim
@@ -174,14 +194,26 @@ The shim also has:
 
 - `shim_id`: a random identifier for one shim process,
 - `process_epoch`: a monotonic per-session value for one shim incarnation,
-- `controller_generation`: a monotonic fencing number advanced on adoption,
+- `controller_generation`: that shim's monotonic fencing number advanced on
+  adoption,
 - PID and process start identity: diagnostic/janitor correlation,
 - socket path and protocol range: discovery and negotiation.
 
 None is a lifecycle identity. A new `shim_id` under the same session is not a new
-session; two live shim ids claiming the same `(org_id, session_id)` are an
-ambiguity that quarantines both until reconciled. A PID is never trusted without
-its process-start identity because PID reuse is normal.
+session. The daemon also has a replaceable `controller_id`, and a composing
+deployment may expose a worker-registration id; both identify one process or
+registration leg, not the physical host. A restart fence names the stable host
+identity minted and persisted independently of those correlations. A composing
+plane may map that stable identity to a scope-local host row, but it may not
+fall back to a controller or worker id when that lookup fails.
+
+Two or more live shim ids claiming the same `(org_id, session_id)` are an
+ambiguity that quarantines **every** observed record until reconciled. Discovery,
+capacity, fencing, and terminal reconciliation retain each full
+`(shim_id, process_epoch, controller_generation)` correlation; a map or set
+keyed only by lifecycle identity is forbidden because it would discard a
+possibly live process. A PID is never trusted without its process-start identity
+because PID reuse is normal.
 
 ### D3 — `session-shim-v1` is a stable local adoption wire
 
@@ -202,8 +234,9 @@ Hello      shim -> daemon   protocol range, identity, shim/process ids,
                             lifecycle phase, current controller generation,
                             output/ring bounds, optional extension names
 Welcome    daemon -> shim   selected version, controller id, proposed next
-                            generation, resume sequence, optional extensions
-Adopted    shim -> daemon   accepted generation and exact replay disposition
+                            generation, resume sequence, prepared extensions
+Adopted    shim -> daemon   accepted generation, exact extension echo, and
+                            exact replay disposition
 Output     shim -> daemon   shim-owned sequence + raw bytes
 Gap        shim -> daemon   missing inclusive range + closed reason
 Snapshot   shim -> daemon   state after the gap or on request
@@ -222,6 +255,21 @@ hosted endpoint, and an OSS-only daemon may omit it. Unknown optional extensions
 are ignored; an extension declared required by either peer makes negotiation
 fail closed when unsupported.
 
+`carrier_epoch` is a monotonic per-session **carrier** generation. It is not the
+shim `process_epoch`, PTY-host stream epoch, `controller_generation`, stable host
+identity, or lifecycle identity. A controller may put it in `Welcome` only when
+the composing carrier prepared and authenticated that exact value after the
+verified `Hello` and before `Welcome` was serialized. The shim echoes the
+accepted value in `Adopted`; the controller commits the prepared carrier handoff
+only after that echo. A value allocated after `Adopted` cannot retroactively
+appear in the already-sent `Welcome`: a composition that resolves its carrier
+later keeps that binding daemon-side and omits this extension.
+
+All shimwire byte fields are length-delimited opaque bytes. Implementations may
+decode typed metadata where the message defines it, but must not pass `Output`,
+`Input`, snapshot, or replay payloads through a Unicode string, newline
+conversion, JSON normalization, or another lossy intermediate.
+
 Protocol compatibility is based on an advertised min/max range and selected
 version, never on daemon or shim binary version equality. A newer daemon must be
 able to adopt an older live v1 shim. A protocol bump therefore requires an
@@ -230,19 +278,27 @@ that overlap requires a separate migration decision.
 
 ### D4 — Adoption is fenced and happens before readiness
 
-On daemon start:
+On daemon start, for each compatible shim:
 
 1. enter `recovering`; do not advertise ready capacity and do not poll/claim;
 2. scan the registry directory, validating size, ownership, mode, schema,
    duplicate session identities, socket type, and PID/start identity;
-3. connect and complete `Hello`/`Welcome` with every compatible live shim;
-4. atomically advance `controller_generation` at the shim;
-5. request replay after the daemon's last durably forwarded sequence;
-6. rehydrate external carrier credentials by `(org_id, session_id)` and attach;
-7. resume external heartbeats only after carrier and controller ownership are
+3. authenticate `Hello`, including the exact shim/process correlation and that
+   shim's current controller generation;
+4. prepare any required carrier handoff and obtain its strictly greater
+   `carrier_epoch` and opaque authenticator **before** serializing `Welcome`;
+5. send `Welcome` with that shim's proposed next controller generation, replay
+   position, and only the already-prepared extensions;
+6. let the shim atomically advance its own `controller_generation` and require
+   `Adopted` to echo the exact accepted generation/extensions;
+7. request replay after the daemon's last durably forwarded sequence;
+8. rehydrate external carrier credentials by `(org_id, session_id)`, authenticate
+   and commit the prepared higher-epoch carrier handoff, then durably retain the
+   adoption receipt;
+9. resume external heartbeats only after carrier and controller ownership are
    established;
-8. classify every remaining record as exited, stale, or quarantined; and
-9. compute capacity from live adopted **plus quarantined** shims before
+10. classify every remaining record as exited, stale, or quarantined; and
+11. compute capacity from live adopted **plus quarantined** shims before
    advertising ready and resuming claims.
 
 The shim is authoritative for the current generation. A daemon proposes a
@@ -264,6 +320,14 @@ single-producer rule.
 
 The daemon durably records only `last_forwarded_seq`; it never allocates or
 renumbers host output. On adoption it asks for `last_forwarded_seq + 1`.
+
+`Output.data` is the exact length-delimited byte slice read from the PTY master.
+The shim, daemon callback, durable carrier handoff, and carrier ingress preserve
+those bytes byte-for-byte and associate durability with the complete frame;
+UTF-8 coercion, newline conversion, truncation, or decode-and-reencode is a
+protocol error. A carrier may produce a separately identified sanitized
+viewer-bound projection when its protocol requires one, but that projection may
+not overwrite the retained source frame or its sequence identity.
 
 - Ring hit: the shim replays the exact frames and continues live.
 - Ring miss: the shim emits `Gap{from_seq,to_seq,reason=ring_evicted}` and a
@@ -316,6 +380,12 @@ The daemon quarantines rather than kills when:
 - the shim reports a phase the daemon cannot interpret, or
 - adoption cannot prove a strictly newer controller generation.
 
+Duplicate lifecycle identities never collapse to one quarantine item. Every
+live record remains separately visible with its shim id, process epoch, last
+known per-shim controller generation, and capacity charge. Reconciliation may
+select one correlation for adoption, but the other correlations remain held
+until each has exact terminal proof.
+
 Quarantine means no input, resize, stop, terminal acknowledgement, or new
 carrier authority is granted. It does **not** mean invisible. Every host status
 and heartbeat payload includes a bounded `quarantined_sessions` projection with
@@ -357,15 +427,59 @@ evidence the platform may infer: missing contact, a passed deadline, or a dead
 PID without a start-identity match never releases a claim. Only the persisted
 terminal observation closes the lifecycle loop.
 
-### D9 — Planned restarts use a durable host-level adoption fence
+### D9 — Planned restarts use exact, authority-scoped adoption fences
 
-Before a planned restart the daemon enumerates every adopted and quarantined
-session and asks its composing control plane, when present, to persist a restart
-fence. The request names the host, a fence id, the exact session identities and
-shim correlation ids, issue time, and `hold_until`. The daemon waits for a
-durable acknowledgement containing the same set before allowing the service
-manager to stop it. If the acknowledgement does not arrive, the update is
-refused and the old daemon keeps serving.
+Before a planned restart the daemon takes one immutable snapshot of every
+adopted and quarantined shim correlation. It deterministically sorts by
+authority scope, lifecycle identity, shim id, process epoch, that shim's
+controller generation, and last durably forwarded sequence; duplicate lifecycle
+identities are retained as distinct rows. It then partitions the snapshot by the
+credential/lifecycle authority that can durably hold it. A hosted multi-tenant
+composition normally uses one organization as one authority scope; a standalone
+composition may use `local`.
+
+For every non-empty partition, the daemon asks the optional composing fence
+store to persist one immutable `restart-fence-v1` request containing:
+
+```json
+{
+  "fenceId": "string",
+  "hostId": "stable scope-local host authority",
+  "sessions": [{
+    "orgId": "string",
+    "sessionId": "string",
+    "shimId": "optional string",
+    "processEpoch": 0,
+    "controllerGeneration": 0,
+    "lastForwardedSeq": 0
+  }],
+  "issuedAt": 0,
+  "holdUntil": 0,
+  "state": "held"
+}
+```
+
+There is deliberately no fence-level `controller_generation`. The field is
+captured only inside each shim correlation. `hostId` is the durable
+machine authority for that scope, never the current daemon/controller id or a
+replaceable worker-registration id. Failure to resolve it is a refusal, not
+permission to substitute a correlation id.
+
+The time fields are signed Unix nanoseconds and the sequence/generation
+fields are non-negative integers serialized without omission, including zero.
+`shimId` is the only correlation omitted when empty, which is allowed for a
+malformed quarantined record. The composing adapter transports the producer's
+JSON bytes as an opaque body; it does not reconstruct this object from semantic
+fields.
+
+The exact byte slice serialized from that immutable ordered snapshot is the
+request authority. The store must persist it without normalizing JSON,
+reordering rows, dropping correlations, or reconstructing it through another
+encoder, then echo the identical bytes with a non-empty durable revision. The
+daemon allows the service manager to stop only after **every** scope returns a
+byte-identical durable acknowledgement. A partial multi-scope success remains a
+restart refusal; the already-created holds stay valid and the same byte requests
+are idempotently retried.
 
 `hold_until` covers the planned restart budget, the shim orphan deadline,
 termination grace, clock skew, and propagation margin. The fence is consumed by
@@ -375,14 +489,21 @@ session-duration/stuck reaping, host disappearance reconciliation, and queue
 claim repair.
 
 Fence expiry changes the state from `held` to `reconciliation_required`; it does
-not release anything. A claim can be released only after the new daemon reports
-either:
+not release anything. Every covered correlation resolves only after the new
+daemon reports either:
 
-- a successful adoption followed later by an ordinary terminal receipt, or
-- an adopted terminal tombstone proving the shim reaped the harness group.
+- a successful adoption of that exact shim/process correlation followed later
+  by its ordinary terminal receipt, or
+- the durable terminal tombstone for that exact shim/process correlation proving
+  the shim reaped its harness group.
 
-If neither proof arrives, the host and session stay visible in quarantine. This
-is the required invariant: **fence expiry must never release a claim while the
+For duplicate lifecycle identities, one correlation's proof does not discharge
+the others. The common release predicate reads the fence and all correlation
+proofs in the same transaction or revision-CAS critical section that performs
+release, requeue, terminalization, or fence consumption; a check followed by an
+unserialized write is a time-of-check/time-of-use defect. If any correlation is
+unresolved, the host and session stay visible in quarantine. This is the
+required invariant: **fence expiry must never release a claim while any covered
 harness may still be running.**
 
 An OSS-only daemon has no remote reaper and therefore needs no hosted fence. It
@@ -396,6 +517,8 @@ preserving the OSS boundary.
 | Daemon exits or is upgraded | Shim and harness continue. External attach pauses; output accumulates in the shim ring. Replacement daemon adopts before advertising capacity and resumes the carrier from the last acknowledged sequence. |
 | Daemon does not return before orphan deadline | Shim terminates and reaps its harness, persists a tombstone, and stops consuming live-process capacity. External claim remains fenced/quarantined until the tombstone is reported. |
 | Old daemon returns after a newer daemon adopted | Its lower controller generation is rejected for every mutation. It may inspect enough state to learn it is stale, then exits. |
+| Two live shim records claim one lifecycle identity | Preserve and quarantine every shim/process correlation, charge every possibly live harness to capacity, fence every row, and refuse lifecycle release until each correlation has its own ordinary-terminal or group-reaped-tombstone proof. |
+| Carrier preparation succeeds but adoption fails | The prepared carrier epoch remains unused/abandoned; it is never rebound to another session or reused. A later preparation allocates a strictly greater value. No carrier commit occurs before `Adopted` echoes the prepared value. |
 | Shim exits unexpectedly | Closing the sole PTY master normally delivers terminal hangup, but the harness may ignore it. The daemon janitor verifies the recorded process-group leader's start identity, performs bounded SIGTERM -> SIGKILL if any member survives, and records a shim-failure terminal outcome only after the group is proved gone. |
 | Harness exits | Shim drains PTY output, emits one immutable `Exit`, writes a terminal tombstone, and notifies the current controller. |
 | Harness wedges | Existing stop/no-progress policy reaches the shim as a generation-fenced `Stop`; the shim performs group SIGTERM -> SIGKILL and owns the terminal observation. Interactive human think-time exemptions remain unchanged. |
@@ -413,8 +536,10 @@ The rollout is additive:
    local compatibility gate. Existing direct-owned sessions drain; they are not
    transplanted across process boundaries.
 3. Enable startup adoption and the real service-manager survival smoke.
-4. Enable the optional composing-plane restart fence only after every release
-   path consults the same predicate.
+4. Enable the optional composing-plane restart fence only after every authority
+   scope can return an exact-byte durable acknowledgement and every release,
+   requeue, terminalization, host-loss, queue-repair, and administrative path
+   reaches the same serialized predicate.
 5. Make shim ownership the default for interactive sessions.
 6. Extend the same ownership boundary to other long-lived session modes where
    restart continuity is required.
@@ -454,6 +579,24 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
 7. **Orphan bound.** Prevent daemon return, observe shim-owned group termination
    within the configured bound, then prove the external claim remains
    quarantined until the terminal tombstone is durably consumed.
+8. **Exact multi-scope fences.** On one physical host serving at least two
+   authority scopes, include adopted, quarantined, and duplicate lifecycle
+   correlations, prove deterministic request bytes per scope, refuse stop on
+   one missing/changed/revision-less acknowledgement, and prove the stable host
+   identity never falls back to the daemon/controller or worker correlation.
+9. **Prepare/commit carrier handoff.** Prove `carrier_epoch` is allocated and
+   authenticated before `Welcome`, echoed by `Adopted`, and committed only
+   afterward. Same/lower epochs cannot evict a live carrier; a strictly higher
+   authenticated epoch can. An after-adoption allocation is kept daemon-side
+   and never claimed to have appeared in the prior `Welcome`.
+10. **Lossless bytes.** Exercise every byte value and split boundary through
+    shim output, adoption replay, durable callback, and carrier ingress; assert
+    exact payload and frame identity. Any viewer sanitization is tested as a
+    separate derived projection.
+11. **Duplicate terminal conservation.** Start two live correlations under one
+    lifecycle identity, terminalize only one through the ordinary receipt path,
+    and prove every release path remains held until the other's group-reaped
+    tombstone is committed in the same serialization domain.
 
 The service-manager smoke uses the installed binary and actual launchd job. A
 unit test that kills a child subprocess does not exercise the failure class.
@@ -489,8 +632,15 @@ unit test that kills a child subprocess does not exercise the failure class.
   ordinary subprocess tests and fail under the installed job. The real-binary
   launchd smoke is the acceptance gate.
 - **A release path forgets the restart fence.** Centralize fence evaluation in
-  one claim-release/terminalization predicate and write refusal tests at every
-  caller; a per-reaper check recreates split-brain through the omitted path.
+  one transactionally serialized claim-release/terminalization predicate and
+  write refusal tests at every caller; a per-reaper check or a check-then-write
+  race recreates split-brain through the omitted path.
+- **An identity-keyed collection drops a duplicate.** A map keyed only by
+  `(org_id,session_id)` can make one live process disappear from capacity,
+  fencing, and release proof. Preserve correlation rows and gate on all of them.
+- **A carrier epoch is allocated after `Welcome`.** Recording that value as if
+  the shim accepted it invents wire history. Prepare it before `Welcome`, or
+  keep the later binding entirely daemon-side.
 - **Registry ambiguity after crash.** Duplicate identities or stale PIDs can
   tempt cleanup code to kill the wrong process. Quarantine plus PID start-time
   verification is mandatory.

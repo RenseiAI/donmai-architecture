@@ -54,6 +54,12 @@ split: synchronized-mirror
 > advances it. The frozen attach wire gains no unversioned gap event; a local
 > shimwire ring miss maps to the existing resynchronization/snapshot behavior,
 > and any new viewer-visible gap representation requires a new protocol version.
+> The shimwire name for a distinct carrier generation is the generic
+> `carrier_epoch`. It is prepared before `Welcome` and committed only after the
+> shim echoes it in `Adopted`; it never replaces the PTY-host epoch. Because v1's
+> exact host-token claim set has no carrier epoch, authenticated same-PTY-epoch
+> takeover requires a versioned attach successor rather than a same-epoch
+> eviction heuristic.
 
 ## Context
 
