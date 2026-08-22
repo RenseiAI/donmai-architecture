@@ -39,6 +39,15 @@ platform mirror)
 > commit-after-`Adopted` order. This correction is normative and does not change
 > the pending implementation/release/activation status.
 
+> **Recovery clarification 2026-08-22.** A planned-restart fence receipt is
+> authority for the old controller to stop; it is not a recovery credential the
+> replacement controller must inherit. Carrier preparation after an
+> authenticated `Hello` uses the exact live correlation and lets the composing
+> authority resolve its own durable obligations. No matching fence is the valid
+> unplanned-crash case, not a reason to refuse adoption or fabricate a fence.
+> Conflicting authority or correlation still fails closed. This clarification
+> is normative and preserves the implementation/release/activation gates.
+
 ## Context
 
 An interactive session is currently only as durable as the daemon process that
@@ -301,6 +310,29 @@ On daemon start, for each compatible shim:
 11. compute capacity from live adopted **plus quarantined** shims before
    advertising ready and resuming claims.
 
+**Composing prepare resolution.** An optional composing callback receives the
+authenticated post-`Hello` lifecycle identity, shim id, process epoch, and
+current per-shim controller generation, together with the composition-resolved
+stable scope-local host authority, controller id, and durable last-forwarded
+sequence. The sequence is the composing carrier's resume cursor; it is not a
+shim-authenticated `Hello` field. A remote authority compares it with its own
+durable ingress/fence state and refuses a forward leap. Zero remains the safe
+over-replay cursor when no stronger durable fact exists.
+
+The replacement controller never supplies, guesses, or persists an external
+fence id, fence revision, correlation revision, or host-adoption revision. The
+composing authority resolves any such obligations from its own durable state.
+
+Zero applicable fence correlations is valid after an unplanned controller
+loss; required carrier preparation and live-shim adoption still proceed. One or
+more applicable exact correlations are retained as one immutable set behind an
+opaque prepared correlation returned to the daemon. A conflicting lifecycle,
+host authority, shim/process/controller correlation, or durable sequence fails
+startup closed. Selecting by lifecycle identity alone, choosing the newest row,
+or dropping one duplicate is forbidden. The opaque prepared correlation stays
+daemon-side; `Adopted` echoes only the generation and negotiated extensions that
+the shim actually received in `Welcome`.
+
 The shim is authoritative for the current generation. A daemon proposes a
 strictly greater generation; the shim commits it before replying `Adopted`.
 Every subsequent mutating frame carries it. Read-only inspection may omit it;
@@ -481,6 +513,47 @@ byte-identical durable acknowledgement. A partial multi-scope success remains a
 restart refusal; the already-created holds stay valid and the same byte requests
 are idempotently retried.
 
+Those acknowledgements authorize the old controller's stop; they are not
+credentials for its replacement. A planned replacement is not required to
+inherit local fence-receipt state. During post-`Hello` preparation, the
+composing authority resolves every unambiguous applicable unresolved
+correlation row from the exact authenticated preparation facts and binds all of
+them to the adoption. Multiple exact applicable rows remain separate release
+obligations even when represented by one opaque prepared correlation. One row
+may not be selected while another is discarded. The same preparation with no
+applicable row is the unplanned-crash case and does not fabricate a fence.
+
+A planned service-manager action must cross one daemon-owned preflight edge.
+`POST /api/daemon/restart/prepare` atomically enters `draining`, prevents new
+claims, mints one server-owned preparation/fence identity, freezes the immutable
+multi-scope snapshot once, obtains every required durable acknowledgement, and
+returns success only while that exact prepared state remains stop-safe. Partial
+failure and retry reuse the same identity and frozen per-scope request bytes;
+they never resample live state or accept a caller-supplied fence id.
+
+The only permission response is a schema-valid `2xx` body whose state is
+`prepared` or `not_required`. `not_required` is valid only after the handler has
+entered `draining` and proved that shim ownership/adoption is disabled with no
+shim registry occupants, or that the one frozen snapshot has no correlations.
+It is the idempotent default-off/zero-shim posture, not a client inference from
+`404`. A caller may invoke the service manager only after one of those explicit
+states. Unknown or empty success bodies, timeout, malformed acknowledgement,
+missing authority scope, `409`, `5xx`, and transport failure all refuse the
+action.
+
+The daemon's own update route crosses the same internal preflight before package
+swap or exit. If an external caller cannot invoke the service manager after a
+successful preparation, the daemon remains `draining`. Returning to service is
+an explicit reconciler/operator action, not an automatic error path: `POST
+/api/daemon/resume` durably marks the local preparation abandoned, invalidates
+only its stop authorization, and proves every already-persisted external hold
+remains intact before it may reopen claims. A later restart takes a new snapshot
+and preparation identity. A bare signal or
+direct service-manager stop did not cross this edge and therefore has
+unplanned-crash semantics. Signal handlers cannot substitute a late fence
+because a service manager may escalate termination before remote durability
+completes.
+
 `hold_until` covers the planned restart budget, the shim orphan deadline,
 termination grace, clock skew, and propagation margin. The fence is consumed by
 every external path that can release a claim or terminalize a session, not just
@@ -535,7 +608,9 @@ The rollout is additive:
 2. Enable shim ownership for newly launched interactive PTY sessions behind a
    local compatibility gate. Existing direct-owned sessions drain; they are not
    transplanted across process boundaries.
-3. Enable startup adoption and the real service-manager survival smoke.
+3. Enable startup adoption and the real service-manager survival smoke. This
+   includes unplanned recovery with no inherited local fence receipt; composing
+   carrier state is resolved from the authenticated live correlation.
 4. Enable the optional composing-plane restart fence only after every authority
    scope can return an exact-byte durable acknowledgement and every release,
    requeue, terminalization, host-loss, queue-repair, and administrative path
@@ -545,6 +620,16 @@ The rollout is additive:
    restart continuity is required.
 7. Delete the direct daemon-owned session path once no served mode depends on
    it.
+
+One preflight-less legacy generation may cross into the first preflight-capable
+release exactly once. This migration exception is permitted only when the old
+daemon's legacy drain and status surfaces prove zero active direct-owned
+sessions, the shim registry has no live or quarantined occupants, the installed
+version is explicitly below the first preflight version, and the candidate
+artifact is verified to contain the preflight route before the service-manager
+action. The caller records an auditable legacy-cutover result. `404` is otherwise
+a hard refusal; this rule is never a general compatibility fallback and is
+removed after the cutover generation drains from support.
 
 There is no permanent `legacy` versus `shim` lifecycle authority. During the
 transition, ownership mode is an explicit diagnostic field; lifecycle identity,
@@ -597,6 +682,33 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     lifecycle identity, terminalize only one through the ordinary receipt path,
     and prove every release path remains held until the other's group-reaped
     tombstone is committed in the same serialization domain.
+12. **Unplanned recovery without fence state.** Start a live shim, crash its
+    controller before any restart fence exists, and prove a replacement can
+    prepare and commit the required carrier from the authenticated `Hello`
+    facts before the orphan deadline. It must not invent a fence or advertise
+    ready before the complete adoption publication succeeds.
+13. **Planned receipt-state loss.** Obtain an exact durable restart-fence
+    acknowledgement, stop the old controller, and remove only its local copy of
+    that receipt. Prove the replacement supplies no fence selector, the
+    composing authority binds every exact applicable correlation, and ordinary
+    terminal evidence later discharges all and only those obligations.
+14. **Caller-side planned restart refusal.** Drive every installed restart and
+    update caller through the daemon preflight, remove or corrupt one scope's
+    acknowledgement, and prove no caller invokes the service manager. The green
+    path proves preflight first prevents new claims and only then permits the
+    planned stop. A direct signal is separately proved to take the unplanned
+    recovery path rather than claim a fence it never durably obtained.
+15. **Frozen preflight retry.** Fail one authority scope after another has
+    acknowledged, mutate live registry state, and retry. Prove the daemon reuses
+    the same server-minted identity and exact request bytes rather than
+    resampling, and that no caller-selected id can enter the request. Prove
+    `not_required` only for an atomically drained default-off/empty snapshot.
+16. **Prepared restart cancellation.** Force the service-manager invocation to
+    fail after successful preflight and prove the daemon remains draining.
+    `resume` must invalidate only the local stop authorization, retain external
+    holds, and reopen claims only afterward; a later preparation uses a new
+    identity and snapshot. The daemon-owned update path proves the same
+    preflight ordering before swap or exit.
 
 The service-manager smoke uses the installed binary and actual launchd job. A
 unit test that kills a child subprocess does not exercise the failure class.
