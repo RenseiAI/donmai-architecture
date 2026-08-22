@@ -196,7 +196,8 @@ interface SandboxProviderCapabilities {
   // executor can make declared read-only leaves non-writable to the harness
   // process through an isolation boundary the process cannot undo. chmod under
   // the same uid, prompt policy, and post-hoc git checks do not qualify.
-  repositoryAuthorityEnforcement: 'none' | 'isolated-read-only-v1'
+  repositoryAuthorityEnforcement?: 'none' | 'isolated-read-only-v1'
+                                    // absent is exactly 'none' for legacy peers
 
   // A2A / federated work
   // A2A is "execute work in someone else's workarea+sandbox"
@@ -242,7 +243,10 @@ The seventh row — A2A as transport flavor — is its own provider implementati
 > while leaving a mutable sibling writable. An unsandboxed process running as
 > the owning uid cannot attest it: `chmod` is reversible by that same process.
 > Prompt instructions and commit/backstop filtering are likewise not a
-> filesystem permission boundary.
+> filesystem permission boundary. On the additive wire an absent
+> `repositoryAuthorityEnforcement` field is exactly `none`; it keeps a legacy
+> executor registrable for singular default-primary intent but can never satisfy
+> a read-only-repository demand.
 
 The capability flags above are the *declared* shape — what a provider/host advertises at registration time. The corresponding *runtime view* is `LiveCapacityInstance.capabilities` in the live execution capacity contract (`014-tui-operator-surfaces.md` § "Live capacity contract" and `ADR-2026-05-06-tui-noun-consolidation.md` Addendum 2026-05-06). Each live row carries the capability tags currently in force on that specific instance — the operator-facing reflection of what this doc specifies as the provider's capability schema.
 

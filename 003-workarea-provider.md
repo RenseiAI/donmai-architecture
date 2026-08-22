@@ -179,10 +179,11 @@ interface WorkareaProviderCapabilities {
   supportsResume: boolean               // resume from prior pause/archive
 
   // Versioned multi-repository protocol understood by this provider. An empty
-  // list is the honest declaration for every current implementation. A producer
-  // may emit RepositoryDeclarationV1 only when the exact bound executor also
-  // attests 'session-root-v1'; this is a protocol gate, never a feature hint.
-  multiRepositoryWorkareaProtocols: ('session-root-v1')[]
+  // list OR an absent field is the honest declaration for every current/legacy
+  // implementation. A producer may emit RepositoryDeclarationV1 only when the
+  // exact bound executor positively attests 'session-root-v1'; this is a
+  // protocol gate, never a feature hint.
+  multiRepositoryWorkareaProtocols?: ('session-root-v1')[]
 
   // Sharing model
   supportsSharedMode: boolean           // multiple sessions in one workarea

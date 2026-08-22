@@ -406,7 +406,12 @@ authority binds `workareaRoot`; none binds a leaf.
    `repositoryDeclaration` or non-default `RepositoryFilter` only after the
    selected execution cell attests the exact `session-root-v1` protocol. The
    attestation is re-checked at bind/claim; it is never inferred from binary
-   version, pool membership, or a remembered host capability.
+   version, pool membership, or a remembered host capability. Both capability
+   fields are additive and optional on their registration wires: absent
+   `multiRepositoryWorkareaProtocols` is exactly `[]`, and absent
+   `repositoryAuthorityEnforcement` is exactly `none`. Absence keeps a legacy
+   executor registrable for the singular default-primary path and never counts
+   as positive attestation.
 4. **An old peer receives only representable legacy intent.** A request whose
    effective intent is the default mutable primary may be encoded using the
    existing singular source fields. Droppable `read-only` context is omitted

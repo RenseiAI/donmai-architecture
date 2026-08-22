@@ -364,6 +364,12 @@ non-primary `mutable` repository, that executor is excluded and an empty
 candidate set is a typed pre-admission refusal — the old runner is never asked
 to ignore a field and silently run the primary instead.
 
+Capability fields are additive on executor registration: absent
+`multiRepositoryWorkareaProtocols` means `[]`, and absent
+`repositoryAuthorityEnforcement` means `none`. Those absences preserve legacy
+registration and the singular default-primary path; neither is positive
+attestation at placement or the bind/claim re-check.
+
 Read-only authority is a second viability input on the same exact cell. Any
 declared `read-only` leaf requires executor attestation of
 `repositoryAuthorityEnforcement: 'isolated-read-only-v1'`; without it the cell
