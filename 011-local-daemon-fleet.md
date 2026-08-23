@@ -231,9 +231,13 @@ Per `ADR-2026-08-17-session-shim-adoption.md`, one stable process owns each
 long-lived interactive harness process group, PTY master, VT/snapshot state,
 recorder, output sequence, replay ring, and final exit observation. The daemon
 is the replaceable controller and carrier. On startup it enters `recovering`,
-validates every bounded secret-free registry record, adopts every compatible
-shim, classifies stale or incompatible records, and charges both adopted and
-quarantined shims against capacity before returning to `ready` or claiming work.
+An externally composed daemon first uses the additive typed registration/
+refresh seam to acquire auth-only credentials and exact stable-host/adoption-
+revision receipts for every served scope. It does not start heartbeat, capacity
+publication, poll, claim, or spawner admission. It then validates every bounded
+secret-free registry record, adopts every compatible shim, classifies stale or
+incompatible records, and charges both adopted and quarantined shims against
+capacity before activation, `ready`, or work claiming.
 Duplicate lifecycle identities preserve every shim/process correlation; none is
 overwritten merely because its session identity collides.
 
@@ -245,6 +249,16 @@ process is replaced. It never derives from a worker registration, runtime-token
 jti, stable host id, mutable hostname, or a literal fallback. Credential refresh
 therefore cannot look like controller replacement, and controller replacement
 cannot hide behind credential continuity.
+
+The typed registration and every runtime-token refresh carry the complete exact
+controller/protocol-range/capability tuple. Their response must echo that tuple,
+the stable scope-local host authority, and the current adoption revision before
+the credential may be installed or cached. A fresh-by-expiry cache from the
+prior controller, another scope, or another tuple is stale and triggers the
+authoritative auth-only round trip; unavailability leaves the daemon recovering.
+The first heartbeat starts only after adoption publication and carrier
+activation, carries one coherent host/controller/revision/quarantine projection,
+and must receive the exact server acceptance before poll/claim starts.
 
 After an authenticated shim `Hello`, an optional composing carrier receives the
 exact live correlation and resolves its own durable preparation state. The
@@ -263,6 +277,21 @@ available only after selected local-wire v2 proves its exact inspect/emit proxy.
 A v1 shim is kept alive, reported as carrier-incompatible, and charged to
 capacity; the daemon never fabricates a screen or treats a stale snapshot cache
 as fresh.
+
+External takeover uses the correctly versioned
+`protocol/interactive-attach-v2.md`: a higher carrier is a non-authoritative
+candidate through snapshot-receipt storage, per-session adoption commit, every
+scope's batch commit, and Donmai's local publication. Only the post-publication
+`carrier_activate`/`carrier_active` exchange makes it active. Before that, the
+relay may send only the mandatory authoritative Snapshot request; viewer Input,
+authoritative Resize, and Kill are neither forwarded nor acknowledged.
+
+Ordinary host output has the same durable boundary. Every sequence-bearing raw
+frame is committed byte-for-byte in the carrier before ring insertion or
+viewer fan-out. The carrier reloads its contiguous high-water after restart and
+returns `host_ack`; only that ack lets the generic client return durable success,
+the daemon advance `last_forwarded_seq`, and the shim heartbeat advance. A
+socket write or in-memory ring append is not durability.
 
 The local status/doctor surfaces and every host heartbeat expose the same
 bounded quarantine projection: session identity, shim/process correlation,
@@ -313,11 +342,14 @@ reboot scheduled), it drains or fences according to the intended outcome:
    unavailable until provider disposition is complete and `released` is
    durably saved; acknowledgement and expiry only select a release path.
 3. **Release eligible workarea-cache entries.** Cache entries in `ready` or `warming` state are torn down; `acquired` entries follow the policy above. Drain never overrides a non-released terminal workarea lease or acquisition-quarantine guard.
-4. **Restart and adopt.** The new controller boots in `recovering`, adopts live
-   shims and terminal tombstones, restores external carriers through the
-   prepare-before-`Welcome`/commit-after-`Adopted` sequence, classifies every
-   remaining registry entry, computes capacity including quarantine, and only
-   then re-registers as `ready`. Preparation is resolved from each authenticated
+4. **Restart and adopt.** The new controller boots in `recovering`, obtains only
+   the typed auth credentials and stable host/revision receipts it needs for
+   every scope, while heartbeat/poll/claim remain stopped. It adopts live shims
+   and terminal tombstones, restores external carriers through the
+   prepare-before-`Welcome`/commit-after-`Adopted` sequence, commits every
+   per-scope batch, publishes locally, explicitly activates each v2 candidate,
+   and then sends the first exact heartbeat before it may become `ready` or
+   claim. Preparation is resolved from each authenticated
    live correlation, not from an inherited local fence ledger. Fence expiry
    without terminal proof for every
    covered shim/process correlation changes the
