@@ -280,7 +280,13 @@ adds that exact inspect/emit proxy but omits applied Resize/Marker and lacks one
 complete raw event for every host sequence. Selected v3 adds the one exact
 `HostFrame` rail for Output, applied Resize, Marker, Snapshot, and Exit. Durable
 external attach requires selected v3 plus `full_host_frame_v3` and the exact
-attested `durable_carrier_proof_v1`; v1 reports
+attested `durable_carrier_proof_v2`; this token replaces v1 in the exact
+five-token set while frozen v1 decode/same-handoff replay/drain remains required.
+Legacy action additionally requires one live untombstoned entry in the immutable
+store-authority-bound v1 cutover manifest. Both v1 writers close before its
+fsync-backed freeze; eligibility only shrinks through tombstones and restart/
+rollback never resnapshot or reopen it. Advertising v1 or both proof tokens
+authorizes no new carrier. V1 reports
 `authoritative_snapshot_unsupported`, v2 reports
 `durable_host_frame_unsupported`, and both stay alive/capacity-charged. The
 daemon never fabricates a screen or missing frame.
@@ -297,6 +303,29 @@ additional pre-active disposition is the proof-bound
 `controller_unforwarded` Gap N+1..K immediately before Snapshot K+1/atSeq K.
 The proof/reservation, signed carrier credential, atomic admission recheck,
 Gap/Snapshot receipt, and adoption consume bind the exact N/K transition.
+
+An exact retained `receipt_stored` handoff replays only under the same controller.
+A changed controller for that state, or any admitted `preparing` candidate before
+reprepare, first commits the carrier's authenticated abandonment request/result:
+existing high-water remains (zero is valid), any staged Gap/Snapshot is preserved,
+current active/pending authority clears without incumbent rebind, and an all-time
+carrier-epoch floor plus single-use predecessor forces the proof-v2 successor
+strictly higher. The exact carrier readiness field is
+`durable_carrier_proof_v2_ready`. Missing/false readiness, the old unversioned
+`durable_carrier_proof_ready`, a missing/unverified cutover manifest/write-close/
+tombstone set, or a v1-only reader keeps credential mint,
+candidate admission, heartbeat, capacity, poll, claim, and `Ready` disabled.
+
+Once proof/receipt adoption consumes, that candidate is no longer abandonable.
+A replacement controller server-resolves the consumed adoption and receives the
+exact original still-valid bearer/epoch, N, H, and ResumeFrom H+1 from retained
+encrypted authority-scoped storage. Relay same-token reconnect requires the old
+candidate transport absent/closed and sends no new Snapshot/append; exact
+adoption/batch/local replay then activates C. A live same-jti transport refuses
+without eviction. Credential validity is gated before consume; insufficient
+margin abandons pre-consume, while post-consume loss/expiry reconciles without
+remint. Already-active changed-controller recovery allocates higher B through the
+full candidate pipeline and never equal-active rebinds A.
 
 Ordinary host output has the same durable boundary. Every sequence-bearing raw
 frame arrives once from selected local-v3 `HostFrame` and is committed byte-for-
