@@ -12,7 +12,11 @@ split: synchronized-mirror
 **Boundary:** shared (cross-cutting; canonical here, mirrored stub in `rensei-architecture`)
 **Authors:** Claude (Opus 4.8) — W1 foundations/contracts author
 
-> Normative wire protocol: [`protocol/interactive-attach-v1.md`](protocol/interactive-attach-v1.md) (this corpus).
+> Normative wire protocols:
+> [`protocol/interactive-attach-v1.md`](protocol/interactive-attach-v1.md) for
+> the frozen original protocol and
+> [`protocol/interactive-attach-v2.md`](protocol/interactive-attach-v2.md) for
+> durable carrier takeover activation (this corpus).
 > Platform extensions (relay service, control plane, session/quota policy, iOS client):
 > `rensei-architecture/ADR-2026-07-12-interactive-sessions-platform.md`.
 > Driving program: `runs/2026-07-11-ios-interactive-sessions-program/` (W1 — Foundations & contracts).
@@ -60,6 +64,15 @@ split: synchronized-mirror
 > exact host-token claim set has no carrier epoch, authenticated same-PTY-epoch
 > takeover requires a versioned attach successor rather than a same-epoch
 > eviction heuristic.
+
+> **Amended by the ADR-2026-08-17 activation correction (2026-08-23) — v2 is
+> an actual protocol successor, not a `/v2` path speaking v1.** The host leg
+> negotiates `interactive-attach-v2`, uses its independent strict host claim and
+> control registry, remains a non-authoritative candidate until the daemon's
+> post-publication activation exchange completes, and receives durable
+> contiguous `host_ack` only after exact raw-frame persistence. The generic
+> attach client does not report a durable send to the daemon on socket write;
+> it waits for that ack. V1 bytes, claims, and controls remain unchanged.
 
 ## Context
 
@@ -150,9 +163,13 @@ dependency (a local dashboard could attach to it directly).
 
 ### 2. Framing library (OSS, brand-neutral)
 
-A single Go framing library implements
-[`protocol/interactive-attach-v1.md`](protocol/interactive-attach-v1.md), which is
-**normative**. The library is the shared codec for the host and the (closed) relay
+A single Go framing library implements the normative v1 base and the separately
+versioned v2 successor in
+[`protocol/interactive-attach-v1.md`](protocol/interactive-attach-v1.md) and
+[`protocol/interactive-attach-v2.md`](protocol/interactive-attach-v2.md). The
+v2 codec reuses v1 frame bytes by explicit inheritance while selecting its own
+subprotocol, strict host claim, and control registry; it never adds controls to
+a v1 selection. The library is the shared codec for the host and the (closed) relay
 — the relay consumes the same OSS-published, brand-neutral framing rather than
 re-implementing it, so host and relay cannot drift. The protocol is derived from
 asciinema's ALiS shape but is **not** byte-compatible with it (see the spec's
@@ -176,6 +193,12 @@ speaks the framing library:
   host-leg shape) behind the same attach interface — carrier fallback and
   upgrade-back are invisible to the PTY host core. The degraded host lane is
   what keeps the outbound attach working on WSS-hostile networks.
+- **Durable completion is application-level.** On a v2 host leg, writing a WSS
+  frame is not delivery success. The client waits for the exact current-leg
+  contiguous `host_ack`; only then may the daemon advance its shim heartbeat.
+  Carrier activation likewise waits for `carrier_active` after the daemon's
+  local adoption publication. A v1 or unacknowledged leg cannot satisfy those
+  callbacks.
 - The client is standalone-usable (donmai without the platform can attach a local
   viewer to a local host over this client) — satisfying the OSS boundary rule that
   the layer never ships a half-working, platform-dependent client.
@@ -311,6 +334,10 @@ Outbound-stream mandate (amends the 2026-06-22 pull-model decision):
 - `protocol/interactive-attach-v1.md` — the normative wire protocol (new; this
   ADR is its owning decision). Revision v1.0-draft2 (2026-07-12) folds the W4/W5
   implementer-review findings; the spec's changelog section is the ledger.
+- `protocol/interactive-attach-v2.md` — the host-carrier successor for strict
+  generation takeover, explicit post-publication activation, durable raw-frame
+  acknowledgement/high-water reload, and versioned gap disposition. It inherits
+  the v1 data-frame grammar without modifying v1's selection or registry.
 - Platform extensions: `rensei-architecture/ADR-2026-07-12-interactive-sessions-platform.md`.
   Multi-writer arbitration **semantics** (pen policy, grab eligibility,
   cooldown, auto-release, presence derivation) are platform-defined in

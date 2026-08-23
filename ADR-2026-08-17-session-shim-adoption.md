@@ -12,9 +12,10 @@ and activation remain pending behind the proof obligations below.
 **Date:** 2026-08-17
 **Boundary:** shared (the per-session process boundary, local shim wire,
 adoption protocol, sequence ownership, crash semantics, registry safety,
-quarantine contract, and migration law are OSS-canonical here; hosted relay,
-restart-fence persistence, and control-plane reaper integration live in the
-platform mirror)
+quarantine contract, typed recovery composition seams, attach-v2 activation/
+durable-ack protocol, and migration law are OSS-canonical here; hosted relay,
+credential authority, restart-fence/frame-journal persistence, and control-plane
+reaper integration live in the platform mirror)
 **Authors:** session-continuity design lane
 
 > **Accepted 2026-08-18.** Acceptance fixes the ownership, identity, adoption,
@@ -57,6 +58,19 @@ platform mirror)
 > version 1 remains adoptable during the overlap. A daemon-side VT reconstruction
 > or a cache presented as a fresh shim snapshot is forbidden. This correction is
 > normative; external-carrier activation remains pending on the v2 proof below.
+
+> **Activation-seam and output-durability correction 2026-08-23.** Boundary
+> verification against the released daemon and the candidate relay proved three
+> remaining composition holes: registration, refresh, and heartbeat had no typed
+> session-shim attestation surface; a higher carrier became authoritative before
+> its snapshot receipt, adoption, batch publication, and local publication were
+> complete; and ordinary host frames could enter a relay ring/fan-out before any
+> durable raw-frame acknowledgement existed. The correction below is normative.
+> Recovery may acquire scoped credentials before adoption, but no heartbeat,
+> capacity, poll, claim, or viewer mutation starts during that auth-only phase.
+> `interactive-attach-v1` remains frozen; its correctly versioned v2 successor
+> owns carrier activation, durable host acknowledgement, and gap-disposition
+> controls. Implementation, release, migration, and activation remain pending.
 
 ## Context
 
@@ -173,6 +187,29 @@ control plane must implement consistently.
     tombstone proving that exact harness process group was reaped. Without proof
     for all correlations, the session and claim enter visible reconciliation
     quarantine.
+11. **Typed recovery admission:** an externally composed daemon uses additive
+    typed registration, refresh, and heartbeat seams. One process presents the
+    same once-resolved controller id and exact
+    `(controller_id, protocol_min, protocol_max, capabilities)` tuple on initial
+    registration and every refresh. A successful response echoes that tuple,
+    the stable scope-local host authority, and the adoption revision before its
+    credential may be installed or cached. Missing, changed, or stale cached
+    evidence is a refusal. Auth-only registration/refresh may run in
+    `recovering` before adoption; heartbeat, capacity publication, poll, claim,
+    and `Ready` remain stopped.
+12. **Activation and durable output:** a v2 carrier takeover advances only
+    `preparing -> receipt-stored -> adoption-committed ->
+    batch-committed/local-published -> active`. Before `active`, the relay may
+    send only the mandatory authoritative snapshot request to the candidate
+    host; viewer `Input`, authoritative `Resize`, and `Kill` are neither
+    forwarded nor acknowledged, and later ordinary host frames remain
+    backpressured outside the relay journal/ring/fan-out. An explicit
+    `interactive-attach-v2` activation
+    exchange follows the daemon's post-publication seam. Every sequence-bearing
+    host frame is persisted as its exact raw bytes before ring insertion or
+    fan-out; the host receives only a contiguous durable acknowledgement, that
+    high-water reloads after relay restart, and the daemon advances the shim's
+    heartbeat acknowledgement only after receiving it.
 <!-- BOUNDARY-SYNC-END: adr-2026-08-17-session-shim-core-contract -->
 
 ### D1 — Process ownership moves to a per-session shim
@@ -372,31 +409,41 @@ capacity. It never adds an optional v1 message or substitutes a daemon VT/cache.
 
 ### D4 — Adoption is fenced and happens before readiness
 
-On daemon start, for each compatible shim:
+On daemon start:
 
-1. enter `recovering`; do not advertise ready capacity and do not poll/claim;
-2. scan the registry directory, validating size, ownership, mode, schema,
+1. enter `recovering`; an externally composed daemon performs D12 auth-only
+   typed registration/refresh for every served scope and obtains the exact
+   stable-host/adoption-revision receipts;
+2. keep heartbeat, capacity publication, spawner admission, poll, and claim
+   unstarted;
+3. scan the registry directory, validating size, ownership, mode, schema,
    duplicate session identities, socket type, and PID/start identity;
-3. authenticate `Hello`, including the exact shim/process correlation and that
+4. authenticate each compatible shim `Hello`, including the exact shim/process correlation and that
    shim's current controller generation;
-4. prepare any required carrier handoff and obtain its strictly greater
+5. prepare any required carrier handoff and obtain its strictly greater
    `carrier_epoch` and opaque authenticator **before** serializing `Welcome`;
-5. send `Welcome` with that shim's proposed next controller generation, replay
+6. send `Welcome` with that shim's proposed next controller generation, replay
    position, and only the already-prepared extensions;
-6. let the shim atomically advance its own `controller_generation` and require
+7. let the shim atomically advance its own `controller_generation` and require
    `Adopted` to echo the exact accepted generation/extensions;
-7. request replay after the daemon's last durably forwarded sequence;
-8. when the required external carrier admits on-demand snapshots, require
-   selected protocol version 2 and prove one fresh authoritative inspect/emit
-   round trip before presenting the controller as an attach host;
-9. rehydrate external carrier credentials by `(org_id, session_id)`, authenticate
-   and commit the prepared higher-epoch carrier handoff, then durably retain the
-   adoption receipt;
-10. resume external heartbeats only after carrier and controller ownership are
-   established;
-11. classify every remaining record as exited, stale, or quarantined; and
-12. compute capacity from live adopted **plus quarantined** shims before
-   advertising ready and resuming claims.
+8. request replay after the carrier's persisted D14 high-water;
+9. when an external carrier admits on-demand snapshots, require selected local
+   shimwire version 2 and selected `interactive-attach-v2`; admit the higher
+   carrier only as a non-authoritative candidate and persist its fresh mandatory
+   Snapshot receipt;
+10. commit each exact per-session adoption, including server-side receipt
+    resolution/consumption, and durably retain the opaque adoption receipt;
+11. classify every remaining record as exited, stale, or quarantined;
+12. commit one complete adoption batch for every served scope, including empty
+    scans, and retain every batch receipt;
+13. atomically publish the local adopted/quarantined/tombstoned set and local
+    `adoptionComplete`;
+14. cross D13 `OnAdoptionPublished`, obtain `carrier_active` for every exact v2
+    candidate, and record `carrierActivationComplete`;
+15. send the first coherent heartbeat and require the exact accepted host/
+    controller/adoption-revision echo; and
+16. compute capacity from live adopted **plus quarantined** shims before
+    advertising `Ready` and starting poll/claim.
 
 **Composing prepare resolution.** An optional composing callback receives the
 authenticated post-`Hello` lifecycle identity, shim id, process epoch, and
@@ -438,8 +485,12 @@ all host-produced frames from that one critical section
 (`donmai/ptyhost/session.go:74-85,177-199,288-306`). The shim preserves that
 single-producer rule.
 
-The daemon durably records only `last_forwarded_seq`; it never allocates or
-renumbers host output. On adoption it asks for `last_forwarded_seq + 1`.
+The daemon records only the downstream carrier's acknowledged
+`last_forwarded_seq`; it never allocates or renumbers host output. A composing
+durable callback does not return success on socket write: for attach v2 it waits
+for D14 `host_ack`, after which the carrier can reload the exact durable
+disposition. Only then does the daemon advance both its cursor and the shimwire
+Heartbeat acknowledgement. On adoption it asks for `last_forwarded_seq + 1`.
 
 `Output.data` is the exact length-delimited byte slice read from the PTY master.
 The shim, daemon callback, durable carrier handoff, and carrier ingress preserve
@@ -686,28 +737,59 @@ preserving the OSS boundary.
 | Socket disappears but shim PID/start identity is live | Quarantine. Do not kill, recreate the socket path, or release the claim. The orphan deadline is the shim's escape hatch. |
 | Registry record survives but PID/start identity does not | Classify stale, retain a diagnostic/tombstone, and reconcile lifecycle evidence. Never signal a reused PID. |
 | Protocol ranges do not overlap | Quarantine and account capacity. A compatible daemon may adopt; otherwise the shim drains or reaches its orphan deadline. |
+| Cached credential is fresh by expiry but its shim receipt is absent, stale, from another scope, or names another controller/tuple | Refuse the cache and perform typed auth-only registration/refresh. If that cannot complete, remain `recovering`; do not start heartbeat, poll, claim, or adoption with guessed host authority. |
+| Auth-only registration succeeds for only some served scopes | Retain no partial readiness. The successful credentials may be refreshed/retried in memory, but adoption publication and every external loop remain stopped until every scope returns its exact host/revision receipt. |
+| Candidate carrier socket binds, then receipt/adoption/batch/local publication fails | The candidate remains non-active. The incumbent has no mutation authority; viewer Input/Resize/Kill are not forwarded or acknowledged. Durable completed steps retry idempotently and no earlier receipt is rebound. |
+| Daemon publishes locally, then its activation exchange fails or its acknowledgement is lost | Keep `carrierActivationComplete=false` and stay `recovering`. Retry `carrier_activate` on the exact candidate; the relay returns the same `carrier_active` result only for the same authenticated epochs and stored receipt. |
+| Durable host-frame append fails or is ambiguous | Do not mutate ring/cache/fan-out and do not emit `host_ack`. Donmai and the shim retain their previous acknowledged cursor and replay the exact frame. |
+| Relay restarts after durable append but before host ack | Reload the persisted high-water and exact retained tail, compare replay bytes, and return the same contiguous ack. Never acknowledge from an empty in-memory ring. |
 | Machine reboots | Both daemon and shim processes die. Boot recovery consumes terminal/stale registry evidence before advertising capacity; external release still requires the ordinary terminal/reconciliation contract. |
 
 ### D11 — Migration is interactive-first and converges on one model
 
 The rollout is additive:
 
-1. Ship `session-shim-v1`, registry inspection, and adoption disabled.
-2. Enable shim ownership for newly launched interactive PTY sessions behind a
+1. Ship `session-shim-v1`, registry inspection, the D12 typed credential/cache/
+   heartbeat types, and the v2 codec/client additions with ownership, adoption,
+   carrier activation, and durable external output all disabled.
+2. Deploy every composing credential authority so registration and refresh
+   persist and echo the exact controller/range/capability tuple, stable host
+   authority, and adoption revision. Keep the daemon flag off; verify a stale
+   cache cannot replace this round trip.
+3. Deploy compatible relays with the v2 candidate state machine, durable
+   host-frame journal/high-water reload, snapshot receipt, `host_ack`, and
+   explicit activation exchange. Keep the activation selector false. An
+   in-memory ring or a v1-negotiated host leg cannot satisfy this step.
+4. Enable shim ownership for newly launched interactive PTY sessions behind a
    local compatibility gate. Existing direct-owned sessions drain; they are not
    transplanted across process boundaries.
-3. Enable startup adoption and the real service-manager survival smoke. This
-   includes unplanned recovery with no inherited local fence receipt; composing
-   carrier state is resolved from the authenticated live correlation.
-4. Enable the optional composing-plane restart fence only after every authority
+5. Enable startup adoption and the real service-manager survival smoke. An
+   externally composed daemon performs auth-only multi-scope registration first,
+   keeps heartbeat/poll/claim stopped, then adopts and publishes. This includes
+   unplanned recovery with no inherited local fence receipt; composing carrier
+   state is resolved from the authenticated live correlation.
+6. Enable the optional composing-plane restart fence only after every authority
    scope can return an exact-byte durable acknowledgement and every release,
    requeue, terminalization, host-loss, queue-repair, and administrative path
    reaches the same serialized predicate.
-5. Make shim ownership the default for interactive sessions.
-6. Extend the same ownership boundary to other long-lived session modes where
+7. Enable external attach-v2 takeover only after per-session adoption, every
+   per-scope batch, Donmai local publication, relay activation, first exact
+   heartbeat echo, and durable ordinary-output acknowledgement pass together.
+   Local-wire or attach-wire v1 remains conservation-only during the overlap.
+8. Make shim ownership the default for interactive sessions.
+9. Extend the same ownership boundary to other long-lived session modes where
    restart continuity is required.
-7. Delete the direct daemon-owned session path once no served mode depends on
-   it.
+10. Delete the direct daemon-owned session path once no served mode depends on
+    it.
+
+Rollback disables new external v2 admissions and new shim-owned claims first,
+then lets already-active carriers and shims drain while retaining auth refresh,
+fences, terminal evidence, durable frame journals, and release reconciliation.
+It never lowers a controller/carrier generation, discards a batch receipt or
+persisted carrier high-water, reactivates an incumbent, or rebinds a v2 leg as
+v1. A v1-only replacement still adopts/conserves a live shim and charges it to
+capacity, but exposes no external carrier. Removing the new types, journal, or
+stores waits until no live/fenced/quarantined/adoption reference remains.
 
 One preflight-less legacy generation may cross into the first preflight-capable
 release exactly once. This migration exception is permitted only when the old
@@ -722,6 +804,228 @@ removed after the cutover generation drains from support.
 There is no permanent `legacy` versus `shim` lifecycle authority. During the
 transition, ownership mode is an explicit diagnostic field; lifecycle identity,
 claim semantics, and terminal receipts remain one model throughout.
+
+### D12 — Recovery credentials use additive typed attestation seams
+
+The daemon's public registration package gains one brand-neutral typed
+attestation used by registration and refresh, plus typed server and heartbeat
+receipts. The zero value remains absent and serializes byte-identically to the
+pre-shim contract:
+
+```go
+type SessionShimHostAttestation struct {
+    Supported     bool
+    ControllerID  string
+    ProtocolMin   uint32
+    ProtocolMax   uint32
+    Capabilities  []string
+}
+
+type SessionShimCredentialReceipt struct {
+    Enabled          bool
+    State            string // recovering | ready
+    WorkerHostID     string // stable scope-local host authority
+    AdoptionRevision string // non-empty opaque server revision; "0" is valid
+    ControllerID     string
+    ProtocolMin      uint32
+    ProtocolMax      uint32
+    Capabilities     []string
+}
+
+type SessionShimHeartbeatProjection struct {
+    Enabled             bool
+    AdoptionComplete    bool
+    WorkerHostID        string
+    ControllerID        string
+    AdoptionRevision    string
+    QuarantinedSessions []QuarantinedSession
+}
+```
+
+The concrete public Go names may follow the daemon package's existing naming,
+but these fields and equality rules are normative. `RegistrationOptions` and
+`RegisterRequest` carry the optional attestation. On the JSON wire the existing
+flat additive request keys are `sessionShimSupported`,
+`sessionShimControllerId`, `sessionShimProtocolMin`,
+`sessionShimProtocolMax`, and `sessionShimCapabilities`. `RegisterResponse` and
+the refresh response carry one typed `sessionShim` receipt. `HeartbeatOptions`
+accepts one coherent projection callback and `heartbeatRequestBody` carries it
+under `sessionShim`; a composition must not assemble these fields from separate
+samples.
+
+For one daemon process, the attestation is constructed exactly once from the
+controller id D2 resolved at daemon construction and an immutable sorted,
+duplicate-free protocol/capability declaration. Initial registration and **every
+refresh attempt** serialize the entire tuple. An empty `{}` refresh, omission of
+one field, duplicate/unknown capability, changed ordering that is not the
+canonical order, changed range under the same controller, or a controller id
+equal to stable-host, worker-registration, runtime-token-jti, or a known prior
+token correlation is a typed refusal. A token rotation never supplies a new
+controller id; a replacement process never inherits the old one.
+
+The server persists the tuple before minting the credential and echoes the
+complete accepted tuple together with the stable scope-local host authority and
+current adoption revision. The client compares every field exactly before it
+installs, fans out, or caches the credential. A response that only returns a
+bearer, worker id, or `sessionShimSupported:true` is legacy evidence, not hosted
+recovery authority.
+
+The on-disk credential cache gains the same receipt. When session-shim recovery
+is requested, a cache entry is usable only when the credential is otherwise
+fresh **and** its receipt contains the current process's exact tuple, non-empty
+stable host authority, and non-empty adoption revision. Missing receipt, an old
+controller, a changed range/capability set, or a receipt from another scope
+causes a network register/refresh; it never falls back to the cached bearer. If
+the authoritative request cannot succeed, the daemon remains `recovering`.
+Neither raw tokens nor token jtis enter diagnostics, logs, errors, adoption
+records, or the heartbeat projection.
+
+Startup ordering changes only for an externally composed recovery:
+
+1. resolve the controller id once, load configuration, detect the immutable
+   advertised protocol/capability tuple, and enter `recovering`;
+2. perform auth-only typed registration or refresh for every served authority
+   scope and retain only its non-secret host/revision receipt in Donmai;
+3. keep heartbeat, capacity publication, poll, claim, and the spawner's work
+   admission stopped while D4 adoption, per-session commits, and every per-scope
+   batch complete;
+4. cross the D13 post-publication carrier activation seam;
+5. start heartbeat with the exact accepted host/controller/revision projection,
+   require its schema-valid exact server echo, and only then advertise `Ready`
+   and start poll/claim.
+
+The optional composing hook that acquires additional scopes returns a bounded,
+deterministically ordered list of non-secret
+`(scope, stable_host_authority, adoption_revision)` receipts. It retains its
+bearers itself. An empty or duplicate scope, changed authority, missing receipt,
+or partial multi-scope result fails recovery closed. A standalone daemon with no
+external credential authority skips this hook and retains its working local
+path.
+
+### D13 — Attach v2 has an explicit post-publication activation edge
+
+The carrier successor is normatively specified in
+`protocol/interactive-attach-v2.md`. It uses the distinct WebSocket subprotocol
+token `interactive-attach-v2` and `/v2/` path. Reusing
+`interactive-attach-v1` negotiation while accepting v2-only claims or controls
+is not versioning; it is an unannounced v1 mutation and is forbidden. The first
+v2 profile is host-only, so existing v1 viewer legs may remain attached to the
+same relay room while the host carrier uses v2.
+
+A strictly higher authenticated `carrier_epoch` admits a **candidate**, not an
+active room host. Admission fences the incumbent's mutation authority and
+advances only through this cross-layer state machine:
+
+```text
+preparing
+  -> receipt-stored
+  -> adoption-committed
+  -> batch-committed/local-published
+  -> active
+```
+
+- `preparing`: the candidate is authenticated and epoch-fenced, but not active.
+  The relay may send it exactly one mandatory `snapshot_request(reason=resync)`.
+  Join, backpressure, and ordinary resync requests queue behind that request.
+  Viewer `Input`, authoritative `Resize`, and `Kill` do not cross any host leg;
+  input sequence/ack state does not advance, resize timers do not arm or flush,
+  and a kill reports a typed not-active refusal rather than `relayed:true`.
+  After the mandatory Snapshot, later host frames stay in bounded shim/client
+  replay state; they do not enter the relay journal/ring/fan-out and receive no
+  `host_ack` until activation.
+- `receipt-stored`: the exact next authoritative Snapshot frame from the
+  candidate has been appended as exact raw bytes to the D14 host-frame journal
+  and its bound strict Snapshot receipt has committed. It is not yet inserted
+  into the live ring/fan-out and has no host ack. A socket bind, cached Snapshot,
+  best-effort lifecycle callback, or either durable write in progress is not
+  this state. Donmai retains the Snapshot as a pending shim acknowledgement;
+  adoption publication may use the strict stored receipt and does not wait on
+  the not-yet-permitted host ack.
+- `adoption-committed`: the composing authority resolved and atomically consumed
+  that receipt during the exact per-session adoption commit.
+- `batch-committed/local-published`: every served scope, including an empty
+  scan, has returned its durable batch receipt; Donmai has atomically published
+  the adopted/quarantined/tombstoned set and set local `adoptionComplete`.
+- `active`: only Donmai's post-publication hook may send the v2
+  `carrier_activate` control on the exact candidate leg. The relay verifies the
+  authenticated PTY/carrier epochs and `receipt-stored` state, atomically makes
+  that candidate authoritative, publishes the staged Snapshot into its ring,
+  and returns `carrier_active` with the durable cursor. That cursor resolves the
+  pending Snapshot and only then advances the shim heartbeat. Exact retry is
+  idempotent; stale, changed, early, wrong-leg, v1, or receipt-less activation is
+  refused without changing the room.
+
+`SessionShimConfig` therefore gains an additive `OnAdoptionPublished` callback.
+Its immutable input lists the controller id, every retained per-scope batch
+receipt, and every carrier-required `(org_id, session_id, carrier_epoch)` in
+deterministic order; it contains no bearer, jti, handoff nonce, snapshot bytes,
+or platform receipt selector. The callback returns only after every listed
+carrier has received its exact `carrier_active` acknowledgement and returns the
+same complete set. Donmai verifies set equality and then records a separate
+`carrierActivationComplete` local fact. `Ready`, heartbeat, poll, and claim
+require both local facts.
+
+If activation fails after durable adoption/batch commit, those commits are not
+rolled back or rebound. The daemon remains `recovering`, the candidate remains
+non-active, exact activation is retried, and no viewer mutation is acknowledged.
+An empty carrier set completes trivially after the batch publication. A hosted
+composition makes the hook mandatory; a standalone composition with no external
+carrier omits it. Initial launches use the same candidate/publication/activation
+ordering rather than creating a permanent recovery-only carrier model.
+
+### D14 — Carrier durability precedes ring, fan-out, and shim acknowledgement
+
+`OnSessionEventDurable` means downstream durable acknowledgement, not a
+successful socket write. For every sequence-bearing host frame (`Output`,
+applied `Resize`, `Marker`, live `Snapshot`, and `Exit`), the v2 relay:
+
+1. authenticates the exact leg and validates the bounded binary frame without
+   normalizing it;
+2. appends the exact received frame bytes, digest, stream identity, type, and
+   sequence to its durable host-frame journal;
+3. commits or fsyncs that append and advances only the highest **contiguous**
+   durable disposition;
+4. only then applies the existing per-type in-memory ring, cache, and fan-out
+   behavior;
+5. returns `host_ack` for that contiguous durable high-water on the exact v2
+   leg.
+
+The journal identity is `(org_id, session_id, PTY-host epoch, host sequence)`;
+`carrier_epoch` is retained as ingress correlation, never as stream identity.
+An exact replay at or below the high-water is idempotent and returns the existing
+ack. Different raw bytes for the same identity are a terminal typed conflict.
+An out-of-order future frame cannot move the ack. A shimwire `Gap` may advance
+the durable disposition only after its exact missing range/reason and the
+following authoritative Snapshot are stored as one recovery transition; the
+ack never claims that missing raw frames exist.
+
+A journal timeout, refusal, disk failure, or ambiguous commit produces no ring
+insertion, cache update, fan-out, or host ack. It backpressures or closes the
+candidate with a typed durability error. The sanitized viewer projection remains
+derived after persistence and never overwrites the retained source frame.
+
+On relay restart, the journal loads its persisted high-water and retained replay
+tail before admitting a host or viewer, sending an ack, or accepting a takeover
+snapshot. Missing/corrupt state makes v2 unavailable; it never resets to zero
+while claiming the same PTY epoch. A self-hosted relay supplies a compatible
+durable journal through the same small interface; the relay data path imports no
+hosted control-plane library and has no in-memory-success fallback.
+
+The generic attach client treats `host_ack` as the completion of its durable
+send. Only then may its `OnSessionEventDurable` call return nil. Donmai records
+`last_forwarded_seq` and advances the shimwire Heartbeat acknowledgement only
+after that return. Timeout, reconnect, or an unacknowledged write leaves both
+cursors unchanged and replays the exact bytes. This is the single end-to-end
+law: **shim acknowledgement means the external carrier can reload the exact
+durable disposition after its own restart.**
+
+The adoption-time mandatory Snapshot is the one staged exception to the
+synchronous callback shape: its exact journal append and strict receipt let
+adoption/batch/local publication continue, but do not advance the shim cursor.
+The pending delivery resolves from `carrier_active.ackSeq` (or the immediately
+following exact `host_ack`) after activation. Waiting synchronously for that ack
+before calling `OnAdoptionPublished` is a circular dependency and a contract
+violation; acknowledging before activation is equally invalid.
 
 ## Acceptance and proof obligations
 
@@ -820,6 +1124,71 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     refusal, with no v2 message sent and no cache/fabricated snapshot fallback.
     A v2 shim under the same test must answer the carrier's takeover resync before
     the carrier is reported complete.
+20. **Typed credential attestation RED/GREEN.** Drive the real
+    `RegistrationOptions -> RegisterRequest -> RegisterResponse` path and the
+    real runtime-token refresh endpoint call. Initial register and every refresh
+    must carry the same exact complete tuple and accept only a server echo with
+    the stable host authority and adoption revision. Delete each request field,
+    restore the literal `{}` refresh body, omit/change each response field, or
+    rotate the controller during refresh and observe a discriminating RED; then
+    restore and observe GREEN. A fake that asserts its own hand-authored struct
+    cannot satisfy this proof.
+21. **Stale cache and auth-only startup RED/GREEN.** Seed fresh-by-expiry caches
+    with a missing receipt, prior-process controller, other-scope host,
+    stale adoption revision, and changed protocol/capability tuple. Each must
+    call the authoritative register/refresh path or remain `recovering`, never
+    install the bearer. Against the production `Daemon.Start` composition, prove
+    auth-only multi-scope credential acquisition occurs before shim `Hello`,
+    while heartbeat, spawner admission, poll, and claim call counts remain zero.
+    Removing the recovery phase or starting any loop early must make the fixture
+    RED.
+22. **Heartbeat publication boundary RED/GREEN.** After every batch and carrier
+    activation, send one coherent heartbeat projection with the exact echoed
+    host/controller/adoption revision and complete deterministic quarantine set.
+    The first server response must echo acceptance of that exact revision before
+    poll/claim starts. Omit or tear any field, replay the prior revision, or
+    return an empty/changed echo and prove `Ready` and claims stay false.
+23. **Pre-active carrier silence RED/GREEN.** Hold a v2 takeover independently
+    at `preparing`, `receipt-stored`, `adoption-committed`, and
+    `batch-committed` without local publication. At every stop point send driver
+    Input, advertise a new authoritative geometry, and invoke Kill. Assert zero
+    frames reach the host, zero `input_ack` advance occurs, zero resize timer or
+    send occurs, and Kill does not report relayed. Removing each production state
+    check must turn its named test RED. Only the one mandatory resync Snapshot
+    request is permitted.
+24. **Post-publication activation RED/GREEN.** Commit every per-session adoption
+    and per-scope batch, then prove the candidate remains non-active until Donmai
+    publishes its local complete set and calls `OnAdoptionPublished`. The exact
+    v2 activation/ack exchange makes it active once. Delete the hook, call it
+    before local publication, omit one carrier from its returned set, retry on a
+    different leg/epoch, or negotiate v1 and prove `Ready` remains refused.
+    Make publication wait synchronously for the pre-active Snapshot host ack and
+    prove the deadlock/timeout fixture RED; the strict receipt must permit
+    publication while the shim cursor stays held until activation.
+25. **Raw-frame durability and acknowledgement RED/GREEN.** For each
+    sequence-bearing host frame and every byte value/split boundary, block and
+    fail the real durable append. Assert no ring/cache mutation, viewer fan-out,
+    `host_ack`, Donmai `last_forwarded_seq`, or shim Heartbeat acknowledgement.
+    Commit the exact raw bytes and assert those five effects occur in order.
+    Deleting the append, raw-byte comparison, or ack wait must make the
+    discriminating fixture RED; a semantic re-encoding or in-memory fake is not
+    proof.
+26. **Relay-restart high-water RED/GREEN.** Persist a contiguous frame run,
+    crash after append both before and after host ack, rebuild the relay from an
+    empty process heap, and prove it reloads the same high-water and exact tail.
+    Exact replay returns the same ack without duplicate fan-out; changed bytes
+    conflict; a future gap does not advance. Removing the reload or seeding from
+    the ring must make the fixture RED.
+27. **Gap durability.** Evict the shim ring across recovery and prove the exact
+    `Gap` range/reason plus following shim-produced Snapshot commit as one durable
+    transition before the cursor advances. The ack and viewer resync must expose
+    the gap disposition without claiming the missing raw frames were stored.
+28. **Non-leak and immutable-artifact proof.** Exercise every new refusal and
+    diagnostic with fixture tokens, token jtis, handoff nonces, raw output, and
+    raw Snapshot bytes and prove none appears in logs, errors, control snapshots,
+    or host diagnostics. Installed-artifact CI must pin immutable daemon, client,
+    and relay revisions; a mutable checkout or branch name cannot satisfy the
+    release/activation gate.
 
 The service-manager smoke uses the installed binary and actual launchd job. A
 unit test that kills a child subprocess does not exercise the failure class.
@@ -836,6 +1205,11 @@ unit test that kills a child subprocess does not exercise the failure class.
   workload death.
 - Incompatible shims remain observable and capacity-honest instead of becoming
   silent, unreachable load.
+- Credential acquisition can precede adoption without accidentally starting
+  any serving loop, and every later readiness fact names the exact accepted
+  controller/host/revision tuple.
+- Carrier authority and output durability now have explicit acknowledgements;
+  neither a socket bind nor an in-memory ring can impersonate completion.
 
 ### Negative
 
@@ -848,6 +1222,10 @@ unit test that kills a child subprocess does not exercise the failure class.
   audited disposal path.
 - Service-manager behavior now needs real macOS and Linux integration coverage;
   process-tree unit tests are insufficient.
+- A v2 relay needs a durable host-frame journal and restart recovery in addition
+  to its in-memory fan-out ring.
+- Recovery may hold valid credentials and durable adoption commits while still
+  remaining deliberately non-Ready until carrier activation converges.
 
 ### Risks
 
@@ -877,6 +1255,16 @@ unit test that kills a child subprocess does not exercise the failure class.
   authoritative screen, and a stale exact snapshot is exact only at its original
   `at_seq`. Every fresh attach resync crosses the v2 request to the shim; otherwise
   carrier activation refuses visibly.
+- **A fresh-by-expiry cache carries stale controller authority.** Credential TTL
+  does not prove the current daemon process or adoption revision. Require the
+  exact typed server echo, or stay recovering.
+- **A candidate leg becomes the room host too early.** Installing it at socket
+  admission lets viewer input, resize, or kill cross before the receipt and
+  adoption commits exist. Candidate and active bindings are distinct states;
+  only the post-publication v2 exchange joins them.
+- **The relay acknowledges memory rather than durability.** Ring append followed
+  by a crash can lose bytes the shim was told were safe. Persist exact raw bytes,
+  reload the high-water, then ack; no other ordering is accepted.
 
 ## Alternatives considered
 
@@ -912,6 +1300,20 @@ strict decoder are closed precisely so an older live shim cannot silently
 downgrade or misparse a new daemon. The selected v2 overlap is the compatible
 extension path.
 
+**Serve a `/v2` URL while negotiating `interactive-attach-v1`.** Rejected: the
+subprotocol token is the WSS version authority. A path and v2-shaped credential
+cannot silently widen v1's frozen control registry; the successor offers and
+echoes `interactive-attach-v2`.
+
+**Make a strictly higher carrier active when its socket binds.** Rejected: the
+signed generation fences stale legs but proves neither snapshot durability nor
+adoption/batch/local publication. The candidate remains non-authoritative until
+the explicit post-publication activation exchange.
+
+**Treat ring insertion or a successful socket write as durable output.**
+Rejected: both disappear on relay-process loss. A shim acknowledgement is
+permitted only after the relay's persisted high-water can be reloaded.
+
 **Rebuild the screen in the daemon or answer from its last snapshot cache.**
 Rejected: the shim owns the PTY and headless VT. A second emulator can diverge on
 queries, resize, alt-screen, or output already buffered inside the shim; a cached
@@ -939,6 +1341,9 @@ The accepting commit carries these reference-document amendments:
 - `protocol/interactive-attach-v1.md` — clarify that a daemon/carrier restart
   does not create a new PTY host epoch; any new viewer-visible gap mechanism is
   versioned rather than silently added to frozen v1.
+- `protocol/interactive-attach-v2.md` — the correctly versioned host-carrier
+  successor: separate negotiation/claims, candidate activation, durable host
+  acknowledgement, and explicit gap disposition.
 
 The platform mirror names its own reaper, relay, and host-heartbeat amendments.
 
@@ -961,9 +1366,17 @@ obligations and activation gates in this ADR and its platform mirror.
 - `daemon.SessionShimConfig` carries an additive controller-id override. The
   effective value is resolved/generated once when the daemon is constructed;
   it is not a callback and is never read from mutable worker/token state.
+- Registration, refresh, cache, and heartbeat gain the D12 additive public
+  types. With the session-shim attestation absent, their request/response/cache
+  bytes and startup order remain the existing standalone contract.
+- The composing `Daemon.Start` hook may obtain auth-only per-scope credentials
+  before adoption, but it must not start heartbeat, spawner admission, poll, or
+  claim. `OnAdoptionPublished` is the later, separate carrier-activation edge.
 - The v2 controller proxy delegates both snapshot modes to the shim and preserves
   exact frame bytes. A cache may accelerate display of a known checkpoint but is
   not an implementation of either request mode.
+- The v2 attach client returns durable event success only after the matching
+  `host_ack`; a successful WSS write is not the `OnSessionEventDurable` contract.
 - Registry writes use the injected state-directory seam. No brand-specific path
   is compiled into OSS.
 - Release sequencing is OSS protocol/library first, composing binary second,
