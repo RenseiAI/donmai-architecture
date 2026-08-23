@@ -34,6 +34,13 @@ A later edit to a v1-draft section does not silently rewrite v2. Its applicable
 delta must be accepted here and this pinned `extends-revision` must move. V1 and
 v2 therefore remain independently reproducible.
 
+The external attach version and local daemon↔shim selected version are separate
+axes. Durable attach-v2 activation requires selected local shimwire v3 and its
+`full_host_frame_v3` capability as specified in
+[`session-shim-v3.md`](session-shim-v3.md). Selected local v2 may answer an
+authoritative snapshot request but cannot supply every exact host frame, so it
+is conservation-only and visibly carrier-ineligible.
+
 ## 1. Version selection is independent and exact
 
 - A v2 WSS host offers `Sec-WebSocket-Protocol: interactive-attach-v2`. The
@@ -158,8 +165,9 @@ No viewer authority crosses the boundary while preparing:
 - no best-effort callback, socket fact, or cached room state advances the
   takeover.
 
-The host answers the mandatory request from the shim-owned VT through local-wire
-v2. The first candidate sequence-bearing frame must be the exact next Snapshot
+The host answers the mandatory request from the shim-owned VT through selected
+local shimwire v3. The first candidate sequence-bearing frame is supplied once
+by the request-correlated raw HostFrame and must be the exact next Snapshot
 after the durable cursor. If the shim ring cannot supply that point, the host
 first sends one exact `host_gap`, then the authoritative Snapshot. No ordinary
 Output may overtake this response. After that Snapshot, the generic client holds
@@ -229,6 +237,13 @@ are ingress correlations only. A self-hosted relay supplies the same interface
 to its own durable control plane or local durable store; there is no import from
 one hosted platform and no in-memory-success fallback.
 
+Every ordinary frame admitted here originates in the selected-local-v3
+`HostFrame` event, which carries the complete raw attach-frame bytes for Output,
+applied Resize, Marker, Snapshot, and Exit. Selected-v2 semantic observations
+are not inputs to this journal. A live requested Snapshot uses its one raw
+HostFrame; the adjacent local `SnapshotResult` is correlation-only and cannot
+create a second relay frame.
+
 For every sequence-bearing host frame, the relay order is:
 
 1. verify the exact currently authenticated leg and bounded frame syntax;
@@ -289,17 +304,21 @@ terminal receipt authority; they never move `host_ack`.
 | Relay crashes with only in-memory ring state | V2 remains unavailable; memory is not promoted to durability. |
 | Same sequence reappears with changed bytes | Terminal conflict; never sanitize/re-encode it into equality. |
 | v1 host presents v2 claim/control | Version/auth refusal; v1 room semantics remain unchanged. |
+| Local selected-v2 shim reaches carrier preparation | Adopt/conserve it, return `durable_host_frame_unsupported`, charge capacity, and create no attach-v2 candidate. |
+| V3 live Snapshot result carries frame bytes or generates a second event | Duplicate-host-frame refusal; receipt, journal, and acknowledgement do not advance. |
 
 ## 7. Migration and rollback
 
-1. Publish the v2 codec/control types and generic client dormant. V1 stays the
-   default and its conformance corpus must remain byte-identical.
-2. Deploy relay durable journal/reload and candidate state machine with v2
+1. Publish local shimwire v3/full-host-frame support and both max-2 overlap
+   directions before attach-v2 activation. Selected v1/v2 stay byte-identical.
+2. Publish the attach-v2 codec/control types and generic client dormant.
+3. Deploy relay durable journal/reload and candidate state machine with v2
    admission disabled.
-3. Deploy the strict receipt/adoption/batch and daemon post-publication seams.
-4. Enable v2 only for installed artifacts that pass the conformance obligations
-   below. A v1 shim/host remains conservation-only and visibly carrier-ineligible.
-5. Rollback first disables new v2 credential mint/admission and lets already
+4. Deploy the strict receipt/adoption/batch and daemon post-publication seams.
+5. Enable v2 only for installed artifacts that pass the conformance obligations
+   below. A local selected-v1/v2 shim remains conservation-only and visibly
+   carrier-ineligible.
+6. Rollback first disables new v2 credential mint/admission and lets already
    active v2 legs drain. It never rebinds them as v1, lowers carrier epoch,
    discards durable high-water, or reactivates an incumbent.
 
@@ -319,6 +338,12 @@ cannot enable it.
       observe its named test RED, then restore GREEN.
 - [ ] Exactly one mandatory takeover Snapshot request crosses before active;
       ordinary snapshot requests serialize behind it.
+- [ ] The host leg proves actual selected local v3 plus
+      `full_host_frame_v3`. Selected local v2 returns the visible durable-frame
+      incompatibility and never creates a candidate.
+- [ ] Output, applied Resize, Marker, Snapshot, and Exit journal bytes come from
+      the one raw local HostFrame event. A legacy semantic input or live
+      SnapshotResult-derived duplicate is RED.
 - [ ] Receipt, adoption, all batches, local publication, `carrier_activate`, and
       `carrier_active` occur in order. Deleting the post-publication seam or
       moving activation earlier is RED.
