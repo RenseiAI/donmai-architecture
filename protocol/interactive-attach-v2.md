@@ -217,13 +217,19 @@ RFC 8785 rules as §2.2:
 {
   "schemaVersion": 1,
   "cutoverRequestId": "UUID",
-  "cutoverRequestDigest": "64 lowercase hex SHA-256",
-  "expectedStoreAuthorityId": "bounded non-empty string"
+  "cutoverRequestDigest": "64 lowercase hex SHA-256"
 }
 ```
 
+The caller never supplies or infers store authority. Relay resolves it from the
+opened durable store under the same exclusive lock that freezes the manifest and
+returns it in the content-addressed result. An initialized store with zero v1
+rows is valid: `entries` is empty and `eligibleEntryCount="0"`; it follows the
+same fsync/reload/idempotency law.
+
 Under one exclusive journal/store-metadata lock, Relay sets v2 readiness false,
-reloads and verifies every v1 reservation/candidate/credential record, durably
+resolves its current stable non-empty `storeAuthorityId`, reloads and verifies
+every v1 reservation/candidate/credential record, durably
 sets `v1WritesClosed=true`, freezes the exact nonterminal v1 set, commits the
 mandatory `minimumWriterSchema="2"`, manifest, and parent/store metadata, then
 reloads and verifies all before reply.
@@ -282,7 +288,7 @@ bytes with `200`:
   "state": "frozen",
   "cutoverRequestId": "same UUID",
   "cutoverRequestDigest": "same digest",
-  "storeAuthorityId": "same expected authority",
+  "storeAuthorityId": "Relay-resolved bounded non-empty string",
   "cutoverId": "UUID",
   "cutoverRevision": "canonical positive uint64 decimal",
   "manifestDigest": "64 lowercase hex SHA-256",
@@ -294,7 +300,8 @@ bytes with `200`:
 ```
 
 The same request id with changed bytes, another cutover request for that store,
-authority mismatch, or any concurrent v1 write is `409 carrier_cutover_conflict`.
+store-authority rotation after the first commit, or any concurrent v1 write is
+`409 carrier_cutover_conflict`.
 Other closed failures are `400 invalid_carrier_cutover_request`, uniform `401`,
 `413`, and `503 carrier_cutover_unavailable`. A committed-response-lost retry
 returns the first response. There is exactly one base manifest per initialized
@@ -969,6 +976,7 @@ terminal receipt authority; they never move `host_ack`.
 | Same reservation request replays after process crash | Return the first proof ordinal/digest/reserved epoch. Changed bytes conflict. |
 | Cutover crashes before write-closed flag + manifest commit | V2 readiness stays false and no partial manifest authorizes legacy state. Exact request retries under the exclusive lock. |
 | Cutover commits but response is lost | Exact request replay returns the first store-bound cutover id/revision/manifest digest and count. It never resnapshots rows. |
+| Initialized store has zero v1 rows and no proof response has exposed store authority | Relay resolves its own authority under the cutover lock, freezes empty entries/count zero, and returns it. Caller never guesses or supplies the value. |
 | New/unlisted/changed v1 row appears after cutover | Refuse the row into reconciliation and set v2 readiness false; never append it to the base manifest. |
 | Retained v1 entry drains or crosses abandonment to v2 | Fsync the exact shrink-only tombstone before deleting/unlinking its row/credential. Restart reload keeps it ineligible forever. |
 | Rollback binary cannot enforce manifest/write-closed/tombstones/minimum writer schema | Store open fails before a write transaction; keep carrier admission/readiness disabled. |
@@ -1047,6 +1055,11 @@ cannot enable it.
       resnapshot. Delete the exclusive lock, store binding, fsync/transaction,
       writer-close ordering, minimum-writer-schema store-open refusal, or reload
       check and observe RED.
+- [ ] Repeat cutover on a freshly initialized store with zero v1 rows and no prior
+      proof reservation response. Relay must resolve/return its own non-empty
+      store authority, freeze an empty manifest, return count zero, and reach v2
+      readiness after reload. Requiring caller-supplied store authority or
+      substituting empty/guessed authority is RED.
 - [ ] Verify every manifest entry id/digest/proof/epoch/state and nullable
       credential digest triple against retained bytes. Insert or mutate a v1 row
       after cutover and prove auth/action refusal, reconciliation, and v2 readiness

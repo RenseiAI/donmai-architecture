@@ -901,6 +901,7 @@ preserving the OSS boundary.
 | Relay restarts after durable append but before host ack | Reload the persisted high-water and exact retained tail, compare replay bytes, and return the same contiguous ack. Never acknowledge from an empty in-memory ring. |
 | V1 cutover crashes before manifest/write-closed commit | V2 readiness remains false; no partial allowset authorizes a legacy row. Exact request retries under the exclusive store lock. |
 | V1 cutover commits but response is lost | Exact request replay returns the first store-bound cutover receipt and never resnapshots surviving v1 rows. |
+| V1 cutover runs on an initialized zero-row store | Relay resolves/returns its own non-empty store authority under lock and freezes an empty manifest/count zero; no prior proof response or caller-supplied authority exists. |
 | Unlisted/changed/new proof-v1 row appears after cutover | Refuse into reconciliation and clear v2 readiness; never add it to the immutable base manifest. |
 | Listed v1 entry drains | Commit its shrink-only tombstone before row/secret deletion. Restart and rollback retain permanent ineligibility. |
 | Replacement shim sidecar ack is N and carrier proof boundary is N, both ahead of prior composing adoption M | Keep M unchanged during preparation, set proof-resolved ResumeFrom to N+1, send only the mandatory Snapshot N+1/atSeq N, then advance M to N only in the transaction consuming exact proof plus receipt. |
@@ -2206,6 +2207,10 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     reload, exact entry lookup,
     tombstone monotonicity, or rollback enforcement and observe its fixture RED
     before restoring GREEN.
+    Repeat with a freshly initialized zero-v1-row store and no proof response:
+    Relay must resolve/return its own non-empty store authority and empty-manifest
+    count zero; requiring caller authority or accepting empty/guessed authority is
+    RED.
 
 The service-manager smoke uses the installed binary and actual launchd job. A
 unit test that kills a child subprocess does not exercise the failure class.
