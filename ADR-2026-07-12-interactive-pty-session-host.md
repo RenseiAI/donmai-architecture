@@ -127,6 +127,12 @@ the `agy` PTY precedent and generalizing it to `claude`/`codex`/shell:
   the host VT directly to the PTY master and never reach the wire — otherwise
   any TUI that probes its terminal hangs (protocol spec § 12; W4 scope with a
   CPR conformance fixture).
+  When the PTY host is owned by a per-session shim, a relay-originated
+  `snapshot_request` still terminates at this VT. The replaceable daemon forwards
+  it through selected local-wire version 2 and returns the exact shim-produced
+  frame; it never answers from a second VT or relabels a cached screen as fresh.
+  A selected v1 shim remains adoptable but cannot back an external carrier that
+  requires this on-demand operation.
 - **`sessionClass` on the host `SessionState`.** The host `SessionState` struct
   carries a `sessionClass` discriminator (e.g. `"interactive"`). This is a
   **named cross-repo dependency**: the reaper / idle-watchdog exemptions key off

@@ -237,6 +237,15 @@ quarantined shims against capacity before returning to `ready` or claiming work.
 Duplicate lifecycle identities preserve every shim/process correlation; none is
 overwritten merely because its session identity collides.
 
+The daemon resolves one opaque controller id before this startup pass. An
+embedding binary may provide it through the additive session-shim configuration;
+otherwise the OSS daemon generates it once. The value is immutable for the
+process and shared by every shim and served scope, but rotates when the daemon
+process is replaced. It never derives from a worker registration, runtime-token
+jti, stable host id, mutable hostname, or a literal fallback. Credential refresh
+therefore cannot look like controller replacement, and controller replacement
+cannot hide behind credential continuity.
+
 After an authenticated shim `Hello`, an optional composing carrier receives the
 exact live correlation and resolves its own durable preparation state. The
 replacement daemon never supplies or reconstructs a remote fence id/revision or
@@ -246,6 +255,14 @@ fence is the ordinary unplanned-crash case, while any conflicting host or
 shim/process/controller correlation keeps startup fail-closed. The durable
 last-forwarded sequence is composing-carrier state, not a `Hello` field; a
 remote store validates it against durable ingress and zero safely over-replays.
+
+Local-wire v1 remains sufficient to adopt and conserve an older live shim, but
+its closed vocabulary cannot proxy a fresh relay snapshot request to the
+shim-owned VT. An external attach carrier requiring on-demand snapshots is
+available only after selected local-wire v2 proves its exact inspect/emit proxy.
+A v1 shim is kept alive, reported as carrier-incompatible, and charged to
+capacity; the daemon never fabricates a screen or treats a stale snapshot cache
+as fresh.
 
 The local status/doctor surfaces and every host heartbeat expose the same
 bounded quarantine projection: session identity, shim/process correlation,
@@ -259,7 +276,9 @@ terminal session.
 Architecture acceptance does not claim this path is shipped. Activation waits
 for the real installed-service survival smoke, old-controller fencing, gap and
 snapshot honesty, no-secret registry proof, quarantine visibility, and orphan
-bound required by the ADR.
+bound required by the ADR. External-carrier activation also waits for immutable
+process-scoped controller identity and the installed v2 authoritative-snapshot
+round trip; source compatibility or a green v1 adoption test does not satisfy it.
 
 ## Drain and restart semantics
 

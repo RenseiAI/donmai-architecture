@@ -48,6 +48,16 @@ platform mirror)
 > Conflicting authority or correlation still fails closed. This clarification
 > is normative and preserves the implementation/release/activation gates.
 
+> **Controller-identity and snapshot correction 2026-08-22.** A controller id
+> is one immutable, opaque daemon-process correlation. It is neither a worker
+> registration id nor a token-generation value, and routine credential refresh
+> cannot change it. The v1 local-wire vocabulary is closed and cannot carry the
+> on-demand authoritative snapshot operation an adopted external attach host
+> requires. Selected protocol version 2 adds that exact request/reply proxy while
+> version 1 remains adoptable during the overlap. A daemon-side VT reconstruction
+> or a cache presented as a fresh shim snapshot is forbidden. This correction is
+> normative; external-carrier activation remains pending on the v2 proof below.
+
 ## Context
 
 An interactive session is currently only as durable as the daemon process that
@@ -216,6 +226,22 @@ identity minted and persisted independently of those correlations. A composing
 plane may map that stable identity to a scope-local host row, but it may not
 fall back to a controller or worker id when that lookup fails.
 
+One daemon process resolves its `controller_id` exactly once before it adopts a
+shim, registers externally, or starts a credential-refresh loop. A composing
+binary may provide a non-empty id through an additive configuration seam; the
+OSS default generates an opaque high-entropy id once at daemon construction.
+The resolved value is immutable for that process and is reused across every
+served scope, shim `Welcome`, prepare/commit callback, registration, refresh,
+heartbeat, and diagnostic projection. A routine token refresh or a new worker
+registration leg keeps it; a replacement daemon process gets a new value.
+
+The default and override both refuse equality with a known stable-host id or
+worker-registration id. Deriving the value from a worker id, runtime-token jti,
+mutable hostname, or a literal such as `daemon` is out of contract. PID/start
+identity may be reported beside it but is not a sufficient id by itself. The
+controller id remains comparison and diagnostic evidence, never a bearer or a
+substitute for authenticated host authority.
+
 Two or more live shim ids claiming the same `(org_id, session_id)` are an
 ambiguity that quarantines **every** observed record until reconciled. Discovery,
 capacity, fencing, and terminal reconciliation retain each full
@@ -224,7 +250,7 @@ keyed only by lifecycle identity is forbidden because it would discard a
 possibly live process. A PID is never trusted without its process-start identity
 because PID reuse is normal.
 
-### D3 — `session-shim-v1` is a stable local adoption wire
+### D3 — The stable local adoption wire has a v1/v2 overlap
 
 The shim listens on one Unix-domain socket under the injected state directory.
 The socket directory is `0700`; the socket and registry record are `0600` and
@@ -248,7 +274,7 @@ Adopted    shim -> daemon   accepted generation, exact extension echo, and
                             exact replay disposition
 Output     shim -> daemon   shim-owned sequence + raw bytes
 Gap        shim -> daemon   missing inclusive range + closed reason
-Snapshot   shim -> daemon   state after the gap or on request
+Snapshot   shim -> daemon   state after an adoption-time replay gap
 Input      daemon -> shim   generation + attributed input bytes
 Resize     daemon -> shim   generation + authoritative geometry
 Stop       daemon -> shim   generation + typed reason
@@ -256,6 +282,56 @@ Heartbeat  both ways       liveness and acknowledged sequence
 Exit       shim -> daemon   immutable terminal observation
 Error      either way      closed code + display-only detail
 ```
+
+The existing protocol-family token remains stable during the overlap; the
+selected integer version, not a suffix inferred from that token, decides the
+message vocabulary. A v2-capable shim advertises `[1,2]`, a v2-capable daemon
+selects the highest overlap, and both speak only the selected vocabulary. A new
+daemon therefore still adopts a live v1 shim, and a new shim selected at v1
+emits no v2 message. Renaming the family token or raising the minimum above 1 is
+a later migration decision, not part of this correction.
+
+Selected version 2 retains every v1 type and adds one request-correlated
+authoritative snapshot operation:
+
+```text
+SnapshotRequest  daemon -> shim   non-zero connection-local request id,
+                                  current controller generation,
+                                  mode = inspect | emit
+SnapshotResult   shim -> daemon   same request id/mode plus the exact
+                                  authoritative result or a closed refusal
+```
+
+`inspect` calls the shim-owned PTY host's read-only snapshot operation. It
+returns the exact encoded screen bytes and the exact `at_seq` they describe,
+allocates no output sequence, and emits no host frame. `emit` calls the
+shim-owned PTY host's emitting snapshot operation exactly once. Its result
+carries the exact encoded interactive-attach `Snapshot` frame bytes and the
+exact `in_stream` disposition: before Exit the frame is sequence-bearing and is
+delivered once, in host-stream order, through the controller's subscription;
+after Exit it has header sequence zero, retains `at_seq == Exit.seq`, and is
+returned for direct transmission. The result bytes are length-delimited opaque
+bytes, never JSON/base64 or a reconstructed semantic object.
+
+Every request carries the currently adopted controller generation. An `emit`
+request is authority-bearing because it allocates a host sequence and therefore
+must pass the same single generation fence as input, resize, and stop. Request
+ids never cross controller connections and never create lifecycle identity.
+Unknown mode, duplicate changed request, malformed result, mismatched request
+id/mode/generation, timeout, or a result that would deliver one emitted frame
+twice is a typed refusal; none may be converted into a cached success.
+Within one live controller connection, an exact retry of the same request id,
+generation, and mode returns the first immutable result without calling the PTY
+host or emitting a second frame. The bounded per-connection retry ledger is
+discarded with the connection; a request id is never replay authority across a
+new controller generation.
+
+The daemon-side controller exposes the same read-only and emitting snapshot
+semantics as the shim-owned PTY session, but it owns no VT. It may retain an
+exact authoritative result at its exact `at_seq` for diagnostics or conservative
+replay. It may not advance that snapshot from observed `Output`, relabel a stale
+cache as current, synthesize a screen, or answer a new request without a fresh
+shim result. The shim remains the sole snapshot authority.
 
 `Welcome.extensions` is an optional, namespaced map. The OSS protocol defines
 one generic `carrier_epoch` extension point for a composing carrier that needs
@@ -285,6 +361,15 @@ able to adopt an older live v1 shim. A protocol bump therefore requires an
 overlap window long enough for the maximum supported session duration. Removing
 that overlap requires a separate migration decision.
 
+Version 1 remains sufficient for local adoption, replay, input, resize, stop,
+heartbeat, and terminal observation. It is not sufficient for a composition
+whose external attach carrier can send an on-demand `snapshot_request`: v1 has
+no controller-to-shim request message, and its snapshot observation does not
+carry the complete emitting-frame disposition needed to implement that request.
+Such a composition adopts the v1 shim for ownership conservation but refuses the
+external carrier, reports the incompatibility, and charges the session to
+capacity. It never adds an optional v1 message or substitutes a daemon VT/cache.
+
 ### D4 — Adoption is fenced and happens before readiness
 
 On daemon start, for each compatible shim:
@@ -301,13 +386,16 @@ On daemon start, for each compatible shim:
 6. let the shim atomically advance its own `controller_generation` and require
    `Adopted` to echo the exact accepted generation/extensions;
 7. request replay after the daemon's last durably forwarded sequence;
-8. rehydrate external carrier credentials by `(org_id, session_id)`, authenticate
+8. when the required external carrier admits on-demand snapshots, require
+   selected protocol version 2 and prove one fresh authoritative inspect/emit
+   round trip before presenting the controller as an attach host;
+9. rehydrate external carrier credentials by `(org_id, session_id)`, authenticate
    and commit the prepared higher-epoch carrier handoff, then durably retain the
    adoption receipt;
-9. resume external heartbeats only after carrier and controller ownership are
+10. resume external heartbeats only after carrier and controller ownership are
    established;
-10. classify every remaining record as exited, stale, or quarantined; and
-11. compute capacity from live adopted **plus quarantined** shims before
+11. classify every remaining record as exited, stale, or quarantined; and
+12. compute capacity from live adopted **plus quarantined** shims before
    advertising ready and resuming claims.
 
 **Composing prepare resolution.** An optional composing callback receives the
@@ -709,6 +797,29 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     holds, and reopen claims only afterward; a later preparation uses a new
     identity and snapshot. The daemon-owned update path proves the same
     preflight ordering before swap or exit.
+17. **Process-scoped controller identity.** With no composing override, construct
+    two daemon processes and prove each resolves one non-empty, distinct
+    controller id while every adoption and diagnostic inside one process carries
+    the same value. With an override, prove registration, repeated runtime-token
+    refresh, carrier prepare/commit, heartbeat, and shim `Welcome` all retain the
+    exact override; a replacement process rotates it. Present a stable-host id,
+    worker-registration id, runtime-token jti, and the literal `daemon` as the
+    controller source and prove every alias is refused rather than normalized.
+18. **Authoritative v2 snapshot proxy.** Negotiate v2 against a real shim-owned
+    PTY. Prove `inspect` returns exact screen bytes/`at_seq` without advancing the
+    host sequence; prove live `emit` advances exactly once and delivers the exact
+    encoded frame once in stream order; prove post-Exit `emit` returns the exact
+    sequence-zero final frame. Exercise all byte values, concurrent ordinary
+    output, duplicated requests, changed replay, mismatched correlation, timeout,
+    and stale generation. Deleting the shim call must make this fixture RED; a
+    daemon VT or hand-authored snapshot fixture cannot satisfy it.
+19. **v1 overlap and carrier refusal.** Adopt a prior released v1 shim with the
+    new daemon and prove its existing control/replay/terminal behavior remains
+    available. Then require an external attach carrier with on-demand snapshots
+    and prove the same v1 selection yields a visible capacity-charged carrier
+    refusal, with no v2 message sent and no cache/fabricated snapshot fallback.
+    A v2 shim under the same test must answer the carrier's takeover resync before
+    the carrier is reported complete.
 
 The service-manager smoke uses the installed binary and actual launchd job. A
 unit test that kills a child subprocess does not exercise the failure class.
@@ -762,6 +873,10 @@ unit test that kills a child subprocess does not exercise the failure class.
 - **Protocol compatibility outlives testing.** A new daemon may compile against
   v1 while no fixture runs against the previous released shim. Release gating
   must retain at least one old-shim/new-daemon adoption fixture.
+- **A daemon cache impersonates the shim VT.** Observed output is not a current
+  authoritative screen, and a stale exact snapshot is exact only at its original
+  `at_seq`. Every fresh attach resync crosses the v2 request to the shim; otherwise
+  carrier activation refuses visibly.
 
 ## Alternatives considered
 
@@ -791,6 +906,17 @@ hides occupied capacity.
 **Release claims when the restart fence expires.** Rejected: elapsed time is not
 proof that a harness stopped. The safe outcome under uncertainty is visible
 quarantine until a terminal receipt or adopted tombstone exists.
+
+**Add a snapshot-request message to v1.** Rejected: the v1 type registry and
+strict decoder are closed precisely so an older live shim cannot silently
+downgrade or misparse a new daemon. The selected v2 overlap is the compatible
+extension path.
+
+**Rebuild the screen in the daemon or answer from its last snapshot cache.**
+Rejected: the shim owns the PTY and headless VT. A second emulator can diverge on
+queries, resize, alt-screen, or output already buffered inside the shim; a cached
+snapshot is authoritative only for its recorded `at_seq`, not for a fresh relay
+request.
 
 **Use only a hard adoption-gap bound and no restart fence.** Rejected: it works
 only while every restart stays faster than every external stale threshold. A
@@ -824,7 +950,7 @@ obligations and activation gates in this ADR and its platform mirror.
 
 ## Implementation notes
 
-- Planned OSS packages: `shimwire` (codec and closed message types),
+- Planned OSS packages: `shimwire` (codec and versioned closed message types),
   `sessionshim` (process/registry/adoption implementation), and a hidden
   `session-shim` binary mode. The exact package layout may change; the ownership
   and protocol boundaries above may not.
@@ -832,6 +958,12 @@ obligations and activation gates in this ADR and its platform mirror.
   handle. It must not retain a second direct reference to PTY state.
 - The shim reuses `ptyhost`, `provider/harness/ptycli`, `attachwire`, and the
   existing process-group stop semantics; it does not fork a second PTY stack.
+- `daemon.SessionShimConfig` carries an additive controller-id override. The
+  effective value is resolved/generated once when the daemon is constructed;
+  it is not a callback and is never read from mutable worker/token state.
+- The v2 controller proxy delegates both snapshot modes to the shim and preserves
+  exact frame bytes. A cache may accelerate display of a known checkpoint but is
+  not an implementation of either request mode.
 - Registry writes use the injected state-directory seam. No brand-specific path
   is compiled into OSS.
 - Release sequencing is OSS protocol/library first, composing binary second,
