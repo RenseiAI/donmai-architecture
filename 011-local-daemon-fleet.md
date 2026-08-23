@@ -230,7 +230,7 @@ Two constraints bind the watcher that implements this:
 Per `ADR-2026-08-17-session-shim-adoption.md`, one stable process owns each
 long-lived interactive harness process group, PTY master, VT/snapshot state,
 recorder, output sequence, replay ring, and final exit observation. The daemon
-is the replaceable controller and carrier. On startup it enters `recovering`,
+is the replaceable controller and carrier. On startup it enters `recovering`.
 An externally composed daemon first uses the additive typed registration/
 refresh seam to acquire auth-only credentials and exact stable-host/adoption-
 revision receipts for every served scope. It does not start heartbeat, capacity
@@ -271,12 +271,14 @@ last-forwarded sequence is composing-carrier state, not a `Hello` field; a
 remote store validates it against durable ingress and zero safely over-replays.
 
 Local-wire v1 remains sufficient to adopt and conserve an older live shim, but
-its closed vocabulary cannot proxy a fresh relay snapshot request to the
-shim-owned VT. An external attach carrier requiring on-demand snapshots is
-available only after selected local-wire v2 proves its exact inspect/emit proxy.
-A v1 shim is kept alive, reported as carrier-incompatible, and charged to
-capacity; the daemon never fabricates a screen or treats a stale snapshot cache
-as fresh.
+its closed vocabulary cannot proxy a fresh relay snapshot request. Selected v2
+adds that exact inspect/emit proxy but omits applied Resize/Marker and lacks one
+complete raw event for every host sequence. Selected v3 adds the one exact
+`HostFrame` rail for Output, applied Resize, Marker, Snapshot, and Exit. Durable
+external attach requires selected v3 plus `full_host_frame_v3`; v1 reports
+`authoritative_snapshot_unsupported`, v2 reports
+`durable_host_frame_unsupported`, and both stay alive/capacity-charged. The
+daemon never fabricates a screen or missing frame.
 
 External takeover uses the correctly versioned
 `protocol/interactive-attach-v2.md`: a higher carrier is a non-authoritative
@@ -287,7 +289,8 @@ relay may send only the mandatory authoritative Snapshot request; viewer Input,
 authoritative Resize, and Kill are neither forwarded nor acknowledged.
 
 Ordinary host output has the same durable boundary. Every sequence-bearing raw
-frame is committed byte-for-byte in the carrier before ring insertion or
+frame arrives once from selected local-v3 `HostFrame` and is committed byte-for-
+byte in the carrier before ring insertion or
 viewer fan-out. The carrier reloads its contiguous high-water after restart and
 returns `host_ack`; only that ack lets the generic client return durable success,
 the daemon advance `last_forwarded_seq`, and the shim heartbeat advance. A
@@ -307,7 +310,9 @@ for the real installed-service survival smoke, old-controller fencing, gap and
 snapshot honesty, no-secret registry proof, quarantine visibility, and orphan
 bound required by the ADR. External-carrier activation also waits for immutable
 process-scoped controller identity and the installed v2 authoritative-snapshot
-round trip; source compatibility or a green v1 adoption test does not satisfy it.
+round trip **plus** selected local-v3 full-host-frame coverage in both immutable
+max-2 overlap directions; source compatibility or a green v1/v2 adoption test
+does not satisfy it.
 
 ## Drain and restart semantics
 

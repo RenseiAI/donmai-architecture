@@ -13,7 +13,8 @@ and activation remain pending behind the proof obligations below.
 **Boundary:** shared (the per-session process boundary, local shim wire,
 adoption protocol, sequence ownership, crash semantics, registry safety,
 quarantine contract, typed recovery composition seams, attach-v2 activation/
-durable-ack protocol, and migration law are OSS-canonical here; hosted relay,
+durable-ack protocol, selected-v3 full-host-frame local wire, and migration law
+are OSS-canonical here; hosted relay,
 credential authority, restart-fence/frame-journal persistence, and control-plane
 reaper integration live in the platform mirror)
 **Authors:** session-continuity design lane
@@ -71,6 +72,18 @@ reaper integration live in the platform mirror)
 > `interactive-attach-v1` remains frozen; its correctly versioned v2 successor
 > owns carrier activation, durable host acknowledgement, and gap-disposition
 > controls. Implementation, release, migration, and activation remain pending.
+
+> **Full-host-frame local-wire correction 2026-08-23.** Released selected
+> shimwire v2 adds only `SnapshotRequest`/`SnapshotResult`; its shim output pump
+> transports Output/Exit/Snapshot semantically and intentionally drops the
+> sequence-bearing applied Resize and Marker frames. D14 therefore cannot be
+> satisfied over selected v2 without reconstructing or losing host history.
+> Selected version 3, under the unchanged `session-shim-v1` family token, adds
+> one exact full-host-frame observation for every sequence-bearing attach frame.
+> Selected v1/v2 remain frozen. Released v2 shims stay adoptable for ownership
+> and snapshots but are visibly ineligible for a durable external carrier; new
+> v3 shims downgrade to exact v2 behavior with a released daemon. This
+> correction is normative and keeps activation pending.
 
 ## Context
 
@@ -210,6 +223,15 @@ control plane must implement consistently.
     fan-out; the host receives only a contiguous durable acknowledgement, that
     high-water reloads after relay restart, and the daemon advances the shim's
     heartbeat acknowledgement only after receiving it.
+13. **Complete local observation:** selected local shimwire v1 and v2 remain
+    unchanged. Selected v3 emits exactly one `HostFrame` observation containing
+    the complete encoded interactive-attach bytes for every sequence-bearing
+    Output, applied Resize, Marker, Snapshot, and Exit. No legacy observation or
+    emitting `SnapshotResult` delivers the same frame twice. Durable external
+    activation requires selected v3 plus `full_host_frame_v3`; selected v2 is
+    ownership/snapshot-compatible but visibly carrier-ineligible. A Gap precedes
+    its exact raw recovery Snapshot, while a post-Exit sequence-zero Snapshot
+    remains a direct result outside the durable high-water.
 <!-- BOUNDARY-SYNC-END: adr-2026-08-17-session-shim-core-contract -->
 
 ### D1 — Process ownership moves to a per-session shim
@@ -287,7 +309,7 @@ keyed only by lifecycle identity is forbidden because it would discard a
 possibly live process. A PID is never trusted without its process-start identity
 because PID reuse is normal.
 
-### D3 — The stable local adoption wire has a v1/v2 overlap
+### D3 — The stable local adoption wire has a v1/v2/v3 overlap
 
 The shim listens on one Unix-domain socket under the injected state directory.
 The socket directory is `0700`; the socket and registry record are `0600` and
@@ -322,11 +344,12 @@ Error      either way      closed code + display-only detail
 
 The existing protocol-family token remains stable during the overlap; the
 selected integer version, not a suffix inferred from that token, decides the
-message vocabulary. A v2-capable shim advertises `[1,2]`, a v2-capable daemon
-selects the highest overlap, and both speak only the selected vocabulary. A new
-daemon therefore still adopts a live v1 shim, and a new shim selected at v1
-emits no v2 message. Renaming the family token or raising the minimum above 1 is
-a later migration decision, not part of this correction.
+message vocabulary. A released v2 peer advertises `[1,2]`; a v3 peer advertises
+`[1,3]`. The daemon selects the highest overlap and both speak only that selected
+vocabulary. A new daemon therefore selects v2 with a released live shim, and a
+new v3 shim selects v2 with a released daemon. Neither direction sends a v3
+message. Renaming the family token or raising the minimum above 1 is a later
+migration decision, not part of this correction.
 
 Selected version 2 retains every v1 type and adds one request-correlated
 authoritative snapshot operation:
@@ -363,6 +386,41 @@ host or emitting a second frame. The bounded per-connection retry ledger is
 discarded with the connection; a request id is never replay authority across a
 new controller generation.
 
+Selected version 3 retains every v1/v2 type and adds the one shim-produced type
+specified byte-for-byte in `protocol/session-shim-v3.md`:
+
+```text
+HostFrame  shim -> daemon   request correlation (zero for ordinary frames)
+                           + one complete encoded interactive-attach host frame
+```
+
+`HostFrame.frame_bytes` is the sole selected-v3 observation authority for each
+positive-sequence Output, applied Resize, Marker, ordinary/requested Snapshot,
+and Exit. It includes the attach type, canonical sequence/relative-time varints,
+and exact payload. A v3 shim emits no legacy `Output`, `Snapshot`, or `Exit`
+observation for the same sequence. The daemon decodes a comparison/lifecycle
+view but retains and delivers the original bytes once; deriving a second event
+from that view is a duplicate-delivery defect.
+
+For selected-v3 `SnapshotRequest(mode=emit)` before Exit, the shim serializes
+one `HostFrame` carrying the exact Snapshot followed immediately by a
+correlation-only `SnapshotResult` whose `bytes` field is empty. The non-zero
+HostFrame request id binds the pair. The controller validates both, completes
+the call, and publishes the raw event once; it never produces the selected-v2
+result-derived event. The request-return path exposes correlation/disposition,
+not a second carrier byte send; the correlated HostFrame event is the sole
+adoption/journal delivery. Inspect remains the exact screen-byte result with no host
+frame. Post-Exit emit remains the exact sequence-zero direct result with no
+HostFrame and no durable high-water advance. These are selected-v3 semantics;
+selected v2 is unchanged and still returns the complete live frame bytes in its
+result.
+
+On a selected-v3 ring miss, `Gap` is followed by one raw recovery-Snapshot
+HostFrame and then the live tail; the legacy semantic `Snapshot` observation is
+not also sent. The daemon therefore preserves the exact gap-before-frame order
+required by D14. The `Exit` HostFrame supplies both exact durable bytes and the
+one immutable terminal view; no legacy Exit duplicate is accepted.
+
 The daemon-side controller exposes the same read-only and emitting snapshot
 semantics as the shim-owned PTY session, but it owns no VT. It may retain an
 exact authoritative result at its exact `at_seq` for diagnostics or conservative
@@ -394,7 +452,7 @@ conversion, JSON normalization, or another lossy intermediate.
 
 Protocol compatibility is based on an advertised min/max range and selected
 version, never on daemon or shim binary version equality. A newer daemon must be
-able to adopt an older live v1 shim. A protocol bump therefore requires an
+able to adopt an older live v1 or v2 shim. A protocol bump therefore requires an
 overlap window long enough for the maximum supported session duration. Removing
 that overlap requires a separate migration decision.
 
@@ -406,6 +464,21 @@ carry the complete emitting-frame disposition needed to implement that request.
 Such a composition adopts the v1 shim for ownership conservation but refuses the
 external carrier, reports the incompatibility, and charges the session to
 capacity. It never adds an optional v1 message or substitutes a daemon VT/cache.
+
+Version 2 remains sufficient for everything version 1 provides plus the exact
+authoritative snapshot proxy. It is **not** sufficient for D14 external durable
+output: the released v2 observation rail has no exact applied-Resize or Marker
+frame and its semantic Output/Exit/Snapshot forms are not complete encoded
+attach frames. A daemon selected at v2 therefore adopts/conserves ownership and
+may use snapshot inspect/emit, but reports
+`durable_host_frame_unsupported`, charges the session to capacity, and refuses
+external attach-v2 credential/activation. It never reconstructs the missing
+frames from terminal state or sequence gaps.
+
+Version 3 plus `full_host_frame_v3` is the first local-wire profile eligible for
+D14 external durable carrier activation. The capability is comparison evidence
+in the composing attestation; selected version 3 is still required and a
+protocol maximum alone cannot infer it.
 
 ### D4 — Adoption is fenced and happens before readiness
 
@@ -428,7 +501,9 @@ On daemon start:
    `Adopted` to echo the exact accepted generation/extensions;
 8. request replay after the carrier's persisted D14 high-water;
 9. when an external carrier admits on-demand snapshots, require selected local
-   shimwire version 2 and selected `interactive-attach-v2`; admit the higher
+   shimwire version 3 with `full_host_frame_v3` and selected
+   `interactive-attach-v2`; selected v2 may complete ownership/snapshot adoption
+   but receives the visible carrier-ineligible outcome. Admit an eligible higher
    carrier only as a non-authoritative candidate and persist its fresh mandatory
    Snapshot receipt;
 10. commit each exact per-session adoption, including server-side receipt
@@ -492,10 +567,12 @@ for D14 `host_ack`, after which the carrier can reload the exact durable
 disposition. Only then does the daemon advance both its cursor and the shimwire
 Heartbeat acknowledgement. On adoption it asks for `last_forwarded_seq + 1`.
 
-`Output.data` is the exact length-delimited byte slice read from the PTY master.
-The shim, daemon callback, durable carrier handoff, and carrier ingress preserve
-those bytes byte-for-byte and associate durability with the complete frame;
-UTF-8 coercion, newline conversion, truncation, or decode-and-reencode is a
+Under selected v3, every host-sequence member is the exact complete encoded
+interactive-attach frame carried by `HostFrame`: Output bytes read from the PTY,
+applied Resize, Marker, Snapshot, and Exit. The shim, daemon callback, durable
+carrier handoff, and carrier ingress preserve those frame bytes byte-for-byte
+and associate durability with the complete frame. UTF-8 coercion, newline
+conversion, truncation, semantic reconstruction, or decode-and-reencode is a
 protocol error. A carrier may produce a separately identified sanitized
 viewer-bound projection when its protocol requires one, but that projection may
 not overwrite the retained source frame or its sequence identity.
@@ -549,7 +626,9 @@ The daemon quarantines rather than kills when:
 - two live records claim the same lifecycle identity,
 - peer authentication or identity comparison fails,
 - the shim reports a phase the daemon cannot interpret, or
-- adoption cannot prove a strictly newer controller generation.
+- adoption cannot prove a strictly newer controller generation, or
+- an external durable carrier is required but the selected local wire lacks its
+  exact full-host-frame observation capability.
 
 Duplicate lifecycle identities never collapse to one quarantine item. Every
 live record remains separately visible with its shim id, process epoch, last
@@ -570,6 +649,11 @@ daemon if one arrives, or execute the bounded orphan rule. A new daemon never
 solves incompatibility by killing an old harness. "Drain and replace" means the
 old shim serves its existing session and a current shim serves the next session;
 it does not mean in-place process replacement.
+
+Carrier incompatibility does not undo a successful ownership adoption. Selected
+v1 reports `authoritative_snapshot_unsupported`; selected v2 reports
+`durable_host_frame_unsupported`. Both remain visible, consume capacity, and
+withhold external carrier authority until a compatible daemon/shim pair exists.
 
 ### D8 — Controller loss has a bounded orphan deadline
 
@@ -743,6 +827,11 @@ preserving the OSS boundary.
 | Daemon publishes locally, then its activation exchange fails or its acknowledgement is lost | Keep `carrierActivationComplete=false` and stay `recovering`. Retry `carrier_activate` on the exact candidate; the relay returns the same `carrier_active` result only for the same authenticated epochs and stored receipt. |
 | Durable host-frame append fails or is ambiguous | Do not mutate ring/cache/fan-out and do not emit `host_ack`. Donmai and the shim retain their previous acknowledged cursor and replay the exact frame. |
 | Relay restarts after durable append but before host ack | Reload the persisted high-water and exact retained tail, compare replay bytes, and return the same contiguous ack. Never acknowledge from an empty in-memory ring. |
+| New daemon adopts a released selected-v2 shim | Preserve ownership and the v2 snapshot proxy, report `durable_host_frame_unsupported`, charge capacity, and withhold external carrier credentials/activation. Never infer missing Marker/Resize bytes. |
+| Released daemon adopts a new v3 shim | Highest overlap selects v2. The shim emits no HostFrame and behaves byte-for-byte like released v2; external v3 durability is not claimed. |
+| Live v3 Snapshot HostFrame arrives without its correlation-only result, or the pair differs | Publish/acknowledge neither partial nor duplicate event; fail the controller and replay the real frame under the next adoption. |
+| Selected-v3 Gap is followed by a legacy semantic Snapshot or a duplicate raw Snapshot | Refuse the duplicate. The only valid order is Gap then one exact recovery-Snapshot HostFrame then the tail. |
+| Exit HostFrame is followed by any positive-sequence observation | Refuse it. Exit remains the final sequence-bearing frame; a final sequence-zero Snapshot is direct-result-only. |
 | Machine reboots | Both daemon and shim processes die. Boot recovery consumes terminal/stale registry evidence before advertising capacity; external release still requires the ordinary terminal/reconciliation contract. |
 
 ### D11 — Migration is interactive-first and converges on one model
@@ -750,46 +839,56 @@ preserving the OSS boundary.
 The rollout is additive:
 
 1. Ship `session-shim-v1`, registry inspection, the D12 typed credential/cache/
-   heartbeat types, and the v2 codec/client additions with ownership, adoption,
-   carrier activation, and durable external output all disabled.
-2. Deploy every composing credential authority so registration and refresh
+   heartbeat types, selected-v3 codec/event support, and the attach-v2 client
+   additions with ownership, adoption, carrier activation, and durable external
+   output all disabled. Keep advertised local-wire max 2 until the v3
+   discriminating corpus passes.
+2. Release a max-3 shim first. Released max-2 daemons select v2 and observe the
+   exact released behavior; no HostFrame can reach them.
+3. Release a max-3 daemon/controller. It selects v2 with released shims,
+   conserves ownership/snapshot authority, and visibly withholds durable external
+   carrier. New/new selects v3 and exposes one exact raw event per sequence.
+4. Deploy every composing credential authority so registration and refresh
    persist and echo the exact controller/range/capability tuple, stable host
-   authority, and adoption revision. Keep the daemon flag off; verify a stale
-   cache cannot replace this round trip.
-3. Deploy compatible relays with the v2 candidate state machine, durable
+   authority, adoption revision, max-3 range, and `full_host_frame_v3`. Keep the
+   daemon flag off; verify max 3 without the capability and selected v2 both
+   refuse external carrier.
+5. Deploy compatible relays with the attach-v2 candidate state machine, durable
    host-frame journal/high-water reload, snapshot receipt, `host_ack`, and
    explicit activation exchange. Keep the activation selector false. An
-   in-memory ring or a v1-negotiated host leg cannot satisfy this step.
-4. Enable shim ownership for newly launched interactive PTY sessions behind a
+   in-memory ring, attach-v1 host leg, or local selected-v2 shim cannot satisfy
+   this step.
+6. Enable shim ownership for newly launched interactive PTY sessions behind a
    local compatibility gate. Existing direct-owned sessions drain; they are not
    transplanted across process boundaries.
-5. Enable startup adoption and the real service-manager survival smoke. An
+7. Enable startup adoption and the real service-manager survival smoke. An
    externally composed daemon performs auth-only multi-scope registration first,
    keeps heartbeat/poll/claim stopped, then adopts and publishes. This includes
    unplanned recovery with no inherited local fence receipt; composing carrier
    state is resolved from the authenticated live correlation.
-6. Enable the optional composing-plane restart fence only after every authority
+8. Enable the optional composing-plane restart fence only after every authority
    scope can return an exact-byte durable acknowledgement and every release,
    requeue, terminalization, host-loss, queue-repair, and administrative path
    reaches the same serialized predicate.
-7. Enable external attach-v2 takeover only after per-session adoption, every
-   per-scope batch, Donmai local publication, relay activation, first exact
-   heartbeat echo, and durable ordinary-output acknowledgement pass together.
-   Local-wire or attach-wire v1 remains conservation-only during the overlap.
-8. Make shim ownership the default for interactive sessions.
-9. Extend the same ownership boundary to other long-lived session modes where
+9. Enable external attach-v2 takeover only after selected local v3 full-frame
+   proof, per-session adoption, every per-scope batch, Donmai local publication,
+   relay activation, first exact heartbeat echo, and durable ordinary-output
+   acknowledgement pass together. Local v2 remains conservation-only.
+10. Make shim ownership the default for interactive sessions.
+11. Extend the same ownership boundary to other long-lived session modes where
    restart continuity is required.
-10. Delete the direct daemon-owned session path once no served mode depends on
+12. Delete the direct daemon-owned session path once no served mode depends on
     it.
 
 Rollback disables new external v2 admissions and new shim-owned claims first,
 then lets already-active carriers and shims drain while retaining auth refresh,
 fences, terminal evidence, durable frame journals, and release reconciliation.
 It never lowers a controller/carrier generation, discards a batch receipt or
-persisted carrier high-water, reactivates an incumbent, or rebinds a v2 leg as
-v1. A v1-only replacement still adopts/conserves a live shim and charges it to
-capacity, but exposes no external carrier. Removing the new types, journal, or
-stores waits until no live/fenced/quarantined/adoption reference remains.
+persisted carrier high-water, reactivates an incumbent, or rewrites a v3 raw
+event as a legacy semantic observation. A max-3 shim behind a max-2 replacement
+selects v2, remains adopted/capacity-charged, and exposes no external carrier.
+Removing the new types, journal, or stores waits until no live/fenced/
+quarantined/adoption reference remains.
 
 One preflight-less legacy generation may cross into the first preflight-capable
 release exactly once. This migration exception is permitted only when the old
@@ -863,6 +962,11 @@ equal to stable-host, worker-registration, runtime-token-jti, or a known prior
 token correlation is a typed refusal. A token rotation never supplies a new
 controller id; a replacement process never inherits the old one.
 
+For D14 external durable carrier, the tuple includes protocol max at least 3 and
+the exact `full_host_frame_v3` capability. The server and daemon still compare
+the actually selected per-shim version at prepare/adoption time: max 3 alone does
+not upgrade a released v2 shim, and selected v2 remains carrier-ineligible.
+
 The server persists the tuple before minting the credential and echoes the
 complete accepted tuple together with the stable scope-local host authority and
 current adoption revision. The client compares every field exactly before it
@@ -911,6 +1015,11 @@ token `interactive-attach-v2` and `/v2/` path. Reusing
 is not versioning; it is an unannounced v1 mutation and is forbidden. The first
 v2 profile is host-only, so existing v1 viewer legs may remain attached to the
 same relay room while the host carrier uses v2.
+
+That external attach-v2 host carrier is independent from the local shimwire
+version and requires selected local v3 with `full_host_frame_v3`. Selected local
+v2 can answer the mandatory snapshot request but cannot supply D14's complete
+ordinary host sequence, so it never enters this candidate state.
 
 A strictly higher authenticated `carrier_epoch` admits a **candidate**, not an
 active room host. Admission fences the incumbent's mutation authority and
@@ -975,6 +1084,11 @@ ordering rather than creating a permanent recovery-only carrier model.
 
 ### D14 — Carrier durability precedes ring, fan-out, and shim acknowledgement
 
+The local prerequisite is selected shimwire v3. Its one `HostFrame` event is the
+source of exact bytes for every sequence-bearing attach frame. Selected v2
+semantic events cannot enter this rail; accepting them would make applied Resize
+and Marker disappear while the carrier claimed a contiguous durable sequence.
+
 `OnSessionEventDurable` means downstream durable acknowledgement, not a
 successful socket write. For every sequence-bearing host frame (`Output`,
 applied `Resize`, `Marker`, live `Snapshot`, and `Exit`), the v2 relay:
@@ -1022,6 +1136,9 @@ durable disposition after its own restart.**
 The adoption-time mandatory Snapshot is the one staged exception to the
 synchronous callback shape: its exact journal append and strict receipt let
 adoption/batch/local publication continue, but do not advance the shim cursor.
+For selected v3, its live `SnapshotResult` is correlation-only; the paired
+HostFrame supplies the bytes once. A non-empty live result or a second
+result-derived event is a duplicate-delivery refusal.
 The pending delivery resolves from `carrier_active.ackSeq` (or the immediately
 following exact `host_ack`) after activation. Waiting synchronously for that ack
 before calling `OnAdoptionPublished` is a circular dependency and a contract
@@ -1117,13 +1234,14 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     output, duplicated requests, changed replay, mismatched correlation, timeout,
     and stale generation. Deleting the shim call must make this fixture RED; a
     daemon VT or hand-authored snapshot fixture cannot satisfy it.
-19. **v1 overlap and carrier refusal.** Adopt a prior released v1 shim with the
-    new daemon and prove its existing control/replay/terminal behavior remains
-    available. Then require an external attach carrier with on-demand snapshots
-    and prove the same v1 selection yields a visible capacity-charged carrier
-    refusal, with no v2 message sent and no cache/fabricated snapshot fallback.
-    A v2 shim under the same test must answer the carrier's takeover resync before
-    the carrier is reported complete.
+19. **v1/v2 overlap and carrier refusal.** Adopt prior released v1 and v2 shims
+    with the new daemon and prove their existing control/replay/terminal behavior
+    remains available. V1 yields visible capacity-charged
+    `authoritative_snapshot_unsupported` with no later message or cache fallback.
+    V2 proves its exact authoritative snapshot proxy still works but yields
+    visible `durable_host_frame_unsupported`, with no external credential or
+    candidate. A selected-v3 shim under the same test must supply the one raw
+    takeover Snapshot event before the carrier can progress.
 20. **Typed credential attestation RED/GREEN.** Drive the real
     `RegistrationOptions -> RegisterRequest -> RegisterResponse` path and the
     real runtime-token refresh endpoint call. Initial register and every refresh
@@ -1189,6 +1307,37 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     or host diagnostics. Installed-artifact CI must pin immutable daemon, client,
     and relay revisions; a mutable checkout or branch name cannot satisfy the
     release/activation gate.
+29. **Released-v2/new-v3 overlap in both directions.** Run a new max-3 daemon
+    against the immutable released max-2 shim and prove selected v2 ownership/
+    snapshot adoption succeeds while `durable_host_frame_unsupported` visibly
+    blocks external carrier. Run a new max-3 shim against the immutable released
+    daemon and prove selected v2 emits the exact released vocabulary with no
+    HostFrame. Replacing either artifact with same-source code is not proof.
+30. **One complete raw event per host sequence.** Under selected v3, drive real
+    PTY Output, applied Resize, Marker, ordinary Snapshot, and Exit through the
+    production shim subscription. Assert one `HostFrame` per sequence with exact
+    complete encoded bytes and no legacy Output/Snapshot/Exit duplicate. Delete
+    each mapping or restore the released Marker/Resize drop and observe the
+    discriminating fixture RED.
+31. **Live SnapshotResult does not double-transmit.** Issue a real v3 emit
+    request and require adjacent `HostFrame(request_id=R, exact frame)` then one
+    correlation-only result with empty bytes. The controller publishes one raw
+    event and completes once. Restoring v2 result bytes, producing a result-
+    derived event, changing pair order/correlation, or exact-retrying a second
+    HostFrame must be RED. Inspect and post-Exit direct results retain their v2
+    bytes and emit no HostFrame.
+32. **Gap, Exit, and final-screen ordering.** Force a v3 ring miss and assert
+    `Gap -> one raw recovery Snapshot -> contiguous tail`, with no legacy
+    Snapshot. Assert the raw Exit is the final positive-sequence event and drives
+    terminal semantics once; the post-Exit sequence-zero Snapshot remains a
+    direct result outside journal/high-water. Reorder, omit, duplicate, or send
+    positive sequence after Exit and observe RED.
+33. **Attestation and visible ineligibility.** Initial registration, every
+    refresh, heartbeat, carrier prepare, and adoption batch must require/echo the
+    max-3 tuple and `full_host_frame_v3`, then compare actual selected version 3.
+    Remove the capability, advertise max 3 alone, or select v2 and prove no
+    attach-v2 credential/candidate/activation exists while the exact
+    `durable_host_frame_unsupported` capacity projection remains visible.
 
 The service-manager smoke uses the installed binary and actual launchd job. A
 unit test that kills a child subprocess does not exercise the failure class.
@@ -1210,6 +1359,8 @@ unit test that kills a child subprocess does not exercise the failure class.
   controller/host/revision tuple.
 - Carrier authority and output durability now have explicit acknowledgements;
   neither a socket bind nor an in-memory ring can impersonate completion.
+- The daemon receives the complete PTY host sequence as exact attach-frame bytes;
+  applied Resize and Marker can no longer disappear behind semantic projection.
 
 ### Negative
 
@@ -1226,6 +1377,8 @@ unit test that kills a child subprocess does not exercise the failure class.
   to its in-memory fan-out ring.
 - Recovery may hold valid credentials and durable adoption commits while still
   remaining deliberately non-Ready until carrier activation converges.
+- A third selected local-wire vocabulary and its overlap fixtures must remain
+  supported for at least the maximum live-session duration.
 
 ### Risks
 
@@ -1265,6 +1418,13 @@ unit test that kills a child subprocess does not exercise the failure class.
 - **The relay acknowledges memory rather than durability.** Ring append followed
   by a crash can lose bytes the shim was told were safe. Persist exact raw bytes,
   reload the high-water, then ack; no other ordering is accepted.
+- **Selected v2 is mistaken for full-frame evidence.** It can proxy a fresh
+  Snapshot but omits applied Resize/Marker and semantically projects other
+  frames. Require actual selected v3 plus the exact capability, not max-version
+  advertisement or snapshot success.
+- **A requested Snapshot is delivered twice.** Sending the complete frame in
+  both HostFrame and a v2-shaped live result creates two durable events for one
+  sequence. Under v3 the result is correlation-only and the raw event is sole.
 
 ## Alternatives considered
 
@@ -1299,6 +1459,21 @@ quarantine until a terminal receipt or adopted tombstone exists.
 strict decoder are closed precisely so an older live shim cannot silently
 downgrade or misparse a new daemon. The selected v2 overlap is the compatible
 extension path.
+
+**Add HostFrame to selected v2.** Rejected: live released v2 peers treat later
+discriminators as illegal under their closed selected vocabulary. A new type is
+a selected-version bump; version-range overlap makes v3 compatible without
+silently changing shipped bytes.
+
+**Reconstruct applied Resize/Marker or complete frames in the daemon.** Rejected:
+released v2 intentionally never transports those frames, and semantic
+Output/Exit/Snapshot messages do not retain every encoded byte. Reconstruction
+would fabricate sequence history and fail byte truth.
+
+**Send HostFrame beside every legacy observation in v3.** Rejected: two rails
+deliver the same host sequence twice and make `SnapshotResult` retry ambiguous.
+V3 has one observation authority and derives lifecycle views from that one raw
+event.
 
 **Serve a `/v2` URL while negotiating `interactive-attach-v1`.** Rejected: the
 subprotocol token is the WSS version authority. A path and v2-shaped credential
@@ -1344,6 +1519,9 @@ The accepting commit carries these reference-document amendments:
 - `protocol/interactive-attach-v2.md` — the correctly versioned host-carrier
   successor: separate negotiation/claims, candidate activation, durable host
   acknowledgement, and explicit gap disposition.
+- `protocol/session-shim-v3.md` — the selected local-wire successor carrying one
+  exact complete raw host-frame observation for every positive-sequence frame,
+  with v2 overlap and non-duplicating SnapshotResult semantics.
 
 The platform mirror names its own reaper, relay, and host-heartbeat amendments.
 
@@ -1375,6 +1553,14 @@ obligations and activation gates in this ADR and its platform mirror.
 - The v2 controller proxy delegates both snapshot modes to the shim and preserves
   exact frame bytes. A cache may accelerate display of a known checkpoint but is
   not an implementation of either request mode.
+- Selected local v3 adds `HostFrame` without changing selected v2. The daemon's
+  raw controller event is the only durable callback for a host sequence;
+  type-specific lifecycle handling derives from it rather than firing a second
+  event.
+- A selected-v3 live emitting Snapshot result is correlation-only and empty of
+  frame bytes; inspect and post-Exit direct results retain v2 semantics. The
+  paired HostFrame/result write is serialized and exact retries never emit a
+  second frame.
 - The v2 attach client returns durable event success only after the matching
   `host_ack`; a successful WSS write is not the `OnSessionEventDurable` contract.
 - Registry writes use the injected state-directory seam. No brand-specific path
