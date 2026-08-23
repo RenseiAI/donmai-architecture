@@ -389,7 +389,8 @@ carrier generation.
       `full_host_frame_v3`. Per-shim external prepare additionally requires
       actual selected v3. Max 3 alone, the earlier four-token set, v1 alone, and
       both proof tokens refuse hosted auth; selected 2 remains conserved but
-      carrier-ineligible. V1 decode/exact retained replay/drain still works.
+      carrier-ineligible. V1 decode/exact retained replay/drain still works only
+      for a live untombstoned store-bound cutover-manifest entry.
 - [ ] For every durable host acknowledgement, block/fail the real `.ack` file
       write/fsync and prove the Heartbeat does not confirm. Restore and prove a
       cold adoption loads the exact lifecycle/shim/process/generation cursor.

@@ -283,7 +283,10 @@ control plane must implement consistently.
     preserves existing high-water and any staged Snapshot while clearing current
     active/pending authority. The successor proof names that abandonment and an
     all-time epoch floor, so no old candidate or incumbent is rebound and the next
-    reservation is strictly higher.
+    reservation is strictly higher. Any proof-v1 replay/drain eligibility comes
+    only from one fsync-backed store-authority-bound immutable manifest frozen
+    after v1 writers close; append-only tombstones make the set shrink-only across
+    restart and rollback, and unlisted or changed rows reconcile rather than open.
 <!-- BOUNDARY-SYNC-END: adr-2026-08-17-session-shim-core-contract -->
 
 ### D1 — Process ownership moves to a per-session shim
@@ -896,6 +899,10 @@ preserving the OSS boundary.
 | Daemon publishes locally, then its activation exchange fails or its acknowledgement is lost | Keep `carrierActivationComplete=false` and stay `recovering`. Retry `carrier_activate` on the exact candidate; the relay returns the same `carrier_active` result only for the same authenticated epochs and stored receipt. |
 | Durable host-frame append fails or is ambiguous | Do not mutate ring/cache/fan-out and do not emit `host_ack`. Donmai and the shim retain their previous acknowledged cursor and replay the exact frame. |
 | Relay restarts after durable append but before host ack | Reload the persisted high-water and exact retained tail, compare replay bytes, and return the same contiguous ack. Never acknowledge from an empty in-memory ring. |
+| V1 cutover crashes before manifest/write-closed commit | V2 readiness remains false; no partial allowset authorizes a legacy row. Exact request retries under the exclusive store lock. |
+| V1 cutover commits but response is lost | Exact request replay returns the first store-bound cutover receipt and never resnapshots surviving v1 rows. |
+| Unlisted/changed/new proof-v1 row appears after cutover | Refuse into reconciliation and clear v2 readiness; never add it to the immutable base manifest. |
+| Listed v1 entry drains | Commit its shrink-only tombstone before row/secret deletion. Restart and rollback retain permanent ineligibility. |
 | Replacement shim sidecar ack is N and carrier proof boundary is N, both ahead of prior composing adoption M | Keep M unchanged during preparation, set proof-resolved ResumeFrom to N+1, send only the mandatory Snapshot N+1/atSeq N, then advance M to N only in the transaction consuming exact proof plus receipt. |
 | Carrier proof boundary is below the local sidecar floor | Refuse before Welcome. Never regress the shim, substitute M, or replay ordinary frames through a candidate. |
 | Carrier journal advances after proof reservation but before candidate admission | Atomic admission recheck detects revision/digest/boundary drift in the same lock that would fence/install; mutate no room state and reprepare at a strictly greater carrier epoch. |
@@ -934,7 +941,8 @@ The rollout is additive:
    Keep the daemon flag off; verify max 3 with the earlier four tokens and
    selected v2 both refuse external carrier.
 5. Deploy compatible relays with frozen proof-v1 journal and exact legacy-claim
-   readers, proof-v2 request/proof
+   readers, the one store-bound v1 eligibility manifest/shrink-only tombstone
+   codec/control edge, proof-v2 request/proof
    codecs, the exact schema-v1 abandonment ledger/route, all-time carrier-epoch
    floor, single-use predecessor lineage, the attach-v2 candidate state machine,
    durable host-frame journal/high-water reload, stable store authority,
@@ -944,7 +952,12 @@ The rollout is additive:
    four-token attestation, or local selected-v2 shim cannot satisfy this step.
    Carrier health exposes the exact boolean
    `durable_carrier_proof_v2_ready:true` only after all v2 proof/abandonment state
-   reloads and verifies. Missing/false, v1-only, or the old unversioned
+   plus the manifest/write-closed flag/tombstones/every referenced v1 row and
+   credential reload and verify. Before that freeze, both composing and Relay v1
+   writers close durably, the store header raises its mandatory minimum writer
+   schema so unaware rollback binaries fail before write-open, and the composing
+   side retains the exact cutover receipt.
+   Missing/false, v1-only, or the old unversioned
    `durable_carrier_proof_ready:true` is ineligible.
    The composing store also retains the original encrypted attach credential
    through activation and ships typed consumed-adoption recovery, the remaining-
@@ -982,6 +995,9 @@ bytes/revisions/reservations, abandonment request/results and predecessor-consum
 state, carrier-epoch floors, and release reconciliation. Once any abandonment
 exists, a four-disposition reader is not a valid rollback artifact; it may drain
 exact retained v1 handoffs but cannot mint or admit a new carrier.
+The v1 base manifest, write-closed flag, tombstones, cutover receipt, and retained
+rows/secrets survive rollback; no artifact may regenerate/enlarge/clear the set or
+reopen a v1 writer. An unaware artifact is rollback-ineligible.
 Consumed-adoption recovery envelopes/correlations remain readable until their
 candidate activates or enters reconciliation; rollback never remints an expired,
 lost, or corrupt bearer.
@@ -1076,8 +1092,9 @@ carrier reservation, and selected v2 remains carrier-ineligible.
 `durable_carrier_proof_v2` **replaces** `durable_carrier_proof_v1` in that exact
 five-token advertised set. A controller never advertises both. V2 advertisement
 requires the frozen v1 decoder and exact retained same-handoff replay/drain path
-for migration, but those abilities are not a v1 advertisement and cannot mint,
-reserve, or admit a new proof-v1 candidate.
+for migration, each gated by one live untombstoned exact entry in the durable
+store-bound v1 cutover manifest. Those abilities are not a v1 advertisement and
+cannot mint, reserve, or admit a new proof-v1 candidate.
 
 The server persists the tuple before minting the credential and echoes the
 complete accepted tuple together with the stable scope-local host authority and
@@ -1357,6 +1374,7 @@ over its durable journal. The public semantic interface is brand-neutral:
 
 ```go
 type DurableCarrierProofResolver interface {
+    FreezeV1Eligibility(context.Context, DurableCarrierV1CutoverRequest) (DurableCarrierV1Cutover, error)
     Reserve(context.Context, DurableCarrierProofRequest) (DurableCarrierProof, error)
     Abandon(context.Context, DurableCarrierAbandonmentRequest) (DurableCarrierAbandonment, error)
     RecheckAndFence(context.Context, DurableCarrierProof, DurableCarrierCandidate) (DurableCarrierProof, error)
@@ -1636,6 +1654,12 @@ no state mutation. Lost or corrupt possibly committed result bytes make external
 v2 unavailable and enter reconciliation; they are never reconstructed from a
 room snapshot or replaced by clearing state.
 
+When `admitted_proof_schema_version="1"`, the source reservation must match one
+live untombstoned cutover-manifest entry. The same serialized transition appends
+its `abandoned_to_v2` drain tombstone before the v1 row/credential can be removed
+or the proof-v2 successor enabled. An unlisted/changed/tombstoned v1 source
+refuses into reconciliation.
+
 Only after the composing authority durably records that exact result may it
 allocate a successor candidate. Its schema-v2 Reserve request names the exact
 predecessor object, uses `expected_carrier_epoch_floor` from the result, and
@@ -1701,11 +1725,27 @@ with no external carrier omits the proof and keeps its local-floor path.
 `protocol/interactive-attach-v2.md` also freezes the exact draft-2 proof-v1 host
 claim profile. It has no proof-schema/floor/predecessor claims and is accepted
 only when every original claim, including jti/nonce/prepared correlation and
-proof/reservation, matches one already-retained pre-cutover same-controller
-handoff and the original credential remains valid. No authority mints or refreshes
+proof/reservation, matches one live untombstoned entry in the exact store-bound
+`proof_v1_retained_eligibility_v1` manifest and the original credential remains
+valid. No authority mints or refreshes
 that profile after v2 cutover. Mixed/changed/fresh/expired evidence refuses; a
 receipt-stored v1 handoff that cannot exact-replay uses the explicit abandonment
 bridge, while an active leg drains its existing connection without fallback.
+
+The carrier journal produces that manifest exactly once per initialized store
+authority through `FreezeV1Eligibility`, after both composing and carrier v1
+writers durably close and under the exclusive store lock. The same commit raises
+the required writer schema to 2, which every previously released v1 store opener
+must already fail closed on before write-open. Its immutable sorted
+entries bind stream, reservation id/digest, proof revision/digest, candidate
+epoch/state, and nullable exact credential/JTI digests/expiry; a store-bound
+revision/digest and fsync/transaction barrier make the snapshot durable. An
+append-only content-addressed tombstone removes an entry after drain/abandon/
+terminal/reconciliation. The base set never grows, tombstones never disappear,
+and an unlisted/changed/new v1 row refuses into reconciliation. Manifest,
+write-closed flag, tombstones, and referenced rows reload before
+`durable_carrier_proof_v2_ready`; rollback preserves and enforces them rather than
+resampling or reopening v1.
 
 The signed attach-v2 credential binds exact non-secret claim fields
 `proof_schema_version="2"`, `store_authority_id`, `proof_revision`, `proof_digest`,
@@ -2147,6 +2187,25 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     already-active A, same-controller same-token reconnect at L remains GREEN;
     changed controller or fresh JTI at A/equal/lower is RED, while normal proof-v2
     higher B full-pipeline takeover is GREEN.
+40. **Durable v1 eligibility cutover RED/GREEN.** Through the real persistent
+    carrier store and composing credential writer, create exact v1 rows across
+    every nonterminal state, close both v1 writers durably, and invoke the
+    authenticated cutover. Crash before commit and prove readiness false with no
+    partial eligibility; crash after commit before response and prove exact retry
+    returns the first store authority, cutover id/revision, manifest digest/count,
+    and write-closed fact without resnapshot. Verify deterministic per-row
+    reservation/proof/credential digests and byte-identical draft-2 auth only for
+    live untombstoned entries. Add/mutate an unlisted v1 row and prove refusal,
+    reconciliation, and readiness false. Drain/abandon/terminalize rows and prove
+    fsync-backed tombstones precede deletion and eligibility only shrinks across
+    restart. Roll back to a manifest-unaware artifact and prove writers/readiness
+    stay disabled because minimum-writer-schema store-open fails before a write;
+    restore compatible code and observe the same smaller allowset.
+    Disable independently writer-close ordering, exclusive lock, store-authority
+    binding, canonical digest, fsync/transaction, minimum-writer-schema refusal,
+    reload, exact entry lookup,
+    tombstone monotonicity, or rollback enforcement and observe its fixture RED
+    before restoring GREEN.
 
 The service-manager smoke uses the installed binary and actual launchd job. A
 unit test that kills a child subprocess does not exercise the failure class.
@@ -2195,6 +2254,9 @@ unit test that kills a child subprocess does not exercise the failure class.
 - The composing secret store must retain one original candidate bearer through
   activation and enforce a minimum remaining-validity budget before adoption
   consume.
+- The carrier store retains one immutable proof-v1 cutover manifest plus
+  shrink-only tombstones and a mandatory minimum-writer schema until every listed
+  reference drains.
 
 ### Risks
 
@@ -2258,6 +2320,10 @@ unit test that kills a child subprocess does not exercise the failure class.
   claims. Enforce the orphan/recovery/activation validity margin before consume;
   below it, abandon while evidence is still unconsumed. After consume, loss or
   expiry is explicit reconciliation.
+- **Rollback resnapshots surviving v1 rows.** That would reopen eligibility for a
+  row already drained or introduced after cutover. The base manifest is one-time
+  and store-bound, tombstones are append-only, and minimum-writer-schema refusal
+  keeps unaware binaries out of the writer path.
 
 ## Alternatives considered
 
@@ -2327,6 +2393,11 @@ four-disposition union and treats an unknown disposition as corruption. A merged
 contract is a compatibility boundary even before activation. V1 remains the
 decoder for exact retained same-handoff evidence; request/proof schema v2 is the
 first schema that can carry abandonment and gates every new admission.
+
+**Define retained v1 by timestamp, deploy generation, or an in-memory cutover
+marker.** Rejected: none identifies the exact reservation/proof/credential bytes,
+and restart or rollback can reopen the set. The fsync-backed store-bound manifest
+is the authority; its tombstone ledger can only subtract.
 
 **Represent abandonment as `empty` or erase the staged high-water.** Rejected:
 `empty` means no durable stream history. The staged Snapshot is an exact journal
@@ -2421,6 +2492,9 @@ obligations and activation gates in this ADR and its platform mirror.
   bytes, request UUID/digest, proof/state/receipt/prepared-correlation digest,
   receipt revision, token/jti/nonce, store authority, or raw frame enters logs,
   traces, errors, room snapshots, heartbeat, status, or doctor output.
+- The resolver also adds `FreezeV1Eligibility`; the store, not the daemon,
+  produces the one manifest under its exclusive lock. A v1 row lookup takes the
+  exact manifest entry/tombstone path and never tests wall clock or process build.
 - The composing prepare hook adds a typed `adopted_candidate_recovery` result.
   It returns the exact retained bearer and H+1 cursor only after server-side
   consumed-adoption/current-authority resolution; the daemon never supplies a
