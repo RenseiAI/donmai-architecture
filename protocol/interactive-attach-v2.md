@@ -51,9 +51,12 @@ Draft 3 closes retained-candidate abandonment. Proof schema v1 remains frozen
 for exact same-handoff replay/drain. Every new carrier admission uses proof
 schema v2 and `durable_carrier_proof_v2`, which add an all-time carrier-epoch
 floor and exact predecessor-abandonment lineage. A changed controller must commit
-the separate authenticated abandonment operation before reserving a successor;
-the abandoned Gap/Snapshot and high-water remain durable while both current
-carrier bindings clear.
+the separate authenticated abandonment operation for unconsumed receipt-stored
+state before reserving a successor; an admitted preparing candidate uses the same
+operation with null receipt evidence. Existing high-water and any staged
+Gap/Snapshot remain durable while both current carrier bindings clear. After
+adoption consume, the same candidate instead rehydrates through the retained
+original bearer with no new proof/Snapshot/cursor.
 
 ## 1. Version selection is independent and exact
 
@@ -102,6 +105,7 @@ in-band refresh. Its exact claim set is independent from v1:
   "predecessor_abandonment": {
     "target_reservation_request_id": "UUID",
     "target_reservation_request_digest": "64 lowercase hex SHA-256",
+    "source_candidate_state": "preparing | receipt_stored",
     "abandonment_request_id": "UUID",
     "abandonment_request_digest": "64 lowercase hex SHA-256",
     "abandonment_revision": "canonical positive uint64 decimal",
@@ -122,7 +126,8 @@ negative PTY epoch, non-positive carrier epoch, non-canonical nonce/digest/jti/
 proof field,
 wrong protocol/audience/algorithm, expiry, or room/organization mismatch is an
 auth refusal before room mutation. The v1 verifier rejects every v2-only member;
-the v2 verifier rejects the v1 claim shape.
+the v2 verifier rejects the attach-v1 claim shape and accepts only the exact
+proof-v2 field set above or §2.0.1's frozen retained proof-v1 field set.
 
 `epoch` remains the PTY-owning shim process generation. `carrier_epoch` is the
 strictly increasing attach-carrier generation inside that PTY epoch. The nonce,
@@ -134,7 +139,7 @@ The proof fields are non-secret comparison authority. `proof_schema_version` is
 the JSON string `"2"`, never a number. `carrier_epoch_floor` equals
 `reserved_candidate_carrier_epoch`. `predecessor_abandonment` is always present:
 it is JSON null unless this proof immediately follows the exact abandonment in
-§2.2, otherwise it has exactly the seven members and JSON types shown above.
+§2.2, otherwise it has exactly the eight members and JSON types shown above.
 Decimal
 `resolved_boundary` and `last_host_seq` must match exactly and be no lower than
 `carrier_boundary`; `reserved_candidate_carrier_epoch` must equal numeric
@@ -142,6 +147,53 @@ Decimal
 The signed tuple can authorize only the one retained proof-v2 reservation request,
 floor/predecessor, and proof revision/digest/boundary at the named initialized store. A valid signature
 with stale or changed proof evidence is still refused before room mutation.
+
+### 2.0.1 Frozen retained proof-v1 claim profile
+
+Proof-v2 cutover does not make an already-retained proof-v1 handoff
+unauthenticatable. The v2 verifier recognizes exactly one second field set: the
+frozen draft-2 proof-v1 host credential below, byte-for-byte and with no
+`proof_schema_version`, `carrier_epoch_floor`, or `predecessor_abandonment`:
+
+```json
+{
+  "sessionId": "string",
+  "roomId": "same string",
+  "role": "host",
+  "epoch": 0,
+  "carrier_epoch": 1,
+  "handoff_nonce": "43-character unpadded base64url",
+  "prepared_correlation_digest": "64 lowercase hex SHA-256",
+  "store_authority_id": "bounded non-empty string",
+  "proof_revision": "canonical positive uint64 decimal",
+  "proof_digest": "64 lowercase hex SHA-256",
+  "carrier_boundary": "canonical uint64 decimal N from the proof",
+  "resolved_boundary": "canonical uint64 decimal K",
+  "last_host_seq": "same canonical uint64 decimal K",
+  "reservation_request_id": "UUID",
+  "reservation_request_digest": "64 lowercase hex SHA-256",
+  "reserved_candidate_carrier_epoch": "canonical positive uint64 decimal",
+  "protocol": "interactive-attach-v2",
+  "orgId": "string",
+  "iat": 0,
+  "exp": 0,
+  "aud": "relay",
+  "jti": "UUID"
+}
+```
+
+This is a retained-state reader, not a mint profile. After proof-v2 cutover no
+credential authority may create or refresh these bytes. Relay accepts them only
+when signature/time/room checks pass and every claim, including original jti,
+nonce, prepared correlation, proof/reservation, epochs, and boundaries, equals
+one already-retained proof-v1 handoff created before the cutover marker. It may
+then exact-replay/drain that same controller handoff; no field may select a new
+reservation, candidate, controller, or receipt. A mixed field set, changed jti,
+fresh proof-v1 row, expired original credential, or absent retained handoff is an
+auth refusal. Receipt-stored state that cannot use its original still-valid
+credential crosses the explicit abandonment bridge to proof v2; an active leg
+without a valid reconnect credential drains its existing connection and gains no
+fallback reconnect.
 
 ### 2.1 Durable carrier proof reservation
 
@@ -179,6 +231,7 @@ successor to §2.2, where its exact value is:
 {
   "targetReservationRequestId": "UUID",
   "targetReservationRequestDigest": "64 lowercase hex SHA-256",
+  "sourceCandidateState": "preparing | receipt_stored",
   "abandonmentRequestId": "UUID",
   "abandonmentRequestDigest": "64 lowercase hex SHA-256",
   "abandonmentRevision": "canonical positive uint64 decimal",
@@ -228,7 +281,7 @@ The proof digest is SHA-256 over RFC 8785 canonical proof bytes excluding
 exact stream inside the stable initialized store, not a store-global counter.
 `carrierEpochFloor == reservedCandidateCarrierEpoch` and never decreases. For
 `empty`, active/pending/high-water/boundary and the predecessor are zero/null.
-For `abandoned`, active/pending are zero, high-water/boundary are positive, and
+For `abandoned`, active/pending are zero, high-water/boundary may be zero, and
 the predecessor object is the exact non-null value shown above. `abandoned` does
 not grant authority to either old carrier. Other dispositions require null
 predecessor. The proof contains no bearer, jti, nonce, raw frame, or frame digest.
@@ -242,7 +295,9 @@ Carrier health/readiness exposes the exact JSON boolean field
 `durable_carrier_proof_v2_ready`. It becomes true only after stable store
 authority, proof-v1/v2 readers, proof-v2 reservation, abandonment request/results
 and consume index, carrier-epoch floors, pending/active state, and high-water all
-reload and verify. Missing/false, a v1-specific value, or the prior unversioned
+reload and verify, and only when encrypted original-credential retention,
+remaining-validity consume gating, and typed adopted-candidate recovery are
+available. Missing/false, a v1-specific value, or the prior unversioned
 `durable_carrier_proof_ready:true` is not v2 evidence and blocks credential mint,
 WSS candidate admission, and activation.
 
@@ -267,13 +322,15 @@ or mismatch returns a typed refusal before room mutation and requires a fresh
 reservation plus strictly greater candidate epoch. One proof can never authorize
 two candidate epochs.
 
-### 2.2 Exact retained-candidate abandonment
+### 2.2 Exact admitted pre-active candidate abandonment
 
 An exact same-controller handoff in `receipt_stored` replays its retained proof,
 receipt, optional Gap, and staged Snapshot and never calls this operation. A
-changed controller cannot inherit or rebind that handoff. Before it allocates a
-successor, its composing authority uses the same control authentication as proof
-reservation. A same controller presenting changed handoff bytes receives the
+changed controller cannot inherit or rebind that handoff. An admitted
+`preparing` candidate has no retained Snapshot to replay and must use this
+operation before reprepare, whether its controller stayed or changed. Only a
+socket that died before reservation/in-lock admission uses the non-durable fence.
+A same controller presenting changed receipt-stored handoff bytes receives the
 existing changed-replay conflict; it cannot use abandonment to resample
 authority. The endpoint is:
 
@@ -292,8 +349,9 @@ non-canonical spellings, and is frozen durably before I/O:
   "schemaVersion": 1,
   "abandonmentRequestId": "UUID",
   "abandonmentRequestDigest": "64 lowercase hex SHA-256",
-  "reason": "controller_changed",
-  "expectedDisposition": "receipt_stored",
+  "reason": "superseded_before_activation",
+  "cause": "controller_changed | preparing_reprepare | credential_lifetime_insufficient",
+  "expectedCandidateState": "preparing | receipt_stored",
   "storeAuthorityId": "bounded non-empty string",
   "orgId": "bounded non-empty string",
   "sessionId": "bounded non-empty string",
@@ -301,31 +359,37 @@ non-canonical spellings, and is frozen durably before I/O:
   "admittedProofSchemaVersion": "1 or 2 as a canonical positive uint64 decimal",
   "admittedProofRevision": "canonical positive uint64 decimal",
   "admittedProofDigest": "64 lowercase hex SHA-256",
-  "sourceStateRevision": "canonical positive uint64 decimal",
-  "sourceStateDigest": "64 lowercase hex SHA-256",
   "reservationRequestId": "UUID",
   "reservationRequestDigest": "64 lowercase hex SHA-256",
   "preparedCorrelationDigest": "64 lowercase hex SHA-256",
-  "snapshotReceiptRequestDigest": "64 lowercase hex SHA-256",
-  "snapshotReceiptRevision": "bounded non-empty opaque string",
+  "snapshotReceiptRequestDigest": "64 lowercase hex SHA-256 or null",
+  "snapshotReceiptRevision": "bounded non-empty opaque string or null",
   "expectedActiveCarrierEpoch": "canonical uint64 decimal",
   "expectedPendingCarrierEpoch": "canonical positive uint64 decimal",
   "reservedCandidateCarrierEpoch": "same canonical positive uint64 decimal",
   "expectedCarrierEpochFloor": "canonical positive uint64 decimal",
-  "expectedHighWater": "canonical positive uint64 decimal"
+  "expectedHighWater": "canonical uint64 decimal"
 }
 ```
 
 The abandonment digest is SHA-256 over RFC 8785 canonical request JSON excluding
-that member. The source-state digest commits the exact current `receipt_stored`
-state: admitted proof and reservation, prepared correlation, frozen Snapshot-
-receipt digest/revision, nullable Gap, staged Snapshot identity, active/pending
-epochs, epoch floor, and high-water. Pending equals the reserved candidate. The
+that member. The caller cannot supply Relay's private current-state root. Under
+the abandonment/activation journal lock, Relay resolves the unique exact current
+admitted `preparing` or `receipt_stored` state matching every request binding and returns its state
+revision/digest. That digest commits admitted proof/reservation, prepared
+correlation, nullable Snapshot-receipt digest/revision, nullable Gap/staged
+Snapshot identity, active/pending epochs, epoch floor, and high-water. No or
+multiple matches conflict. Pending equals the reserved candidate. The
 admitted proof schema spelling is exactly string `"1"` or `"2"`; a JSON number is
 invalid. The expected floor is at least every expected active/pending/reserved
-epoch and must equal the locked source state. A preparing-only
-leg has no durable receipt state and stays on its existing non-durable fence path;
-it cannot use this request with null receipt evidence.
+epoch and must equal the locked source state. Receipt digest/revision are both
+JSON null exactly for `preparing` and both non-null exactly for `receipt_stored`;
+partial or reversed nullability conflicts. `preparing_reprepare` requires
+preparing; `controller_changed` requires receipt_stored plus distinct source/
+current controllers; `credential_lifetime_insufficient` requires receipt_stored
+plus server proof that the original token lacks the post-consume recovery margin
+and is the only same-controller receipt-stored abandonment. Other combinations
+conflict. Expected high-water may be zero.
 
 Under the same journal lock that serializes activation and admission, the first
 successful request fsyncs and returns `201` with this immutable response; exact
@@ -335,6 +399,7 @@ replay returns the same bytes with `200`:
 {
   "schemaVersion": 1,
   "state": "abandoned",
+  "cause": "same closed value",
   "abandonmentRequestId": "same UUID",
   "abandonmentRequestDigest": "same digest",
   "storeAuthorityId": "same string",
@@ -344,13 +409,14 @@ replay returns the same bytes with `200`:
   "admittedProofSchemaVersion": "same canonical string",
   "admittedProofRevision": "same canonical positive uint64 decimal",
   "admittedProofDigest": "same digest",
-  "sourceStateRevision": "same canonical positive uint64 decimal",
-  "sourceStateDigest": "same digest",
+  "sourceCandidateState": "same preparing or receipt_stored string",
+  "sourceStateRevision": "Relay-resolved canonical positive uint64 decimal",
+  "sourceStateDigest": "Relay-resolved 64 lowercase hex SHA-256",
   "reservationRequestId": "same UUID",
   "reservationRequestDigest": "same digest",
   "preparedCorrelationDigest": "same digest",
-  "snapshotReceiptRequestDigest": "same digest",
-  "snapshotReceiptRevision": "same opaque string",
+  "snapshotReceiptRequestDigest": "same digest or null",
+  "snapshotReceiptRevision": "same opaque string or null",
   "abandonmentRevision": "canonical positive uint64 decimal",
   "abandonmentDigest": "64 lowercase hex SHA-256",
   "abandonedCandidateCarrierEpoch": "same pending/reserved positive decimal",
@@ -358,19 +424,22 @@ replay returns the same bytes with `200`:
   "activeCarrierEpoch": "0",
   "pendingCarrierEpoch": "0",
   "carrierEpochFloor": "canonical positive uint64 decimal",
-  "highWater": "same canonical positive uint64 decimal",
-  "boundary": "same canonical positive uint64 decimal"
+  "highWater": "same canonical uint64 decimal",
+  "boundary": "same canonical uint64 decimal"
 }
 ```
 
 The abandonment revision is the next ordinal in the stream's proof-revision
 domain. Its digest is SHA-256 over canonical response bytes excluding that
-member. The floor equals the request's expected floor, is at least every active,
+member. `sourceCandidateState` echoes the locked exact state. The floor equals the request's expected floor, is at least every active,
 pending, reserved, or abandoned epoch ever observed, and never decreases.
 High-water and boundary both equal the
-request's positive value. The exact staged Gap/Snapshot remains durable but the
-old candidate and receipt become permanently non-publishable, non-activatable,
-and non-consumable. Prior active is retained only in the result; current active
+request's value, including zero. For `receipt_stored`, the exact staged
+Gap/Snapshot remains durable while the old candidate and receipt become
+permanently non-publishable, non-activatable, and non-consumable. For `preparing`,
+no Snapshot or receipt is invented. The same journal commit marks the exact target proof
+reservation abandoned, so no old proof/receipt/candidate path can later consume
+it. Prior active is retained only in the result; current active
 and pending both clear, so no incumbent is restored.
 
 The same request id with changed bytes, another id for the same candidate,
@@ -388,7 +457,8 @@ this result and chooses above its floor. One abandonment authorizes one successo
 reservation. If its preserved high-water is H and replacement Hello tail is K,
 K<H or K=max uint64 refuses; K=H stages only Snapshot H+1/atSeq H; K>H stages
 exact `controller_unforwarded` Gap H+1..K then Snapshot K+1/atSeq K. The old
-staged Snapshot is never reused as the successor request.
+staged Snapshot from a receipt-stored source is never reused as the successor
+request; a preparing source has none.
 
 ## 3. V2 control registry additions
 
@@ -585,10 +655,44 @@ its original proof boundary. A `receipt_stored` resume carries pre-stage
 `AckSeq=N`, optional Gap N+1..K, and the exact staged Snapshot K+1; it emits no
 second gap/Snapshot and activation acknowledges K+1. After activation, ordinary
 frames may advance current durable high-water to L>=K+1. An equal-active
-same-token reconnect validates `AckSeq=L` against that current persisted
+same-controller, same-token reconnect validates `AckSeq=L` against that current persisted
 high-water and retained activated proof binding, not equality with original N
 or K. It sends/accepts only the idempotent active acknowledgement before local
 publication releases authority callbacks.
+
+A changed controller or fresh jti cannot use equal-active A. It takes the normal
+proof-v2 `active` path, reserves B above A and the all-time floor, and completes
+the full candidate pipeline. Equal/lower evidence is a refusal, never rebind.
+
+### 4.6 Consumed-adoption candidate recovery
+
+If the controller dies after exact proof/receipt adoption consume but before
+`carrier_active`, the candidate is not abandonable. The composing authority
+server-resolves the consumed adoption from current authenticated controller/
+host/lifecycle/Hello facts, retains the original encrypted credential envelope,
+and returns a typed `adopted_candidate_recovery` outcome. The host supplies no
+adoption/proof/receipt/token/carrier selector. The outcome carries the exact
+original still-valid bearer bytes and carrier epoch C, original pre-stage AckSeq
+N, staged high-water H, opaque recovery correlation, and exact
+`ResumeFrom=H+1`. Exact retry returns the first outcome; no credential is minted,
+refreshed, re-signed, or reconstructed.
+
+The original credential's remaining validity must cover the configured orphan +
+recovery + activation + clock/propagation margin **before** adoption consume. If
+not, the still-unconsumed candidate uses §2.2 cause
+`credential_lifetime_insufficient`. Loss/corruption/expiry after consume is
+reconciliation, never abandonment or remint.
+
+Relay accepts the unchanged same-jti token only for the exact retained pending
+candidate and only when its old transport is absent or closed. A still-live
+transport returns a retryable refusal; token replay never evicts it. Reconnect
+replaces transport only, returns the original `receipt_stored` disposition with
+AckSeq N and already-retained optional Gap/Snapshot through H, and sends no
+mandatory Snapshot request or journal append. The client/Donmai skips H via
+`PreparedAdoption.ResumeFrom=H+1`, stages later frames locally until activation,
+exact-replays the consumed adoption result, finishes batch/local publication,
+and activates C. `carrier_active.ackSeq=H` resolves the original pending Snapshot.
+No proof, receipt, Snapshot, carrier epoch, or cursor advances a second time.
 
 ## 5. Exact raw-frame durability and host acknowledgement
 
@@ -682,6 +786,9 @@ terminal receipt authority; they never move `host_ack`.
 | Higher carrier authenticates, receipt absent | Candidate remains preparing; incumbent has no mutation authority; only mandatory Snapshot request is sent. |
 | Receipt commits but response is lost | Exact frozen receipt retry returns the first revision; candidate still is not active. |
 | Per-session adoption or any batch fails | Candidate remains non-active; completed durable steps retry idempotently. |
+| Controller dies after adoption consume and before activation | Server-resolve `adopted_candidate_recovery`, return the unchanged still-valid bearer/epoch and ResumeFrom H+1, require old transport absent/closed, exact-replay adoption/batches, then activate the original candidate with no new proof/receipt/Snapshot/cursor. |
+| Old same-jti candidate transport is still live during adopted recovery | Retryable refusal; bearer replay cannot evict the live transport. |
+| Original credential lacks required validity before adoption consume | Keep proof/receipt unconsumed and abandon with `credential_lifetime_insufficient` before reserving higher. Expiry/loss/corruption after consume is reconciliation, not remint. |
 | Local publication succeeds, activation request is lost | Daemon stays non-Ready and retries exact `carrier_activate`; relay either promotes once or returns the already-active acknowledgement. |
 | Viewer sends Input before active | Nothing reaches the host and no input ack advances. |
 | Resize debounce fires before active | Timer/result is suppressed; no authoritative Resize reaches any host leg. |
@@ -701,8 +808,10 @@ terminal receipt authority; they never move `host_ack`.
 | Relay commits abandonment but caller loses the response | Exact request replay returns the first response bytes/revision/digest; changed bytes or another id for that candidate conflicts. |
 | Abandonment lineage is lost/corrupt after possible commit | External v2 remains unavailable in reconciliation; never reconstruct, zero high-water, or fall back to proof v1. |
 | Abandoned high-water is H and replacement Hello is K | K&lt;H or K=max refuses; K=H sends only Snapshot H+1/atSeq H; K&gt;H sends exact Gap H+1..K then Snapshot K+1/atSeq K. Old staged bytes remain non-publishable. |
-| Active reconnect presents current AckSeq L after ordinary progress | Accept L only when it equals current persisted high-water and retains the activated proof binding; do not require L==N or K. |
-| Prior candidate is preparing only | Abandon/fence and reprepare; do not fabricate proof/receipt state. |
+| Same-controller same-token active reconnect presents current AckSeq L after ordinary progress | Accept L only when it equals current persisted high-water and retains the activated proof binding; do not require L==N or K. |
+| Changed controller or fresh JTI presents equal-active epoch A | Refuse. Normal proof-v2 active-state takeover allocates B>A/floor and completes the full candidate pipeline; equal/lower never rebinds. |
+| Socket dies before reservation/in-lock admission | Apply the non-durable socket fence; create no carrier abandonment or receipt evidence. |
+| Admitted candidate is `preparing` with no receipt | Commit §2.2 with both receipt members null, preserve existing high-water/floor, clear active/pending without incumbent rebind, and reserve the successor through its exact predecessor. |
 | Proof is terminal, missing, corrupt, timed out, store-rotated, or revision-regressed | External v2 remains unavailable; no in-memory/zero/prior-adoption fallback. |
 | Same sequence reappears with changed bytes | Terminal conflict; never sanitize/re-encode it into equality. |
 | v1 host presents v2 claim/control | Version/auth refusal; v1 room semantics remain unchanged. |
@@ -716,12 +825,15 @@ terminal receipt authority; they never move `host_ack`.
    directions before attach-v2 activation. Selected v1/v2 stay byte-identical.
 2. Publish the attach-v2 codec/control types and generic client dormant.
 3. Deploy relay durable journal/reload, stable store authority, per-stream proof
-   ordinal, frozen proof-v1 reader, proof-v2 reservation/recheck,
+   ordinal, frozen proof-v1 journal and exact legacy-credential readers,
+   proof-v2 reservation/recheck,
    schema-v1 abandonment ledger/route, all-time carrier-epoch floor, single-use
    predecessor index, and candidate state machine with v2 admission disabled.
 4. Deploy the strict proof-bound receipt/adoption/batch, exact five-token
    attestation containing `durable_carrier_proof_v2` instead of v1, and daemon
-   post-publication seams. Never advertise both proof tokens.
+   post-publication seams, plus encrypted original-credential retention,
+   remaining-validity consume gate, and typed consumed-adoption recovery. Never
+   advertise both proof tokens.
 5. Enable v2 only for installed artifacts that pass the conformance obligations
    below. A local selected-v1/v2 shim remains conservation-only and visibly
    carrier-ineligible.
@@ -732,6 +844,8 @@ terminal receipt authority; they never move `host_ack`.
    valid rollback. It never rebinds a leg as v1, lowers an epoch/floor, discards
    store state, or reactivates an incumbent. A max-3 four-token or proof-v1-only
    rollback cannot mint/admit a new proof-bound v2 carrier.
+   Retained original bearers/recovery correlations survive until activation or
+   reconciliation and are never reminted after loss/expiry/corruption.
 
 Activation is an operator/founder deployment decision outside protocol
 acceptance. A source test, mutable checkout, branch reference, or in-memory demo
@@ -748,11 +862,19 @@ cannot enable it.
       set including `durable_carrier_proof_v2` instead of v1; max 3 with the
       earlier four tokens, v1 alone, or both proof tokens is RED and creates no
       credential/candidate. The v1 decoder still exact-replays/drains retained
-      same-handoff state without authorizing new admission.
+      same-handoff state without authorizing new admission, and the exact legacy
+      claim profile authenticates only those already-retained original bytes.
+- [ ] Replay one immutable pre-cutover proof-v1 credential whose original jti,
+      nonce, prepared correlation, proof/reservation, epochs, boundary, and expiry
+      still match the retained same-controller handoff. Deleting the legacy
+      profile reader is RED. Minting a fresh profile, changing any claim, mixing
+      v1/v2 members, accepting an expired credential, or selecting a new
+      reservation/controller is RED; the restored exact retained replay/drain is
+      GREEN and produces no new credential or candidate.
 - [ ] The strict JWT carries `proof_schema_version` exactly as JSON string `"2"`,
       `carrier_epoch_floor` as a canonical positive decimal string equal to the
       reserved candidate, and always-present `predecessor_abandonment` as null or
-      the exact seven-member object. A JSON number, omission, partial object,
+      the exact eight-member object. A JSON number, omission, partial object,
       changed target/abandonment member, or v1 retained proof is RED before room
       mutation.
 - [ ] With shim sidecar ack N, carrier high-water N, and prior adoption M&lt;N, the
@@ -812,8 +934,34 @@ cannot enable it.
       publishing/acking the old leg, and reserves one successor above the floor
       through its single-use predecessor. Independently mutate each source field,
       remove the durable write/floor/predecessor/controller gate, race activation,
-      or restore the incumbent and observe the named fixture RED. Same-controller
+      leave the target proof reservation consumable, or restore the incumbent and
+      observe the named fixture RED. Same-controller
       exact replay remains GREEN with no abandonment or second Snapshot.
+- [ ] With active A and durable high-water H&gt;0, admit higher C through the real
+      in-lock WSS fence, then kill it in `preparing` before receipt storage. The
+      abandonment request must carry preparing plus both receipt fields null,
+      preserve H/floor, clear A/C without reactivating A, mark C's reservation
+      abandoned, and admit only a successor above the floor. Repeat at H=0.
+      Treating preparing as a socket-only fence, requiring positive H, supplying
+      either receipt field, relabeling the state empty/active, or reusing A/C is
+      RED; a pre-admission socket death remains the non-durable control.
+- [ ] Crash the controller independently at `adoption-committed` and
+      `batch-committed/local-published`. The authenticated replacement receives
+      the first typed recovery outcome with exact original bearer/epoch,
+      AckSeq N, H, and ResumeFrom H+1; Relay requires old transport absent/closed,
+      sends no Snapshot/append, exact-replays adoption/batches, and activates C.
+      Abandoning, reminting/changing the JWT or JTI, advancing proof/receipt/
+      cursor, replaying H, or evicting a live same-jti transport is RED.
+- [ ] Reduce original credential remaining validity below the configured orphan/
+      recovery margin before adoption consume and prove
+      `credential_lifetime_insufficient` abandonment stays pre-consume and admits
+      only a higher successor. Delete the validity gate and observe RED. Expire,
+      lose, or corrupt the retained encrypted bearer after consume and prove
+      reconciliation with zero remint/log/diagnostic exposure.
+- [ ] For active A, same-controller same-token reconnect at current L remains
+      idempotent. Change controller or JTI and present A/equal/lower: RED. Normal
+      proof-v2 `active` takeover at B above A/floor completes the full candidate
+      pipeline and is GREEN.
 - [ ] From preserved H, replacement K=H produces only Snapshot H+1; K&gt;H produces
       Gap H+1..K then Snapshot K+1; K&lt;H and overflow are RED. Zeroing H, relabeling
       it empty, or replaying the abandoned Snapshot as the successor is RED.
@@ -825,7 +973,8 @@ cannot enable it.
 - [ ] Tokens, raw jtis, handoff nonces, raw Output/Snapshot bytes, journal
       payloads, abandonment request/result bytes, UUIDs, store authority,
       proof/state/request/receipt/prepared-correlation/abandonment digests, and
-      receipt revisions are absent from logs, errors, diagnostics, room
+      receipt revisions, adopted-recovery correlations, and retained bearer
+      envelopes are absent from logs, errors, diagnostics, room
       snapshots, and viewer control frames.
 - [ ] A self-hosted compatible journal/sink passes the same corpus without any
       hosted-platform import.

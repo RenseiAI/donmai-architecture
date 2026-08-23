@@ -23,11 +23,13 @@ Draft 2 adds the incarnation-bound externally acknowledged cursor sidecar and
 the proof-resolved adoption cursor override. It does not change message type
 `0x0F`, selected-v1/v2 bytes, or the one-event mapping.
 
-Draft 3 binds changed-controller recovery after a retained candidate is durably
-abandoned. It changes no shimwire byte. Proof v2 preserves the abandoned staged
-high-water as the next carrier boundary, carries exact abandonment lineage and an
-all-time carrier-epoch floor, and requires the replacement candidate to allocate
-its new Snapshot after that boundary. Exact same-handoff replay remains unchanged.
+Draft 3 binds pre-consume recovery after an admitted preparing/receipt-stored
+candidate is durably abandoned, plus post-consume recovery of the original
+candidate. It changes no shimwire byte. Proof v2 preserves existing high-water as
+the next carrier boundary, carries exact abandonment lineage and an all-time
+carrier-epoch floor, and requires the replacement candidate to allocate its new
+Snapshot after that boundary. Consumed-adoption recovery instead resumes at H+1
+with no duplicate H. Exact same-handoff replay remains unchanged.
 
 This is a selected-version delta for the local daemon↔shim wire. It does not
 rename the protocol family and does not amend selected v1 or selected v2.
@@ -280,14 +282,22 @@ Snapshot K+1/atSeq K. The existing `DeclareHostGap` remains the
 source-compatible `ring_evicted` default. Pre-active ordinary replay remains
 forbidden.
 
-If a changed controller first abandons a retained `receipt_stored` candidate,
-the abandoned Snapshot's sequence becomes preserved carrier high-water H while
-the old leg remains unacknowledged and non-publishable. The replacement proof-v2
-boundary is H. A new Hello-frozen K must satisfy K>=H: K=H emits only Snapshot
+If a changed controller abandons a retained `receipt_stored` candidate, or an
+admitted `preparing` candidate is abandoned before reprepare, existing carrier
+high-water H is preserved, including zero. A receipt-stored source also preserves
+its abandoned Snapshot as unacknowledged/non-publishable; a preparing source has
+none. The replacement proof-v2 boundary is H. A new Hello-frozen K must satisfy K>=H: K=H emits only Snapshot
 H+1/atSeq H; K>H emits `controller_unforwarded` Gap H+1..K then Snapshot
 K+1/atSeq K; K<H or K=max refuses. The shim does not reuse the abandoned
 Snapshot as the new mandatory response. Under the same controller and exact
 handoff, retained replay uses the original Gap/Snapshot and emits no new request.
+
+If proof/receipt adoption already consumed before controller loss, the exact
+retained staged Snapshot sequence H is authoritative. Server-resolved adopted-
+candidate recovery sets `PreparedAdoption.ResumeFrom=H+1`; the shim does not
+replay H, and later frames remain locally staged until the original carrier C
+activates and acknowledges H. No new proof/Snapshot/cursor is allocated. H=max
+uint64 refuses consume/recovery because the successor cursor is unrepresentable.
 
 ## 9. Capability and visible incompatibility
 
@@ -323,7 +333,8 @@ substitutes semantic reconstruction for exact bytes.
 | Hello LastHostSeq K exceeds proof boundary N | Hold K; set ResumeFrom K+1; send `controller_unforwarded` Gap N+1..K then Snapshot K+1/atSeq K. |
 | Hello LastHostSeq is below proof boundary or max uint64 | Refuse before Welcome; release the output barrier with no candidate/gap/Snapshot. |
 | Max-3 attestation omits `durable_carrier_proof_v2`, advertises v1 instead, or advertises both | Preserve v3 ownership/full-frame observation but withhold proof-bound attach-v2 credential/candidate/activation. Frozen v1 remains decode/replay/drain only. |
-| Changed controller abandons retained candidate at high-water H | Preserve the old staged bytes and sequence; accept only proof-v2 boundary H and a successor above the all-time carrier-epoch floor. K=H emits Snapshot H+1, K>H emits Gap H+1..K plus Snapshot K+1, and K<H refuses. |
+| Receipt-stored or admitted-preparing candidate is durably abandoned at high-water H | Preserve H/floor and any staged bytes, clear active/pending without rebind, and accept only proof-v2 boundary H plus a successor above the floor. K=H emits Snapshot H+1, K>H emits Gap H+1..K plus Snapshot K+1, and K<H refuses. |
+| Controller changes after adoption consume but before activation | Server-resolved recovery uses original candidate C and exact ResumeFrom H+1. Shim emits no H duplicate; H+1 onward stays locally staged until same-token Relay reconnect and activation acknowledge H. |
 
 ## 11. Migration and rollback
 
@@ -399,6 +410,15 @@ carrier generation.
       then Snapshot K+1, and K<H/overflow refuses. Disabling abandonment, floor,
       predecessor, or high-water preservation is V16 RED; exact same-controller
       handoff replay remains one original Snapshot with no new request.
+- [ ] Crash after adoption consume before activation. Exact recovery sets
+      ResumeFrom H+1, emits no duplicate H, stages later frames until original C
+      activates, and advances sidecar only after ack H. Replaying H, allocating a
+      new proof/Snapshot, or accepting H=max is RED.
+- [ ] With active A and H&gt;0, admit C and kill it in preparing before Snapshot
+      receipt. Exact abandonment carries preparing with null receipt evidence,
+      preserves H/floor, clears A/C without rebind, and accepts only a higher
+      successor. Repeat H=0. Treating it as a socket-only fence, inventing a
+      Snapshot/receipt, or relabeling zero-H abandoned as empty is RED.
 - [ ] Tokens, jtis, prompts, raw frame bytes, and frame digests never enter
       logs, errors, discovery records, heartbeat diagnostics, or quarantine
       display detail.
