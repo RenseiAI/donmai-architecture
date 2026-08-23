@@ -266,16 +266,21 @@ replacement daemon never supplies or reconstructs a remote fence id/revision or
 host-adoption revision from local files. A planned restart receipt authorizes
 the old controller's stop; it is not required recovery state. No applicable
 fence is the ordinary unplanned-crash case, while any conflicting host or
-shim/process/controller correlation keeps startup fail-closed. The durable
-last-forwarded sequence is composing-carrier state, not a `Hello` field; a
-remote store validates it against durable ingress and zero safely over-replays.
+shim/process/controller correlation keeps startup fail-closed. For selected v3,
+a strict mode-`0600` ACK sidecar gives the local resume floor and
+`Hello.LastSeq` gives the shim-authenticated live tail. Neither is the external
+carrier cursor. A proof-bound composition resolves and reserves the carrier
+journal's own content-addressed durable boundary after `Hello` and before
+`Welcome`; a daemon cursor, prior adoption cursor, zero fallback, or silent
+maximum cannot substitute.
 
 Local-wire v1 remains sufficient to adopt and conserve an older live shim, but
 its closed vocabulary cannot proxy a fresh relay snapshot request. Selected v2
 adds that exact inspect/emit proxy but omits applied Resize/Marker and lacks one
 complete raw event for every host sequence. Selected v3 adds the one exact
 `HostFrame` rail for Output, applied Resize, Marker, Snapshot, and Exit. Durable
-external attach requires selected v3 plus `full_host_frame_v3`; v1 reports
+external attach requires selected v3 plus `full_host_frame_v3` and the exact
+attested `durable_carrier_proof_v1`; v1 reports
 `authoritative_snapshot_unsupported`, v2 reports
 `durable_host_frame_unsupported`, and both stay alive/capacity-charged. The
 daemon never fabricates a screen or missing frame.
@@ -287,13 +292,18 @@ scope's batch commit, and Donmai's local publication. Only the post-publication
 `carrier_activate`/`carrier_active` exchange makes it active. Before that, the
 relay may send only the mandatory authoritative Snapshot request; viewer Input,
 authoritative Resize, and Kill are neither forwarded nor acknowledged.
+When the shim-authenticated tail K exceeds carrier boundary N, the only
+additional pre-active disposition is the proof-bound
+`controller_unforwarded` Gap N+1..K immediately before Snapshot K+1/atSeq K.
+The proof/reservation, signed carrier credential, atomic admission recheck,
+Gap/Snapshot receipt, and adoption consume bind the exact N/K transition.
 
 Ordinary host output has the same durable boundary. Every sequence-bearing raw
 frame arrives once from selected local-v3 `HostFrame` and is committed byte-for-
 byte in the carrier before ring insertion or
 viewer fan-out. The carrier reloads its contiguous high-water after restart and
 returns `host_ack`; only that ack lets the generic client return durable success,
-the daemon advance `last_forwarded_seq`, and the shim heartbeat advance. A
+the daemon advance its forwarded cursor, and the shim heartbeat advance. A
 socket write or in-memory ring append is not durability.
 
 The local status/doctor surfaces and every host heartbeat expose the same
@@ -310,9 +320,10 @@ for the real installed-service survival smoke, old-controller fencing, gap and
 snapshot honesty, no-secret registry proof, quarantine visibility, and orphan
 bound required by the ADR. External-carrier activation also waits for immutable
 process-scoped controller identity and the installed v2 authoritative-snapshot
-round trip **plus** selected local-v3 full-host-frame coverage in both immutable
-max-2 overlap directions; source compatibility or a green v1/v2 adoption test
-does not satisfy it.
+round trip **plus** selected local-v3 full-host-frame coverage, ACK-sidecar
+crash recovery, carrier proof reservation/admission drift refusal, and both
+immutable max-2 overlap directions; source compatibility or a green v1/v2
+adoption test does not satisfy it.
 
 ## Drain and restart semantics
 
