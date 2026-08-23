@@ -299,15 +299,26 @@ bytes with `200`:
 }
 ```
 
-The same request id with changed bytes, another cutover request for that store,
-store-authority rotation after the first commit, or any concurrent v1 write is
-`409 carrier_cutover_conflict`.
+The same request id with changed bytes, another/new cutover request for that store,
+or any concurrent v1 write is `409 carrier_cutover_conflict`.
 Other closed failures are `400 invalid_carrier_cutover_request`, uniform `401`,
 `413`, and `503 carrier_cutover_unavailable`. A committed-response-lost retry
 returns the first response. There is exactly one base manifest per initialized
 store authority; it is never regenerated to add or reopen an entry.
 `cutoverResponseDigest` is SHA-256 over RFC 8785 canonical response bytes excluding
 that member; exact retry compares and returns the retained bytes.
+
+Exact id/body replay dominates store rotation. Relay's fsync-backed cutover
+idempotency ledger lives in durable control metadata outside the rotatable journal
+authority and retains the original store-A authority plus exact request/response
+bytes/digests. Rotation must retain or transactionally migrate that read-only
+record, manifest, tombstones, and referenced secrets. If A commits and its
+response is lost before rotation to B, exact replay returns A's first response;
+it never runs cutover against B or returns B's authority. A changed/new request
+against B conflicts while any A manifest entry/reference remains. After A's set
+is fully tombstoned with zero live references, B may freeze its own one-time
+manifest under a new request id, but the inherited writer-closed/minimum-schema
+state stays permanent and B can never admit a new v1 row.
 
 The base manifest is immutable. Eligibility only shrinks through an append-only
 fsync-backed tombstone keyed by its exact entry digest:
@@ -342,13 +353,14 @@ Relay loads the manifest, `v1WritesClosed`, all tombstones, and every referenced
 row/credential before `durable_carrier_proof_v2_ready:true`. An unlisted or
 changed proof-v1 row, a listed row with missing bytes, a new v1 write attempt, or
 a tombstoned credential is refusal plus reconciliation and makes readiness false;
-it is never auto-added or treated as legacy. Store-authority rotation invalidates
-the manifest and keeps v2 unavailable while any old reference exists. A new
-authority may freeze only after proving the old allowset has zero live references;
-rotation is never a reset/reopen mechanism.
+it is never auto-added or treated as legacy. Store-authority rotation retains the
+old manifest/idempotency/tombstones read-only and keeps v2 unavailable on the new
+authority while any old reference exists. A new authority may freeze only after
+proving the old allowset has zero live references; rotation is never a reset/
+reopen mechanism, and the inherited v1 writer remains permanently closed.
 
 Rollback preserves the manifest, write-closed flag, tombstones, retained secrets,
-and exact lookup behavior. A binary that cannot read/enforce them is not rollback
+cutover control-idempotency ledger, and exact lookup behavior. A binary that cannot read/enforce them is not rollback
 safe and cannot mount the v1 writer or advertise v2 readiness. Before any v1
 writer release, every store opener must reject an unknown/higher required writer
 schema; cutover atomically raises the mandatory store header to
@@ -358,7 +370,8 @@ the same shrink-only allowset; it never takes a new snapshot of surviving rows.
 
 Diagnostics expose only closed readiness/reason plus bounded revision/count. They
 exclude store/cutover/request/reservation ids, manifest/entry/credential/JTI/
-tombstone digests, exact manifest/tombstone bytes, and retained secrets.
+tombstone/response digests, exact manifest/tombstone/idempotency request/response
+bytes, and retained secrets.
 
 ### 2.1 Durable carrier proof reservation
 
@@ -976,6 +989,7 @@ terminal receipt authority; they never move `host_ack`.
 | Same reservation request replays after process crash | Return the first proof ordinal/digest/reserved epoch. Changed bytes conflict. |
 | Cutover crashes before write-closed flag + manifest commit | V2 readiness stays false and no partial manifest authorizes legacy state. Exact request retries under the exclusive lock. |
 | Cutover commits but response is lost | Exact request replay returns the first store-bound cutover id/revision/manifest digest and count. It never resnapshots rows. |
+| Cutover commits on A, response is lost, then store rotates to B | Retained/migrated control idempotency returns A's first response on exact replay. New/changed B cutover conflicts until every A entry/reference is tombstoned/drained; B inherits permanent v1 closure. |
 | Initialized store has zero v1 rows and no proof response has exposed store authority | Relay resolves its own authority under the cutover lock, freezes empty entries/count zero, and returns it. Caller never guesses or supplies the value. |
 | New/unlisted/changed v1 row appears after cutover | Refuse the row into reconciliation and set v2 readiness false; never append it to the base manifest. |
 | Retained v1 entry drains or crosses abandonment to v2 | Fsync the exact shrink-only tombstone before deleting/unlinking its row/credential. Restart reload keeps it ineligible forever. |
@@ -1055,6 +1069,13 @@ cannot enable it.
       resnapshot. Delete the exclusive lock, store binding, fsync/transaction,
       writer-close ordering, minimum-writer-schema store-open refusal, or reload
       check and observe RED.
+- [ ] Commit cutover on store A, drop the response, rotate to B, then exact-retry
+      the same id/body. It must return A's first response from retained/migrated
+      read-only control idempotency and must not run against B. A changed/new B
+      request is RED while any A entry/reference remains. Tombstone/drain all A
+      entries, prove zero references, then freeze B with a new request while v1
+      writers stay permanently closed. Dropping/mis-scoping the idempotency ledger,
+      returning B on exact replay, or reopening v1 is RED.
 - [ ] Repeat cutover on a freshly initialized store with zero v1 rows and no prior
       proof reservation response. Relay must resolve/return its own non-empty
       store authority, freeze an empty manifest, return count zero, and reach v2

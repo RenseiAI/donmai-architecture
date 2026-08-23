@@ -901,6 +901,7 @@ preserving the OSS boundary.
 | Relay restarts after durable append but before host ack | Reload the persisted high-water and exact retained tail, compare replay bytes, and return the same contiguous ack. Never acknowledge from an empty in-memory ring. |
 | V1 cutover crashes before manifest/write-closed commit | V2 readiness remains false; no partial allowset authorizes a legacy row. Exact request retries under the exclusive store lock. |
 | V1 cutover commits but response is lost | Exact request replay returns the first store-bound cutover receipt and never resnapshots surviving v1 rows. |
+| Cutover commits on store A, response is lost, then authority rotates to B | Retained/migrated control idempotency returns A's first response on exact replay. New B request conflicts until every A entry/reference drains; B inherits permanent v1 closure. |
 | V1 cutover runs on an initialized zero-row store | Relay resolves/returns its own non-empty store authority under lock and freezes an empty manifest/count zero; no prior proof response or caller-supplied authority exists. |
 | Unlisted/changed/new proof-v1 row appears after cutover | Refuse into reconciliation and clear v2 readiness; never add it to the immutable base manifest. |
 | Listed v1 entry drains | Commit its shrink-only tombstone before row/secret deletion. Restart and rollback retain permanent ineligibility. |
@@ -996,8 +997,8 @@ bytes/revisions/reservations, abandonment request/results and predecessor-consum
 state, carrier-epoch floors, and release reconciliation. Once any abandonment
 exists, a four-disposition reader is not a valid rollback artifact; it may drain
 exact retained v1 handoffs but cannot mint or admit a new carrier.
-The v1 base manifest, write-closed flag, tombstones, cutover receipt, and retained
-rows/secrets survive rollback; no artifact may regenerate/enlarge/clear the set or
+The v1 base manifest, write-closed flag, tombstones, cutover receipt/control-
+idempotency ledger, and retained rows/secrets survive rollback; no artifact may regenerate/enlarge/clear the set or
 reopen a v1 writer. An unaware artifact is rollback-ineligible.
 Consumed-adoption recovery envelopes/correlations remain readable until their
 candidate activates or enters reconciliation; rollback never remints an expired,
@@ -1747,6 +1748,10 @@ and an unlisted/changed/new v1 row refuses into reconciliation. Manifest,
 write-closed flag, tombstones, and referenced rows reload before
 `durable_carrier_proof_v2_ready`; rollback preserves and enforces them rather than
 resampling or reopening v1.
+The cutover request/response idempotency record lives in retained control metadata
+outside the rotatable journal authority. Exact retry always returns the original
+store's first response across rotation; a new store request stays blocked until
+the old allowset has zero live references and inherits permanent v1 closure.
 
 The signed attach-v2 credential binds exact non-secret claim fields
 `proof_schema_version="2"`, `store_authority_id`, `proof_revision`, `proof_digest`,
@@ -2211,6 +2216,11 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     Relay must resolve/return its own non-empty store authority and empty-manifest
     count zero; requiring caller authority or accepting empty/guessed authority is
     RED.
+    Commit on store A, lose the response, rotate to B, and exact-retry: A's first
+    response must return from retained/migrated read-only control idempotency,
+    while any changed/new B request remains RED until every A entry/reference
+    drains. Then freeze B under a new id with v1 still permanently closed. Returning
+    B on exact A replay, losing the ledger, or reopening v1 is RED.
 
 The service-manager smoke uses the installed binary and actual launchd job. A
 unit test that kills a child subprocess does not exercise the failure class.
@@ -2329,6 +2339,10 @@ unit test that kills a child subprocess does not exercise the failure class.
   row already drained or introduced after cutover. The base manifest is one-time
   and store-bound, tombstones are append-only, and minimum-writer-schema refusal
   keeps unaware binaries out of the writer path.
+- **Store rotation changes the answer to a lost cutover response.** Cutover
+  idempotency is retained outside the rotatable journal authority; exact replay
+  returns the original store response, and the new store cannot cut over until
+  old references reach zero.
 
 ## Alternatives considered
 
