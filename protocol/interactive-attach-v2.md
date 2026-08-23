@@ -270,7 +270,8 @@ canonical UUID string; neither raw bearer, jti, nonce, frame, receipt bytes, nor
 prepared correlation enters the manifest. The three credential members are all
 null or all non-null. Legacy credential replay requires a non-null triple and
 exact bearer/JTI digests. Reserved/preparing entries without a credential remain
-eligible only for exact abandonment/reconciliation, never authentication.
+eligible only for reconciliation (reserved) or exact abandonment/reconciliation
+(preparing), never authentication.
 
 The first successful call returns `201`; exact request replay returns the first
 bytes with `200`:
