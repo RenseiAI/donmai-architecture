@@ -280,7 +280,9 @@ adds that exact inspect/emit proxy but omits applied Resize/Marker and lacks one
 complete raw event for every host sequence. Selected v3 adds the one exact
 `HostFrame` rail for Output, applied Resize, Marker, Snapshot, and Exit. Durable
 external attach requires selected v3 plus `full_host_frame_v3` and the exact
-attested `durable_carrier_proof_v1`; v1 reports
+attested `durable_carrier_proof_v2`; this token replaces v1 in the exact
+five-token set while frozen v1 decode/same-handoff replay/drain remains required.
+Advertising v1 or both proof tokens authorizes no new carrier. V1 reports
 `authoritative_snapshot_unsupported`, v2 reports
 `durable_host_frame_unsupported`, and both stay alive/capacity-charged. The
 daemon never fabricates a screen or missing frame.
@@ -297,6 +299,16 @@ additional pre-active disposition is the proof-bound
 `controller_unforwarded` Gap N+1..K immediately before Snapshot K+1/atSeq K.
 The proof/reservation, signed carrier credential, atomic admission recheck,
 Gap/Snapshot receipt, and adoption consume bind the exact N/K transition.
+
+An exact retained `receipt_stored` handoff replays only under the same controller.
+A changed controller first commits the carrier's authenticated abandonment
+request/result: the staged Gap/Snapshot and positive high-water remain, current
+active/pending authority clears without incumbent rebind, and an all-time
+carrier-epoch floor plus single-use predecessor forces the proof-v2 successor
+strictly higher. The exact carrier readiness field is
+`durable_carrier_proof_v2_ready`. Missing/false readiness, the old unversioned
+`durable_carrier_proof_ready`, or a v1-only reader keeps credential mint,
+candidate admission, heartbeat, capacity, poll, claim, and `Ready` disabled.
 
 Ordinary host output has the same durable boundary. Every sequence-bearing raw
 frame arrives once from selected local-v3 `HostFrame` and is committed byte-for-

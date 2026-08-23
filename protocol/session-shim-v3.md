@@ -2,7 +2,7 @@
 title: session-shim selected v3 — exact full host-frame observation
 status: Proposed
 date: 2026-08-23
-revision: v3.0-draft2
+revision: v3.0-draft3
 protocol-family: session-shim-v1
 selected-version: 3
 boundary: OSS-only
@@ -22,6 +22,12 @@ activation pending.
 Draft 2 adds the incarnation-bound externally acknowledged cursor sidecar and
 the proof-resolved adoption cursor override. It does not change message type
 `0x0F`, selected-v1/v2 bytes, or the one-event mapping.
+
+Draft 3 binds changed-controller recovery after a retained candidate is durably
+abandoned. It changes no shimwire byte. Proof v2 preserves the abandoned staged
+high-water as the next carrier boundary, carries exact abandonment lineage and an
+all-time carrier-epoch floor, and requires the replacement candidate to allocate
+its new Snapshot after that boundary. Exact same-handoff replay remains unchanged.
 
 This is a selected-version delta for the local daemon↔shim wire. It does not
 rename the protocol family and does not amend selected v1 or selected v2.
@@ -274,12 +280,21 @@ Snapshot K+1/atSeq K. The existing `DeclareHostGap` remains the
 source-compatible `ring_evicted` default. Pre-active ordinary replay remains
 forbidden.
 
+If a changed controller first abandons a retained `receipt_stored` candidate,
+the abandoned Snapshot's sequence becomes preserved carrier high-water H while
+the old leg remains unacknowledged and non-publishable. The replacement proof-v2
+boundary is H. A new Hello-frozen K must satisfy K>=H: K=H emits only Snapshot
+H+1/atSeq H; K>H emits `controller_unforwarded` Gap H+1..K then Snapshot
+K+1/atSeq K; K<H or K=max refuses. The shim does not reuse the abandoned
+Snapshot as the new mandatory response. Under the same controller and exact
+handoff, retained replay uses the original Gap/Snapshot and emits no new request.
+
 ## 9. Capability and visible incompatibility
 
 Selected local version 3 plus `full_host_frame_v3` is a hard prerequisite for
 attach-v2 durable activation. Proof-bound hosted/external activation also
 requires the exact lexically sorted attestation token
-`durable_carrier_proof_v1`; max 3 with the earlier four tokens remains
+`durable_carrier_proof_v2`; max 3 with the earlier four tokens remains
 ineligible. The daemon may still adopt a selected-v2 shim for
 ownership conservation and authoritative snapshot inspect/emit, but it reports
 the external carrier outcome as
@@ -307,7 +322,8 @@ substitutes semantic reconstruction for exact bytes.
 | External proof boundary N is at or ahead of the sidecar ack and Hello K=N | `PreparedAdoption.ResumeFrom` raises exactly to N+1; the proof, not the daemon, is authority. |
 | Hello LastHostSeq K exceeds proof boundary N | Hold K; set ResumeFrom K+1; send `controller_unforwarded` Gap N+1..K then Snapshot K+1/atSeq K. |
 | Hello LastHostSeq is below proof boundary or max uint64 | Refuse before Welcome; release the output barrier with no candidate/gap/Snapshot. |
-| Max-3 attestation omits `durable_carrier_proof_v1` | Preserve v3 ownership/full-frame observation but withhold proof-bound attach-v2 credential/candidate/activation. |
+| Max-3 attestation omits `durable_carrier_proof_v2`, advertises v1 instead, or advertises both | Preserve v3 ownership/full-frame observation but withhold proof-bound attach-v2 credential/candidate/activation. Frozen v1 remains decode/replay/drain only. |
+| Changed controller abandons retained candidate at high-water H | Preserve the old staged bytes and sequence; accept only proof-v2 boundary H and a successor above the all-time carrier-epoch floor. K=H emits Snapshot H+1, K>H emits Gap H+1..K plus Snapshot K+1, and K<H refuses. |
 
 ## 11. Migration and rollback
 
@@ -319,15 +335,18 @@ substitutes semantic reconstruction for exact bytes.
 3. Release a max-3 daemon/client that treats selected v2 as conservation-only
    and selected v3 as the external-durability prerequisite.
 4. Update composing attestation to the exact lexical five-token set including
-   `durable_carrier_proof_v1`, then relay/client installed-artifact gates. Keep
-   activation disabled; max 3/four tokens remains ineligible.
+   `durable_carrier_proof_v2` instead of v1, then relay/client installed-artifact
+   gates. Retain frozen v1 decode/exact same-handoff replay/drain, but never
+   advertise both proof tokens or use v1 for new admission. Keep activation
+   disabled; max 3/four tokens remains ineligible.
 5. Enable external durable carrier only after real v3 full-frame/gap/snapshot/
    terminal proofs pass.
 
 Rollback disables new external carrier activation first. A max-3 shim may run
 under a max-2 daemon by selecting v2, but that host is carrier-ineligible.
-Existing v3 journals, acknowledgements, fence/adoption evidence, and terminal
-proof remain readable until every referenced session drains. Rollback never
+Existing v3 journals, acknowledgements, proof-v1/v2 and abandonment lineage,
+carrier-epoch floors, fence/adoption evidence, and terminal proof remain readable
+until every referenced session drains. Rollback never
 rewrites a v3 frame as a legacy semantic event or lowers a live controller/
 carrier generation.
 
@@ -355,10 +374,11 @@ carrier generation.
       a post-Exit sequence-bearing HostFrame and a sequence-zero HostFrame are
       RED.
 - [ ] Registration/refresh/heartbeat require the max-3 exact lexical five-token
-      attestation including `durable_carrier_proof_v1` and
+      attestation including `durable_carrier_proof_v2` instead of v1 and
       `full_host_frame_v3`. Per-shim external prepare additionally requires
-      actual selected v3. Max 3 alone and the earlier four-token set refuse
-      hosted auth; selected 2 remains conserved but carrier-ineligible.
+      actual selected v3. Max 3 alone, the earlier four-token set, v1 alone, and
+      both proof tokens refuse hosted auth; selected 2 remains conserved but
+      carrier-ineligible. V1 decode/exact retained replay/drain still works.
 - [ ] For every durable host acknowledgement, block/fail the real `.ack` file
       write/fsync and prove the Heartbeat does not confirm. Restore and prove a
       cold adoption loads the exact lifecycle/shim/process/generation cursor.
@@ -372,6 +392,13 @@ carrier generation.
       callback/proof prepare, daemon/prior-adoption inference, or silent clamp
       is RED. No ordinary frame crosses a pre-active carrier, and the shim
       independently refuses Welcome below its in-memory floor.
+- [ ] With immutable installed binaries, stage a first receipt-stored candidate
+      at active zero/high-water H, change controller, and cross the real durable
+      abandonment/proof-v2 path. The old Snapshot remains non-publishable and the
+      successor boundary is H: K=H emits only Snapshot H+1, K>H emits Gap H+1..K
+      then Snapshot K+1, and K<H/overflow refuses. Disabling abandonment, floor,
+      predecessor, or high-water preservation is V16 RED; exact same-controller
+      handoff replay remains one original Snapshot with no new request.
 - [ ] Tokens, jtis, prompts, raw frame bytes, and frame digests never enter
       logs, errors, discovery records, heartbeat diagnostics, or quarantine
       display detail.
