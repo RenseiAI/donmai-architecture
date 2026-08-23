@@ -313,7 +313,8 @@ carrier-epoch floor plus single-use predecessor forces the proof-v2 successor
 strictly higher. The exact carrier readiness field is
 `durable_carrier_proof_v2_ready`. Missing/false readiness, the old unversioned
 `durable_carrier_proof_ready`, a missing/unverified cutover manifest/write-close/
-tombstone set, or a v1-only reader keeps credential mint,
+acknowledgement/tombstone set, any acknowledgement fact not literally true, or a
+v1-only reader keeps credential mint,
 candidate admission, heartbeat, capacity, poll, claim, and `Ready` disabled.
 
 Once proof/receipt adoption consumes, that candidate is no longer abandonable.

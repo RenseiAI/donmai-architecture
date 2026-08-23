@@ -901,7 +901,9 @@ preserving the OSS boundary.
 | Relay restarts after durable append but before host ack | Reload the persisted high-water and exact retained tail, compare replay bytes, and return the same contiguous ack. Never acknowledge from an empty in-memory ring. |
 | V1 cutover crashes before manifest/write-closed commit | V2 readiness remains false; no partial allowset authorizes a legacy row. Exact request retries under the exclusive store lock. |
 | V1 cutover commits but response is lost | Exact request replay returns the first store-bound cutover receipt and never resnapshots surviving v1 rows. |
-| Cutover commits on store A, response is lost, then authority rotates to B | Retained/migrated control idempotency returns A's first response on exact replay. New B request conflicts until every A entry/reference drains; B inherits permanent v1 closure. |
+| Composing authority has not acknowledged the exact cutover and all four true facts | V2 readiness remains false. Relay-local writer closure/manifest state cannot imply composing writer closure, retained-credential support, the validity gate, or adopted-candidate recovery. |
+| Cutover acknowledgement crashes before bind, or commits and loses its response | Before commit, exact retry leaves readiness false until the fsync/transaction and reload finish. After commit, restart reloads the binding and exact retry returns the first acknowledged result. |
+| Cutover/acknowledgement commits on store A, a response is lost, then authority rotates to B | Retained/migrated control idempotency returns A's first result on exact replay. New B cutover/acknowledgement conflicts until every A entry/reference drains; B inherits permanent v1 closure but requires its own cutover and acknowledgement. |
 | V1 cutover runs on an initialized zero-row store | Relay resolves/returns its own non-empty store authority under lock and freezes an empty manifest/count zero; no prior proof response or caller-supplied authority exists. |
 | Unlisted/changed/new proof-v1 row appears after cutover | Refuse into reconciliation and clear v2 readiness; never add it to the immutable base manifest. |
 | Listed v1 entry drains | Commit its shrink-only tombstone before row/secret deletion. Restart and rollback retain permanent ineligibility. |
@@ -944,7 +946,7 @@ The rollout is additive:
    selected v2 both refuse external carrier.
 5. Deploy compatible relays with frozen proof-v1 journal and exact legacy-claim
    readers, the one store-bound v1 eligibility manifest/shrink-only tombstone
-   codec/control edge, proof-v2 request/proof
+   codec, cutover and acknowledgement control edges, proof-v2 request/proof
    codecs, the exact schema-v1 abandonment ledger/route, all-time carrier-epoch
    floor, single-use predecessor lineage, the attach-v2 candidate state machine,
    durable host-frame journal/high-water reload, stable store authority,
@@ -955,10 +957,15 @@ The rollout is additive:
    Carrier health exposes the exact boolean
    `durable_carrier_proof_v2_ready:true` only after all v2 proof/abandonment state
    plus the manifest/write-closed flag/tombstones/every referenced v1 row and
-   credential reload and verify. Before that freeze, both composing and Relay v1
-   writers close durably, the store header raises its mandatory minimum writer
-   schema so unaware rollback binaries fail before write-open, and the composing
-   side retains the exact cutover receipt.
+   credential reload and verify. The cutover order is exact: the composing v1
+   writers close durably; Relay returns its response after its own writer closure
+   and manifest reload; the composing side retains that exact response; it proves
+   `composingProofV1WritesClosed`, `encryptedOriginalCredentialRetained`,
+   `remainingValidityConsumeGate`, and `adoptedCandidateRecovery` all true; it
+   sends the frozen authenticated acknowledgement; and Relay durably binds and
+   reloads that acknowledgement. Before the freeze, the store header raises its
+   mandatory minimum writer schema so unaware rollback binaries fail before
+   write-open. No earlier step makes v2 readiness true.
    Missing/false, v1-only, or the old unversioned
    `durable_carrier_proof_ready:true` is ineligible.
    The composing store also retains the original encrypted attach credential
@@ -997,9 +1004,12 @@ bytes/revisions/reservations, abandonment request/results and predecessor-consum
 state, carrier-epoch floors, and release reconciliation. Once any abandonment
 exists, a four-disposition reader is not a valid rollback artifact; it may drain
 exact retained v1 handoffs but cannot mint or admit a new carrier.
-The v1 base manifest, write-closed flag, tombstones, cutover receipt/control-
-idempotency ledger, and retained rows/secrets survive rollback; no artifact may regenerate/enlarge/clear the set or
-reopen a v1 writer. An unaware artifact is rollback-ineligible.
+The v1 base manifest, write-closed flag, exact acknowledgement, tombstones,
+cutover receipt/control-idempotency ledger, and retained rows/secrets survive
+rollback; no artifact may regenerate/enlarge/clear the set or reopen a v1
+writer. An acknowledgement-unaware artifact is rollback-ineligible, and a
+retained acknowledgement cannot make an artifact missing one of its four facts
+ready.
 Consumed-adoption recovery envelopes/correlations remain readable until their
 candidate activates or enters reconciliation; rollback never remints an expired,
 lost, or corrupt bearer.
@@ -1377,6 +1387,7 @@ over its durable journal. The public semantic interface is brand-neutral:
 ```go
 type DurableCarrierProofResolver interface {
     FreezeV1Eligibility(context.Context, DurableCarrierV1CutoverRequest) (DurableCarrierV1Cutover, error)
+    AcknowledgeV2Cutover(context.Context, DurableCarrierV2CutoverAcknowledgement) (DurableCarrierV2CutoverAcknowledgementResult, error)
     Reserve(context.Context, DurableCarrierProofRequest) (DurableCarrierProof, error)
     Abandon(context.Context, DurableCarrierAbandonmentRequest) (DurableCarrierAbandonment, error)
     RecheckAndFence(context.Context, DurableCarrierProof, DurableCarrierCandidate) (DurableCarrierProof, error)
@@ -1384,7 +1395,20 @@ type DurableCarrierProofResolver interface {
 ```
 
 An implementation may combine the operations inside its control API and WSS
-admission transaction. `Reserve` runs after authenticated shim `Hello` and
+admission transaction. `FreezeV1Eligibility` returning successfully is not
+readiness. `AcknowledgeV2Cutover` runs only after the composing authority has
+durably retained that exact cutover response and verified four literal true
+facts: `composingProofV1WritesClosed`,
+`encryptedOriginalCredentialRetained`, `remainingValidityConsumeGate`, and
+`adoptedCandidateRecovery`. Its strict content-addressed acknowledgement binds
+the cutover request id/digest, carrier-resolved store authority, and exact
+cutover-response digest. The carrier persists and reloads that binding before
+v2 readiness; exact replay returns the first result and changed evidence
+conflicts. The canonical HTTP binding, RFC 8785 `acknowledgementDigest`,
+201/200 replay, closed error taxonomy, rotation/rollback law, and redaction are
+frozen in `protocol/interactive-attach-v2.md` §2.0.2.
+
+`Reserve` runs after authenticated shim `Hello` and
 before `Welcome`; `RecheckAndFence` runs under the same carrier-journal lock or
 revision-CAS critical section that admits/fences the exact candidate. The
 candidate argument is the strict verified non-secret projection of the signed
@@ -1392,10 +1416,12 @@ carrier claims: lifecycle/PTY/carrier epoch, store/proof/request bindings,
 carrier boundary N, resolved boundary/last host K, and reserved candidate epoch.
 The raw JWT, jti, handoff nonce, and bearer do not enter the durable interface;
 the relay's authentication/room layer verifies those separately before this
-call. The control credential authenticates the reserve caller but never enters
-either request, proof, digest, diagnostics, or logs. An OSS/self-hosted relay
-ships a working local-journal implementation; no hosted dependency is required
-by the interface.
+call. The control credential authenticates the cutover, acknowledgement,
+reserve, and abandon callers but never enters a request, result, proof, digest,
+diagnostics, or logs. An OSS/self-hosted relay ships a working local-journal
+implementation; the acknowledgement may use the same route or an equivalent
+authenticated in-process seam, and no hosted dependency or composing-plane
+import is required by the interface.
 
 The request binds the exact lifecycle/PTY incarnation and comparison evidence:
 
@@ -1745,12 +1771,15 @@ revision/digest and fsync/transaction barrier make the snapshot durable. An
 append-only content-addressed tombstone removes an entry after drain/abandon/
 terminal/reconciliation. The base set never grows, tombstones never disappear,
 and an unlisted/changed/new v1 row refuses into reconciliation. Manifest,
-write-closed flag, tombstones, and referenced rows reload before
-`durable_carrier_proof_v2_ready`; rollback preserves and enforces them rather than
-resampling or reopening v1.
+write-closed flag, exact `AcknowledgeV2Cutover` binding with all four true facts,
+tombstones, and referenced rows reload before
+`durable_carrier_proof_v2_ready`; rollback preserves and enforces them rather
+than resampling or reopening v1. The carrier's cutover response cannot prove the
+composing writer/recovery facts and never makes readiness true by itself.
 The cutover request/response idempotency record lives in retained control metadata
-outside the rotatable journal authority. Exact retry always returns the original
-store's first response across rotation; a new store request stays blocked until
+outside the rotatable journal authority beside the exact acknowledgement record.
+Exact retry always returns the original store's first cutover or acknowledged
+response across rotation; a new store request/acknowledgement stays blocked until
 the old allowset has zero live references and inherits permanent v1 closure.
 
 The signed attach-v2 credential binds exact non-secret claim fields
@@ -1903,7 +1932,7 @@ arbitrary cross-controller rebind.
 | Admitted candidate remains `preparing` | Commit exact abandonment with null receipt fields, preserve existing high-water/floor, clear active/pending without incumbent rebind, mark the target reservation abandoned, and reserve the successor through its predecessor. |
 | Proof disposition is terminal | Refuse carrier preparation and enter terminal reconciliation; no candidate is created. |
 | Proof resolver timeout, loss, or corruption | Remain recovering with external carrier ineligible; local shim ownership/capacity conservation remains. |
-| Relay restarts | Reload store id, monotonic revision, proof-v1/v2 reservations, abandonment requests/results and consume state, carrier-epoch floor, high-water, pending proof/receipt, and active binding before proof or WSS readiness. |
+| Relay restarts | Reload store id, cutover acknowledgement, monotonic revision, proof-v1/v2 reservations, abandonment requests/results and consume state, carrier-epoch floor, high-water, pending proof/receipt, and active binding before proof or WSS readiness. |
 | Four-token/max-3 attestation, proof-v1-only reader, or older relay/controller rollback | Withhold new external carrier proof/credential/admission; preserve existing journal/proof/abandonment/adoption evidence and let already-active carriers drain. |
 
 ## Acceptance and proof obligations
@@ -2199,7 +2228,17 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     authenticated cutover. Crash before commit and prove readiness false with no
     partial eligibility; crash after commit before response and prove exact retry
     returns the first store authority, cutover id/revision, manifest digest/count,
-    and write-closed fact without resnapshot. Verify deterministic per-row
+    and write-closed fact without resnapshot. Persist that exact response in the
+    composing authority, prove the four acknowledgement facts true, and invoke
+    `AcknowledgeV2Cutover` through the strict authenticated route or equivalent
+    in-process seam. Crash before acknowledgement commit and prove readiness
+    false; crash after commit before response and prove reload plus exact replay
+    returns the first acknowledged result. Independently falsify/omit each fact,
+    change each cutover-request/response/store binding, digest, auth, content-
+    encoding, declared/actual size bound, or exact member set and prove no
+    readiness mutation. Delete the acknowledgement durable write, reload, or
+    readiness dependency and observe RED before restoring GREEN. Verify
+    deterministic per-row
     reservation/proof/credential digests and byte-identical draft-2 auth only for
     live untombstoned entries. Add/mutate an unlisted v1 row and prove refusal,
     reconciliation, and readiness false. Drain/abandon/terminalize rows and prove
@@ -2209,7 +2248,7 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     restore compatible code and observe the same smaller allowset.
     Disable independently writer-close ordering, exclusive lock, store-authority
     binding, canonical digest, fsync/transaction, minimum-writer-schema refusal,
-    reload, exact entry lookup,
+    cutover/acknowledgement reload, exact entry lookup,
     tombstone monotonicity, or rollback enforcement and observe its fixture RED
     before restoring GREEN.
     Repeat with a freshly initialized zero-v1-row store and no proof response:
@@ -2219,8 +2258,10 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     Commit on store A, lose the response, rotate to B, and exact-retry: A's first
     response must return from retained/migrated read-only control idempotency,
     while any changed/new B request remains RED until every A entry/reference
-    drains. Then freeze B under a new id with v1 still permanently closed. Returning
-    B on exact A replay, losing the ledger, or reopening v1 is RED.
+    drains. Repeat with A's acknowledgement response lost: exact replay returns
+    A's first acknowledged result and never binds it to B. Then freeze and
+    acknowledge B under a new id with v1 still permanently closed. Returning B
+    on exact A replay, losing either record, or reopening v1 is RED.
 
 The service-manager smoke uses the installed binary and actual launchd job. A
 unit test that kills a child subprocess does not exercise the failure class.
@@ -2339,10 +2380,13 @@ unit test that kills a child subprocess does not exercise the failure class.
   row already drained or introduced after cutover. The base manifest is one-time
   and store-bound, tombstones are append-only, and minimum-writer-schema refusal
   keeps unaware binaries out of the writer path.
-- **Store rotation changes the answer to a lost cutover response.** Cutover
-  idempotency is retained outside the rotatable journal authority; exact replay
-  returns the original store response, and the new store cannot cut over until
-  old references reach zero.
+- **The carrier derives v2 readiness from its local cutover.** Its manifest cannot
+  prove composing writer closure or the three recovery supports. Require the
+  exact four-fact composing acknowledgement to bind and reload before readiness.
+- **Store rotation changes the answer to a lost cutover or acknowledgement
+  response.** Both idempotency records are retained outside the rotatable journal
+  authority; exact replay returns the original store result, and the new store
+  cannot cut over or acknowledge until old references reach zero.
 
 ## Alternatives considered
 
