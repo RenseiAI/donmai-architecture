@@ -85,6 +85,19 @@ reaper integration live in the platform mirror)
 > v3 shims downgrade to exact v2 behavior with a released daemon. This
 > correction is normative and keeps activation pending.
 
+> **Durable carrier-boundary proof correction 2026-08-23.** Unplanned recovery
+> exposed a cursor-authority gap: a selected-v3 shim can have an fsync-backed
+> acknowledgement floor ahead of a composing authority's prior adoption, while
+> the external carrier alone owns the durable journal high-water. Neither cursor
+> may be inferred from the other, and replaying ordinary frames through a
+> non-authoritative candidate would violate D13. The correction below adds one
+> generic control-authenticated, content-addressed durable-carrier proof and
+> reservation, binds it through preparation, attach credential, admission,
+> Snapshot receipt, and adoption consume, and lets `PreparedAdoption` raise but
+> never regress the shim's local resume floor. The one mandatory pre-active
+> Snapshot remains the only candidate host frame. This correction is normative;
+> implementation, release, migration, and activation remain pending.
+
 ## Context
 
 An interactive session is currently only as durable as the daemon process that
@@ -232,6 +245,22 @@ control plane must implement consistently.
     ownership/snapshot-compatible but visibly carrier-ineligible. A Gap precedes
     its exact raw recovery Snapshot, while a post-Exit sequence-zero Snapshot
     remains a direct result outside the durable high-water.
+14. **Proof-bound recovery cursor:** a selected-v3 shim persists every exact
+    externally acknowledged cursor before confirming its Heartbeat, while the
+    external carrier exposes its independent durable high-water only through a
+    generic control-authenticated proof/reservation. The proof binds stable
+    store authority, lifecycle/PTY incarnation, active and pending carrier
+    epochs, closed disposition, boundary, and monotonic content-addressed
+    revision without token, jti, or raw-frame bytes. It is resolved after
+    authenticated `Hello`, whose selected-v3 `LastSeq` is held as an adoption
+    boundary, and before `Welcome`; `PreparedAdoption.ResumeFrom` may raise but
+    never regress the local sidecar floor. When `LastSeq` exceeds proof boundary,
+    the carrier records one proof-bound `controller_unforwarded` Gap before
+    the mandatory Snapshot. The signed carrier credential, atomic admission
+    recheck, Gap/Snapshot receipt, and adoption consume bind the exact proof and
+    resolved boundary. Drift refuses and reprepares. No prior control-plane
+    cursor, daemon assertion, or pre-active ordinary-frame replay can substitute
+    for that chain.
 <!-- BOUNDARY-SYNC-END: adr-2026-08-17-session-shim-core-contract -->
 
 ### D1 — Process ownership moves to a per-session shim
@@ -493,13 +522,15 @@ On daemon start:
    duplicate session identities, socket type, and PID/start identity;
 4. authenticate each compatible shim `Hello`, including the exact shim/process correlation and that
    shim's current controller generation;
-5. prepare any required carrier handoff and obtain its strictly greater
-   `carrier_epoch` and opaque authenticator **before** serializing `Welcome`;
+5. prepare any required carrier handoff, resolve/reserve its exact D15 durable-
+   carrier proof, and obtain its strictly greater `carrier_epoch`, proof-bound
+   authenticator, and resolved resume cursor **before** serializing `Welcome`;
 6. send `Welcome` with that shim's proposed next controller generation, replay
    position, and only the already-prepared extensions;
 7. let the shim atomically advance its own `controller_generation` and require
    `Adopted` to echo the exact accepted generation/extensions;
-8. request replay after the carrier's persisted D14 high-water;
+8. request replay from the exact proof-resolved `PreparedAdoption.ResumeFrom`,
+   which may raise but never regress the shim's fsync-backed local floor;
 9. when an external carrier admits on-demand snapshots, require selected local
    shimwire version 3 with `full_host_frame_v3` and selected
    `interactive-attach-v2`; selected v2 may complete ownership/snapshot adoption
@@ -523,11 +554,18 @@ On daemon start:
 **Composing prepare resolution.** An optional composing callback receives the
 authenticated post-`Hello` lifecycle identity, shim id, process epoch, and
 current per-shim controller generation, together with the composition-resolved
-stable scope-local host authority, controller id, and durable last-forwarded
-sequence. The sequence is the composing carrier's resume cursor; it is not a
-shim-authenticated `Hello` field. A remote authority compares it with its own
-durable ingress/fence state and refuses a forward leap. Zero remains the safe
-over-replay cursor when no stronger durable fact exists.
+stable scope-local host authority, controller id, validated local sidecar
+resume floor, and authenticated `Hello.LastSeq`. The sidecar floor is local
+comparison evidence, while `Hello.LastSeq` is the shim-authenticated live tail;
+neither is the external carrier cursor. For proof-bound external
+activation, the composing authority obtains the D15 carrier-owned proof rather
+than accepting a daemon `last_forwarded_seq` assertion or its own prior adoption
+cursor. Its prepared response carries exact
+`resolved_boundary = Hello.LastSeq` and
+`resolved_resume_from = Hello.LastSeq + 1`; Donmai returns the latter as
+`PreparedAdoption.ResumeFrom`, and the adopter refuses any regression below the
+sidecar floor. If Hello LastSeq exceeds proof boundary, the proof-bound prepared
+correlation also carries the exact `controller_unforwarded` Gap required by D15.
 
 The replacement controller never supplies, guesses, or persists an external
 fence id, fence revision, correlation revision, or host-adoption revision. The
@@ -537,7 +575,8 @@ Zero applicable fence correlations is valid after an unplanned controller
 loss; required carrier preparation and live-shim adoption still proceed. One or
 more applicable exact correlations are retained as one immutable set behind an
 opaque prepared correlation returned to the daemon. A conflicting lifecycle,
-host authority, shim/process/controller correlation, or durable sequence fails
+host authority, shim/process/controller correlation, sidecar floor, proof store/
+revision/digest/boundary, or durable sequence fails
 startup closed. Selecting by lifecycle identity alone, choosing the newest row,
 or dropping one duplicate is forbidden. The opaque prepared correlation stays
 daemon-side; `Adopted` echoes only the generation and negotiated extensions that
@@ -565,7 +604,13 @@ The daemon records only the downstream carrier's acknowledged
 durable callback does not return success on socket write: for attach v2 it waits
 for D14 `host_ack`, after which the carrier can reload the exact durable
 disposition. Only then does the daemon advance both its cursor and the shimwire
-Heartbeat acknowledgement. On adoption it asks for `last_forwarded_seq + 1`.
+Heartbeat acknowledgement. Under selected v3 the shim fsyncs D15's
+incarnation-bound ACK sidecar before confirming that Heartbeat. On adoption the
+sidecar successor is the local floor; a proof-bound external composition uses
+the carrier-owned resolved boundary to return an exact
+`PreparedAdoption.ResumeFrom` at or above it. Neither the composing authority's
+prior adoption cursor nor a daemon cache may lower or advance this chain by
+inference.
 
 Under selected v3, every host-sequence member is the exact complete encoded
 interactive-attach frame carried by `HostFrame`: Output bytes read from the PTY,
@@ -827,6 +872,12 @@ preserving the OSS boundary.
 | Daemon publishes locally, then its activation exchange fails or its acknowledgement is lost | Keep `carrierActivationComplete=false` and stay `recovering`. Retry `carrier_activate` on the exact candidate; the relay returns the same `carrier_active` result only for the same authenticated epochs and stored receipt. |
 | Durable host-frame append fails or is ambiguous | Do not mutate ring/cache/fan-out and do not emit `host_ack`. Donmai and the shim retain their previous acknowledged cursor and replay the exact frame. |
 | Relay restarts after durable append but before host ack | Reload the persisted high-water and exact retained tail, compare replay bytes, and return the same contiguous ack. Never acknowledge from an empty in-memory ring. |
+| Replacement shim sidecar ack is N and carrier proof boundary is N, both ahead of prior composing adoption M | Keep M unchanged during preparation, set proof-resolved ResumeFrom to N+1, send only the mandatory Snapshot N+1/atSeq N, then advance M to N only in the transaction consuming exact proof plus receipt. |
+| Carrier proof boundary is below the local sidecar floor | Refuse before Welcome. Never regress the shim, substitute M, or replay ordinary frames through a candidate. |
+| Carrier journal advances after proof reservation but before candidate admission | Atomic admission recheck detects revision/digest/boundary drift in the same lock that would fence/install; mutate no room state and reprepare at a strictly greater carrier epoch. |
+| Prior candidate has a durable receipt-stored Snapshot | Resume only the exact retained proof/handoff/receipt/Snapshot, or durably abandon it before a new reservation. A second mandatory Snapshot for the retained candidate is forbidden. |
+| Prior candidate was only preparing | It has no durable proof disposition; abandon/fence and reprepare without fabricating receipt or cursor evidence. |
+| Proof is terminal, unavailable, corrupt, timed out, replay-changed, revision-regressed, or from another store authority | Refuse external carrier while conserving shim ownership/capacity. No zero/in-memory/prior-adoption fallback. |
 | New daemon adopts a released selected-v2 shim | Preserve ownership and the v2 snapshot proxy, report `durable_host_frame_unsupported`, charge capacity, and withhold external carrier credentials/activation. Never infer missing Marker/Resize bytes. |
 | Released daemon adopts a new v3 shim | Highest overlap selects v2. The shim emits no HostFrame and behaves byte-for-byte like released v2; external v3 durability is not claimed. |
 | Live v3 Snapshot HostFrame arrives without its correlation-only result, or the pair differs | Publish/acknowledge neither partial nor duplicate event; fail the controller and replay the real frame under the next adoption. |
@@ -839,10 +890,11 @@ preserving the OSS boundary.
 The rollout is additive:
 
 1. Ship `session-shim-v1`, registry inspection, the D12 typed credential/cache/
-   heartbeat types, selected-v3 codec/event support, and the attach-v2 client
-   additions with ownership, adoption, carrier activation, and durable external
-   output all disabled. Keep advertised local-wire max 2 until the v3
-   discriminating corpus passes.
+   heartbeat types, selected-v3 codec/event and ACK-sidecar support,
+   `PreparedAdoption.ResumeFrom`, and the attach-v2 client additions with
+   ownership, adoption, carrier activation, and durable external output all
+   disabled. Keep advertised local-wire max 2 until the v3 discriminating corpus
+   passes.
 2. Release a max-3 shim first. Released max-2 daemons select v2 and observe the
    exact released behavior; no HostFrame can reach them.
 3. Release a max-3 daemon/controller. It selects v2 with released shims,
@@ -850,13 +902,15 @@ The rollout is additive:
    carrier. New/new selects v3 and exposes one exact raw event per sequence.
 4. Deploy every composing credential authority so registration and refresh
    persist and echo the exact controller/range/capability tuple, stable host
-   authority, adoption revision, max-3 range, and `full_host_frame_v3`. Keep the
-   daemon flag off; verify max 3 without the capability and selected v2 both
-   refuse external carrier.
+   authority, adoption revision, max-3 range, and the lexically ordered five-
+   token set including `durable_carrier_proof_v1` and `full_host_frame_v3`.
+   Keep the daemon flag off; verify max 3 with the earlier four tokens and
+   selected v2 both refuse external carrier.
 5. Deploy compatible relays with the attach-v2 candidate state machine, durable
-   host-frame journal/high-water reload, snapshot receipt, `host_ack`, and
-   explicit activation exchange. Keep the activation selector false. An
-   in-memory ring, attach-v1 host leg, or local selected-v2 shim cannot satisfy
+   host-frame journal/high-water reload, stable store authority, monotonic proof
+   reservation/recheck, snapshot receipt, `host_ack`, and explicit activation
+   exchange. Keep the activation selector false. An in-memory ring, attach-v1
+   host leg, four-token attestation, or local selected-v2 shim cannot satisfy
    this step.
 6. Enable shim ownership for newly launched interactive PTY sessions behind a
    local compatibility gate. Existing direct-owned sessions drain; they are not
@@ -865,15 +919,18 @@ The rollout is additive:
    externally composed daemon performs auth-only multi-scope registration first,
    keeps heartbeat/poll/claim stopped, then adopts and publishes. This includes
    unplanned recovery with no inherited local fence receipt; composing carrier
-   state is resolved from the authenticated live correlation.
+   state is resolved from its control-authenticated D15 proof after `Hello` and
+   returns the exact non-regressing prepared resume cursor before `Welcome`.
 8. Enable the optional composing-plane restart fence only after every authority
    scope can return an exact-byte durable acknowledgement and every release,
    requeue, terminalization, host-loss, queue-repair, and administrative path
    reaches the same serialized predicate.
 9. Enable external attach-v2 takeover only after selected local v3 full-frame
-   proof, per-session adoption, every per-scope batch, Donmai local publication,
-   relay activation, first exact heartbeat echo, and durable ordinary-output
-   acknowledgement pass together. Local v2 remains conservation-only.
+   proof, ACK-sidecar crash recovery, proof-reservation/admission drift checks,
+   proof-bound receipt/adoption consume, per-session adoption, every per-scope
+   batch, Donmai local publication, relay activation, first exact heartbeat
+   echo, and durable ordinary-output acknowledgement pass together. Local v2
+   remains conservation-only.
 10. Make shim ownership the default for interactive sessions.
 11. Extend the same ownership boundary to other long-lived session modes where
    restart continuity is required.
@@ -882,7 +939,8 @@ The rollout is additive:
 
 Rollback disables new external v2 admissions and new shim-owned claims first,
 then lets already-active carriers and shims drain while retaining auth refresh,
-fences, terminal evidence, durable frame journals, and release reconciliation.
+fences, terminal evidence, durable frame journals, store authority, proof bytes/
+revisions/reservations, and release reconciliation.
 It never lowers a controller/carrier generation, discards a batch receipt or
 persisted carrier high-water, reactivates an incumbent, or rewrites a v3 raw
 event as a legacy semantic observation. A max-3 shim behind a max-2 replacement
@@ -962,10 +1020,14 @@ equal to stable-host, worker-registration, runtime-token-jti, or a known prior
 token correlation is a typed refusal. A token rotation never supplies a new
 controller id; a replacement process never inherits the old one.
 
-For D14 external durable carrier, the tuple includes protocol max at least 3 and
-the exact `full_host_frame_v3` capability. The server and daemon still compare
-the actually selected per-shim version at prepare/adoption time: max 3 alone does
-not upgrade a released v2 shim, and selected v2 remains carrier-ineligible.
+For D14/D15 external durable carrier, the tuple includes protocol max at least 3
+and the exact lexically sorted, duplicate-free capability set
+`authoritative_snapshot_v2`, `carrier_epoch_prepare_commit`,
+`durable_carrier_proof_v1`, `full_host_frame_v3`,
+`interactive_attach_v2`. The server and daemon still compare the actually
+selected per-shim version at prepare/adoption time: max 3 alone, or max 3 with
+the earlier four-token set, does not upgrade a released v2 shim or prove a
+carrier reservation, and selected v2 remains carrier-ineligible.
 
 The server persists the tuple before minting the credential and echoes the
 complete accepted tuple together with the stable scope-local host authority and
@@ -1021,8 +1083,14 @@ version and requires selected local v3 with `full_host_frame_v3`. Selected local
 v2 can answer the mandatory snapshot request but cannot supply D14's complete
 ordinary host sequence, so it never enters this candidate state.
 
-A strictly higher authenticated `carrier_epoch` admits a **candidate**, not an
-active room host. Admission fences the incumbent's mutation authority and
+A strictly higher authenticated `carrier_epoch` with an exact D15 proof
+reservation admits a **candidate**, not an active room host. Admission first
+authenticates the signed proof binding and, in the same journal lock that would
+fence/install, compares current store authority, proof revision/digest,
+reservation request id/digest, reserved candidate epoch, and boundary. Drift
+refuses before any incumbent fence or room mutation. Exact match atomically
+consumes/replays the reservation and fences the incumbent's mutation authority.
+The candidate then
 advances only through this cross-layer state machine:
 
 ```text
@@ -1039,7 +1107,10 @@ preparing
   Viewer `Input`, authoritative `Resize`, and `Kill` do not cross any host leg;
   input sequence/ack state does not advance, resize timers do not arm or flush,
   and a kill reports a typed not-active refusal rather than `relayed:true`.
-  After the mandatory Snapshot, later host frames stay in bounded shim/client
+  When Hello LastSeq K exceeds proof boundary N, one exact proof-bound
+  `controller_unforwarded` Gap N+1..K precedes the mandatory Snapshot. The Snapshot is
+  exactly sequence K+1 with `at_seq == K` (K=N means no gap); no ordinary replay
+  from an older composing cursor is permitted. After that Snapshot, later host frames stay in bounded shim/client
   replay state; they do not enter the relay journal/ring/fan-out and receive no
   `host_ack` until activation.
 - `receipt-stored`: the exact next authoritative Snapshot frame from the
@@ -1047,11 +1118,16 @@ preparing
   and its bound strict Snapshot receipt has committed. It is not yet inserted
   into the live ring/fan-out and has no host ack. A socket bind, cached Snapshot,
   best-effort lifecycle callback, or either durable write in progress is not
-  this state. Donmai retains the Snapshot as a pending shim acknowledgement;
+  this state. The receipt echoes the exact store authority, proof revision/
+  digest, reservation request id/digest, reserved candidate epoch, proof
+  boundary N, resolved boundary K, and the nullable exact gap.
+  Donmai retains the Snapshot as a pending shim acknowledgement;
   adoption publication may use the strict stored receipt and does not wait on
   the not-yet-permitted host ack.
 - `adoption-committed`: the composing authority resolved and atomically consumed
-  that receipt during the exact per-session adoption commit.
+  that receipt and its exact reserved proof during the per-session adoption
+  commit. Only this transaction may advance an older composing adoption cursor
+  through resolved boundary K.
 - `batch-committed/local-published`: every served scope, including an empty
   scan, has returned its durable batch receipt; Donmai has atomically published
   the adopted/quarantined/tombstoned set and set local `adoptionComplete`.
@@ -1118,12 +1194,15 @@ insertion, cache update, fan-out, or host ack. It backpressures or closes the
 candidate with a typed durability error. The sanitized viewer projection remains
 derived after persistence and never overwrites the retained source frame.
 
-On relay restart, the journal loads its persisted high-water and retained replay
-tail before admitting a host or viewer, sending an ack, or accepting a takeover
-snapshot. Missing/corrupt state makes v2 unavailable; it never resets to zero
-while claiming the same PTY epoch. A self-hosted relay supplies a compatible
-durable journal through the same small interface; the relay data path imports no
-hosted control-plane library and has no in-memory-success fallback.
+On relay restart, the journal loads its stable store authority, per-stream proof
+ordinal, frozen reservation requests/proofs, pending candidate proof/receipt,
+persisted high-water, and retained replay tail before resolving proof, admitting
+a host or viewer, sending an ack, or accepting a takeover Snapshot. Missing/
+corrupt state makes v2 unavailable; it never resets a proof or sequence to zero
+while claiming the same PTY epoch/store authority. A self-hosted relay supplies
+a compatible durable journal through the same small interface; the relay data
+path imports no hosted control-plane library and has no in-memory-success
+fallback.
 
 The generic attach client treats `host_ack` as the completion of its durable
 send. Only then may its `OnSessionEventDurable` call return nil. Donmai records
@@ -1143,6 +1222,312 @@ The pending delivery resolves from `carrier_active.ackSeq` (or the immediately
 following exact `host_ack`) after activation. Waiting synchronously for that ack
 before calling `OnAdoptionPublished` is a circular dependency and a contract
 violation; acknowledging before activation is equally invalid.
+
+### D15 — Durable carrier proof resolves the recovery cursor before `Welcome`
+
+There are three cursor authorities and none may impersonate another:
+
+- the shim's local fsync-backed externally acknowledged floor;
+- the external carrier journal's durable high-water; and
+- a composing authority's last committed adoption cursor.
+
+After a crash these can legitimately be `N`, `N`, and `M` with `M < N`, while
+the authenticated Hello reports a live host tail `K >= N`. The
+shim cannot regress to `M`; the composing authority cannot accept `N` merely
+because the replacement daemon reported it; and the candidate cannot replay
+ordinary frames `M+1..N` before activation. Recovery therefore resolves the
+carrier's own proof rather than choosing among inferred cursors.
+
+#### D15.1 — Selected-v3 acknowledgement sidecar is a local floor
+
+For selected local v3, the shim persists each exact externally covered
+Heartbeat acknowledgement in an incarnation-bound sidecar before it confirms
+that Heartbeat to the controller. The sidecar is a strict bounded JSON body in
+an exact mode-`0600` `.ack` file under the exact mode-`0700` registry directory,
+atomically replaced with file and parent-directory
+fsync. It binds exact `(org_id, session_id, shim_id, process_epoch,
+controller_generation, acked_seq)`. It contains no bearer, jti, stable host or
+controller id, raw frame, frame digest, prompt, or terminal bytes. Released
+registry scanners enumerate only their frozen `.json` discovery records and
+ignore the `.ack` suffix, so selected-v2 overlap remains unchanged.
+
+The sidecar says only that some previously authenticated carrier durably covered
+`acked_seq`; it is not a carrier-store proof and cannot mint or select a handoff.
+Selected v3 validates exact correlation, `controller_generation <=
+Hello.Generation`, and `acked_seq <= Hello.LastSeq`. On cold adoption, its
+successor sequence is `LocalResumeFrom`, normalized to start at 1 when no
+sidecar exists. A malformed, unsafe-mode, identity-mismatched, ahead, regressed,
+or overflowed sidecar refuses selected-v3 carrier recovery. Selected v2 ignores
+the `.ack` file entirely, including corrupt bytes, preserving released overlap.
+The shim independently retains its in-memory acknowledged floor and refuses a
+later `Welcome.resume_from` below it even if a controller failed to validate the
+file. The shim never lowers a valid floor.
+
+After authenticated `Hello`, `AdoptionPreparation` exposes exact
+`LocalResumeFrom uint64` (normalized start 1) and `LastHostSeq uint64` from that
+Hello. The old ambiguous `LastForwardedSeq` spelling is not the proof authority.
+`PreparedAdoption` gains one exact additive field:
+
+```go
+type PreparedAdoption struct {
+    ControllerGeneration Generation
+    Extensions           Extensions
+    Correlation          []byte
+    ResumeFrom           *uint64
+}
+```
+
+`nil` preserves the standalone/local-floor behavior. A non-nil pointer may
+equal or advance the local floor and becomes the exact `Welcome.resume_from`.
+It may not regress the floor; a lower value is a typed preparation refusal, not
+a silent `max`, and `LastHostSeq == math.MaxUint64` cannot produce a successor.
+The older free-standing `ResumeFrom` composition callback may still describe a
+standalone durable sink, but it cannot be configured simultaneously with a
+proof-resolving prepare hook; that ambiguity is a typed startup refusal.
+Proof-bound hosted/external preparation requires non-nil `ResumeFrom`.
+
+Adding the field changes Go unkeyed external composite literals even though the
+zero value and keyed literals remain source-compatible. This is an explicit
+pre-release source-compatibility exception: the migration gate compiles known
+consumers, converts them to keyed literals, and releases the field before the
+proof capability can advertise. Introducing a parallel unbound cursor callback
+would preserve compilation by weakening the authority contract and is rejected.
+
+For selected-v3 proof preparation, sending `Hello` establishes a bounded
+adoption output barrier at `LastHostSeq=K`: no later positive host sequence is
+allocated ahead of the proof-bound mandatory Snapshot. PTY bytes may remain
+kernel-backpressured or in the shim's existing bounded raw staging area; timeout
+or staging exhaustion aborts preparation and releases the barrier without
+inventing sequence/output. This selected-v3 behavior changes no v1/v2 wire byte.
+
+#### D15.2 — Generic durable-carrier proof and reservation
+
+A compatible external carrier exposes a small control-authenticated interface
+over its durable journal. The public semantic interface is brand-neutral:
+
+```go
+type DurableCarrierProofResolver interface {
+    Reserve(context.Context, DurableCarrierProofRequest) (DurableCarrierProof, error)
+    RecheckAndFence(context.Context, DurableCarrierProof, DurableCarrierCandidate) (DurableCarrierProof, error)
+}
+```
+
+An implementation may combine the operations inside its control API and WSS
+admission transaction. `Reserve` runs after authenticated shim `Hello` and
+before `Welcome`; `RecheckAndFence` runs under the same carrier-journal lock or
+revision-CAS critical section that admits/fences the exact candidate. The
+candidate argument is the strict verified non-secret projection of the signed
+carrier claims: lifecycle/PTY/carrier epoch, store/proof/request bindings,
+carrier boundary N, resolved boundary/last host K, and reserved candidate epoch.
+The raw JWT, jti, handoff nonce, and bearer do not enter the durable interface;
+the relay's authentication/room layer verifies those separately before this
+call. The control credential authenticates the reserve caller but never enters
+either request, proof, digest, diagnostics, or logs. An OSS/self-hosted relay
+ships a working local-journal implementation; no hosted dependency is required
+by the interface.
+
+The request binds the exact lifecycle/PTY incarnation and comparison evidence:
+
+```text
+org_id, session_id
+pty_epoch
+local_resume_from
+last_host_seq
+expected_active_carrier_epoch
+expected_pending_carrier_epoch
+reserved_candidate_carrier_epoch
+reservation_request_id
+reservation_request_digest
+```
+
+`reservation_request_id` is a server/composer-minted non-zero UUID frozen once
+for one preparation attempt. `reservation_request_digest` is lowercase SHA-256
+over the exact canonical request bytes excluding the digest field. Both are
+persisted before the carrier call. An exact post-crash retry uses the same id
+and bytes; changed bytes at that id conflict. A daemon callback may transport
+them opaquely but never mint, resample, or reconstruct them.
+`reserved_candidate_carrier_epoch` is the newly allocated strictly greater
+epoch for this exact preparation. It must exceed both expected and carrier-
+observed active/pending epochs. Reserving proof before allocating that value, or
+leaving it out so one proof could sign two candidate epochs, is forbidden.
+
+At a JSON control boundary, every epoch, cursor, and revision above is a
+canonical uint64 decimal string (`"0"` or a non-zero digit followed by digits),
+the request id is a canonical UUID string, and the digest is exactly 64
+lowercase hexadecimal characters. Canonical request/proof bytes use RFC 8785
+JSON Canonicalization Scheme after omitting their own digest member. A JSON
+number, unknown/duplicate member, overflow, non-canonical spelling, or changed
+canonical byte is a refusal rather than an equivalent representation.
+
+Shim id, shim process epoch, and controller generation remain in the prepared
+adoption correlation outside the carrier proof because the carrier does not
+authenticate those local facts. The composing authority binds both sets in one
+preparation transaction; neither can select or rewrite the other.
+
+The returned immutable proof has exactly these semantic fields:
+
+```text
+schema_version = 1
+store_authority_id
+proof_revision
+reservation_request_id
+reservation_request_digest
+disposition = empty | active | receipt_stored | terminal
+org_id, session_id
+pty_epoch
+local_resume_from
+last_host_seq
+active_carrier_epoch
+pending_carrier_epoch
+reserved_candidate_carrier_epoch
+high_water
+boundary
+proof_digest
+```
+
+`store_authority_id` is a stable, non-secret authority for one initialized
+journal store, not a host/session/controller id. It is non-empty and bounded;
+explicit store reinitialization rotates it and invalidates every earlier proof.
+`proof_revision` is the proof ordinal: a positive canonical uint64 decimal
+persisted monotonically for the exact
+`(store_authority_id, org_id, session_id, pty_epoch)` stream. It advances on
+every durable disposition or reservation for that stream; it is deliberately
+not a store-global counter or global fsync bottleneck. Rollback or reuse under
+changed bytes is corruption. `proof_digest` is lowercase SHA-256 over the exact
+canonical proof bytes excluding the digest field, including the frozen
+reservation request id/digest. The store durably retains those bytes and the
+reservation state, so exact request replay returns the first proof revision/
+digest while changed replay conflicts.
+
+`high_water` is the highest contiguous durable disposition (raw frame or
+explicit gap transition). `boundary` is the carrier proof boundary before the
+new mandatory Snapshot; proof schema v1 requires equality with high-water. Both
+are present so the journal fact and its handoff role cannot be confused with the
+separately resolved Hello boundary later. `empty` requires
+zero prior active/pending carrier epochs and zero high-water/boundary; its newly
+reserved candidate epoch remains non-zero and strictly greater. `active` names
+the current active carrier and no pending one. `receipt_stored` also names the exact prior pending carrier whose staged
+Snapshot is already included in the high-water. `terminal` is durable evidence
+that no live takeover may be prepared. Unknown disposition or impossible epoch/
+cursor combination is corruption, never a display-only warning.
+
+A prior `receipt_stored` candidate is not silently rebound. Exact same-handoff
+recovery may replay its retained proof, frozen receipt, and staged Snapshot; a
+new handoff first durably abandons/burns the old prepared authority while
+preserving its staged frame as a journal disposition, then reserves a strictly
+higher carrier at that high-water. A merely `preparing` prior candidate has no
+durable receipt disposition and cannot become proof by inference; it is fenced/
+abandoned before reprepare. Terminal, unavailable, corrupt, timeout, stale
+store, revision rollback, or conflicting active/pending state refuses before
+`Welcome`.
+
+The proof's reserved candidate epoch must equal the request, the signed attach
+credential's `carrier_epoch`, the epoch rechecked at WSS admission, and both the
+receipt's `carrier_epoch` and explicit reserved-candidate field. Any mismatch is
+changed replay/proof conflict. A proof revision can authorize exactly one
+candidate epoch.
+
+The proof contains no token, token jti, handoff nonce, prepared-correlation
+selector, raw frame, frame digest, screen bytes, or receipt secret. A room
+snapshot, in-memory ring, callback, daemon cursor, or composing adoption row is
+not this proof.
+
+#### D15.3 — Preparation, admission, receipt, and consume share one proof
+
+After `Hello`, let carrier proof boundary/high-water be `N` and the
+Hello-frozen `LastHostSeq` be `K`. The composing preparation transaction obtains
+the carrier proof, compares its lifecycle/PTY correlation and epochs, and
+requires `N + 1 >= LocalResumeFrom` and `K >= N`. A proof whose successor is
+below `LocalResumeFrom`, `K < N`, or overflow of `K + 1` refuses
+`carrier_cursor_regression`. The
+prepared response returns exact `resolved_boundary=K` and
+`resolved_resume_from=K+1`; Donmai sets `PreparedAdoption.ResumeFrom` to that
+value. A composing authority whose prior adoption is only `M` retains `M`;
+proof resolution is provisional and does not advance adoption.
+
+When `K == N`, no recovery gap exists. When `K > N`, the prepared correlation
+and signed credential bind one exact optional
+`Gap{from_seq=N+1,to_seq=K,reason=controller_unforwarded}`. This reason says the frames
+were emitted while the externally durable carrier was unavailable and are
+being truthfully superseded by the authoritative Snapshot; it is not
+`ring_evicted`. The existing source-compatible host-client helper continues to
+default ordinary gaps to `ring_evicted`; an additive
+`DeclareHostGapWithReason` is required for this proof-bound recovery reason.
+
+Hosted/external eligibility requires the attested capability token
+`durable_carrier_proof_v1` in addition to selected local v3 and
+`full_host_frame_v3`. Capability arrays are lexically sorted and duplicate-free;
+max 3 with only the earlier four tokens is ineligible. A standalone composition
+with no external carrier omits the proof and keeps its local-floor path.
+
+The signed attach-v2 credential binds exact non-secret claim fields
+`store_authority_id`, `proof_revision`, `proof_digest`,
+`carrier_boundary=N`, `resolved_boundary=K`, `last_host_seq=K`,
+`reservation_request_id`, `reservation_request_digest`, and
+`reserved_candidate_carrier_epoch` beside
+the existing lifecycle/PTY/carrier/handoff claims. The carrier authenticates the
+credential, loads the exact retained reservation, and atomically rechecks all
+proof fields and the current journal high-water before any incumbent fence,
+room mutation, callback, or mandatory Snapshot request. Exact match consumes or
+replays that reservation and establishes proof boundary N plus resolved boundary
+K and the optional proof-bound gap. Drift returns
+`carrier-proof-drift`, leaves the incumbent/candidate state unchanged, burns the
+prepared handoff according to its existing law, and requires a fresh proof and
+strictly higher carrier epoch. A check followed by an unlocked mutation is a
+TOCTOU defect.
+
+Once the recheck/fence commits, the only permitted candidate host disposition
+is the optional exact `controller_unforwarded` Gap N+1..K followed immediately by the
+one mandatory Snapshot `frame_seq=K+1`, `at_seq=K`. For `K==N`, only the
+Snapshot exists. There is no ordinary `M+1..K` candidate replay, no host
+acknowledgement before activation, and no inference from a cached Snapshot. The
+Gap and Snapshot commit as one durable transition. The strict receipt
+additionally binds store authority, proof revision/digest/boundary N,
+resolved boundary/last host sequence K, nullable exact gap fields/reason, reservation request id/
+digest, and reserved candidate carrier epoch. The composing adoption
+transaction re-resolves and locks the prepared proof, unique receipt, handoff,
+and adoption row; only that transaction may advance a prior adoption cursor
+from `M` through `K` while consuming both proof and Gap/Snapshot receipt.
+Changed/replayed-cross-handoff evidence cannot advance it. The staged Snapshot
+remains pending until `carrier_active` resolves its own sequence K+1 as already
+specified by D13/D14.
+
+The Gap/Snapshot append may advance the journal's current proof ordinal after
+the admission-time recheck. That expected successor does not rewrite the frozen
+reservation proof carried by the credential/receipt or make it stale for
+adoption consume. The journal retains both: the admitted proof at boundary N and
+the exact proof-descended pending transition through Snapshot K+1. Adoption
+verifies that ancestry and receipt atomically; only a disposition not descended
+from the reserved proof is drift/conflict.
+
+After activation, ordinary frames may legitimately advance the carrier journal
+to `L >= K+1`. An equal-active reconnect therefore validates its resume
+`AckSeq=L` against current persisted high-water and the retained activated
+proof binding; it does **not** require L to equal the original proof boundary N
+or resolved boundary K. A `receipt_stored` reconnect retains pre-stage
+`AckSeq=N`, optional gap N+1..K, and candidate Snapshot K+1, then activation
+acknowledges K+1. Neither resume state requests or emits a second mandatory
+Snapshot.
+
+#### D15.4 — State and failure matrix
+
+| State/failure | Required outcome |
+|---|---|
+| Sidecar ack and carrier boundary are N, so the local floor is N+1; Hello LastHostSeq K=N and prior adoption is M&lt;N | Prepare provisionally from proof N, set exact `ResumeFrom=N+1`, send only Snapshot N+1/atSeq N, and advance M through N only while consuming proof plus receipt. |
+| Carrier proof boundary N is below Hello LastHostSeq K | Set `ResumeFrom=K+1`; send exact `controller_unforwarded` Gap N+1..K then Snapshot K+1/atSeq K; receipt binds both and adoption may advance M only through K. |
+| Hello LastHostSeq K is below proof boundary N, or K is max uint64 | Refuse before Welcome; no cursor clamp, candidate, gap, or Snapshot. |
+| Carrier boundary successor N+1 is below `LocalResumeFrom` | Refuse preparation as regression; do not lower the floor, send `Welcome`, or replay ordinary frames pre-active. |
+| Carrier boundary successor N+1 is at or above `LocalResumeFrom` | Exact proof may raise `ResumeFrom`; the carrier remains the authority for those already-durable dispositions. |
+| Journal advances after proof reservation but before WSS admission | Atomic recheck returns drift before room/fence mutation; burn/reprepare with a greater carrier epoch and new proof. |
+| Exact proof/prepare/admission retry | Return the first retained revision/digest/reservation and first candidate disposition; never allocate a second mandatory Snapshot. |
+| Changed proof bytes, revision rollback, or store-authority rotation | Typed conflict/corruption; no fallback to cursor inference or zero under the same PTY epoch. |
+| Prior durable `receipt_stored` candidate | Resume only its exact retained handoff, proof, frozen receipt, and Snapshot, or abandon/burn it before a new higher-carrier proof. Never request a second Snapshot for the same retained candidate. |
+| Active carrier resumes after ordinary frames advanced to L | Validate AckSeq L against current journal high-water and retained activated proof; do not require equality with original N/K. |
+| Prior non-durable preparing candidate | Abandon/fence it and reprepare; no durable proof or receipt is fabricated. |
+| Proof disposition is terminal | Refuse carrier preparation and enter terminal reconciliation; no candidate is created. |
+| Proof resolver timeout, loss, or corruption | Remain recovering with external carrier ineligible; local shim ownership/capacity conservation remains. |
+| Relay restarts | Reload store id, monotonic revision, reservations, high-water, pending proof/receipt, and active binding before proof or WSS readiness. |
+| Four-token/max-3 attestation or older relay/controller rollback | Withhold new external carrier proof/credential/admission; preserve existing journal/proof/adoption evidence and let already-active carriers drain. |
 
 ## Acceptance and proof obligations
 
@@ -1334,10 +1719,56 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     positive sequence after Exit and observe RED.
 33. **Attestation and visible ineligibility.** Initial registration, every
     refresh, heartbeat, carrier prepare, and adoption batch must require/echo the
-    max-3 tuple and `full_host_frame_v3`, then compare actual selected version 3.
-    Remove the capability, advertise max 3 alone, or select v2 and prove no
-    attach-v2 credential/candidate/activation exists while the exact
+    max-3 tuple and exact lexical five-token set including
+    `durable_carrier_proof_v1` and `full_host_frame_v3`, then compare actual
+    selected version 3. Remove `durable_carrier_proof_v1`, retain the prior four
+    tokens, or advertise max 3 alone and prove typed auth refusal with no hosted
+    heartbeat/credential/candidate/activation. Remove `full_host_frame_v3` or
+    select v2 and prove no attach-v2 candidate exists while the exact
     `durable_host_frame_unsupported` capacity projection remains visible.
+34. **Sidecar/proof cursor divergence RED/GREEN.** Persist shim ACK sidecar N,
+    retain composing adoption M&lt;N, crash the controller, and cold-adopt from the
+    production registry. With `Hello.LastHostSeq K=N`, preparation must resolve
+    carrier proof boundary N, return exact `resolved_boundary=N` and
+    `resolved_resume_from=N+1`, and set `PreparedAdoption.ResumeFrom` without
+    pre-active replay. With K&gt;N, the selected-v3 Hello output barrier must hold
+    K, return `ResumeFrom=K+1`, and produce exact
+    `controller_unforwarded` Gap N+1..K then Snapshot K+1/atSeq K. K&lt;N,
+    sidecar/Hello generation mismatch, ack beyond LastHostSeq, unsafe sidecar
+    modes, or overflow refuses. Selected v2 ignores even a corrupt `.ack` file.
+    Replacing proof resolution with M, N from the daemon, zero, or a silent
+    `max` must make the fixture RED. A carrier boundary successor below
+    `LocalResumeFrom` refuses; one at or above it may raise the cursor exactly.
+35. **Frozen proof reservation and admission recheck RED/GREEN.** Persist one
+    immutable reservation request id/body/digest, reserved candidate epoch, proof
+    ordinal/body/digest, store authority, and boundary. Crash before/after the
+    resolver response and prove exact retry returns the first values while a
+    changed request conflicts. Advance the journal between proof and WSS, then
+    prove the same lock that would fence/install detects drift and performs zero
+    incumbent/candidate/room mutation. Removing the signed proof binding,
+    reserved-epoch equality, or in-lock recheck must be RED.
+36. **Proof-bound receipt and adoption consume RED/GREEN.** For K=N the
+    mandatory Snapshot is N+1/atSeq N with no gap. For K&gt;N, exact Gap N+1..K
+    and Snapshot K+1/atSeq K commit together. The frozen receipt echoes store
+    authority, proof ordinal/digest/boundary N, last-host/resolved boundary K,
+    nullable gap range/reason, reservation request id/digest, and reserved
+    candidate epoch. Atomically consume proof plus receipt while advancing prior
+    adoption M only through K. Mutate/omit each
+    binding, reuse one proof for a second carrier epoch/handoff, or check then
+    consume outside the lock and observe RED. No matching proof/receipt leaves M
+    unchanged and the candidate non-active.
+37. **Proof restart/pending/rollback matrix.** Fresh-process reload preserves
+    store authority, per-stream ordinal, reservations, pending proof/receipt,
+    active binding, and high-water. Exact `receipt_stored` recovery retains
+    pre-stage AckSeq N, optional Gap N+1..K, and Snapshot K+1 and emits no
+    second mandatory Snapshot; preparing-only recovery abandons/reprepares;
+    terminal/loss/corruption/timeout/revision rollback refuses. Registration and
+    every refresh must carry the exact lexically ordered five-token set with
+    `durable_carrier_proof_v1`. Delete it while keeping max 3/four earlier tokens
+    and prove external carrier stays ineligible; an older rollback drains but
+    cannot mint/admit new proof-bound carriers. After activation advances to L,
+    equal-active resume accepts current AckSeq L without requiring equality to
+    original N/K.
 
 The service-manager smoke uses the installed binary and actual launchd job. A
 unit test that kills a child subprocess does not exercise the failure class.

@@ -2,7 +2,7 @@
 title: session-shim selected v3 — exact full host-frame observation
 status: Proposed
 date: 2026-08-23
-revision: v3.0-draft1
+revision: v3.0-draft2
 protocol-family: session-shim-v1
 selected-version: 3
 boundary: OSS-only
@@ -18,6 +18,10 @@ activation pending.
 §D3/D14.
 **Protocol family:** `session-shim-v1` (unchanged).
 **Selected version:** `3`.
+
+Draft 2 adds the incarnation-bound externally acknowledged cursor sidecar and
+the proof-resolved adoption cursor override. It does not change message type
+`0x0F`, selected-v1/v2 bytes, or the one-event mapping.
 
 This is a selected-version delta for the local daemon↔shim wire. It does not
 rename the protocol family and does not amend selected v1 or selected v2.
@@ -205,10 +209,78 @@ Flush-before-Exit and “Exit is final sequence-bearing frame” remain inherite
 from interactive attach. The only later Snapshot is the sequence-zero direct
 result in §5.3. A sequence-bearing HostFrame after Exit is a protocol error.
 
-## 8. Capability and visible incompatibility
+## 8. Durable acknowledgement sidecar and resolved resume
+
+After a selected-v3 controller has received an external carrier's exact durable
+acknowledgement, it sends the covered sequence in the existing generation-
+fenced shimwire Heartbeat. The shim validates that the cursor is positive,
+non-regressing, no later than its emitted stream, and from its current controller
+generation. Before replying, it atomically persists a strict bounded JSON body
+to an exact mode-`0600` `.ack` sidecar under the exact mode-`0700` registry
+directory with file and parent-directory fsync:
+
+```text
+schema_version
+org_id, session_id
+shim_id, process_epoch
+controller_generation
+acked_seq
+```
+
+The sidecar filename is a fixed digest of lifecycle/shim/process correlation
+with suffix `.ack`. Released registry scanners enumerate only their frozen
+`.json` discovery records and ignore it. The body contains no controller id,
+stable host id, bearer, jti, raw frame, frame digest, terminal bytes, or prompt.
+Identity mismatch, stale generation, regression, ahead-of-stream, malformed
+body, mode/ownership failure, or ambiguous fsync refuses the Heartbeat and
+leaves the prior sidecar unchanged.
+
+Selected-v3 cold adoption additionally requires sidecar
+`controller_generation <= Hello.Generation` and `acked_seq <= Hello.LastSeq`.
+Selected v2 ignores the `.ack` file entirely, including corrupt contents. On
+cold v3 adoption, `acked_seq + 1` is `LocalResumeFrom` (absence normalizes to
+start sequence 1; max uint64 refuses). After authenticated `Hello`,
+`AdoptionPreparation` exposes exact `LocalResumeFrom uint64` and
+`LastHostSeq uint64`. The composing prepare hook receives both.
+`PreparedAdoption` adds optional
+`ResumeFrom *uint64`: nil uses the local floor; non-nil may equal or raise it
+and becomes exact `Welcome.resume_from`; a lower value refuses rather than
+silently clamping. For an external durable carrier, the value must come from the
+control-authenticated proof reservation in the owning ADR D15. A daemon cache,
+prior composing adoption cursor, or raw sidecar assertion cannot substitute.
+The free-standing resume callback and proof-resolving prepare hook cannot both
+be configured. Proof-bound external preparation requires non-nil ResumeFrom.
+The shim also holds its in-memory ack floor and independently refuses Welcome
+below it.
+
+Adding `ResumeFrom` to the public struct is an explicit pre-release exception
+for unkeyed external composite literals; keyed literals and zero behavior remain
+compatible, and the migration gate compiles/converts known consumers before
+capability advertisement.
+
+This sidecar closes the current-frame crash ambiguity but does not become a
+second output/journal authority. The external carrier proof may be ahead of the
+sidecar and raise the cursor; it may never be behind. Sending selected-v3 Hello
+establishes a bounded output barrier at `LastHostSeq=K` for proof-bound adoption:
+no positive host sequence is allocated before the mandatory Snapshot. Timeout/
+buffer exhaustion aborts the prepare and releases the barrier without inventing
+output.
+
+Let carrier proof boundary/high-water be N. K&lt;N or K+1 overflow refuses. K=N
+sets ResumeFrom N+1 and emits only Snapshot N+1/atSeq N. K&gt;N sets ResumeFrom
+K+1 and the external host client uses additive
+`DeclareHostGapWithReason(N+1,K,"controller_unforwarded")` immediately before
+Snapshot K+1/atSeq K. The existing `DeclareHostGap` remains the
+source-compatible `ring_evicted` default. Pre-active ordinary replay remains
+forbidden.
+
+## 9. Capability and visible incompatibility
 
 Selected local version 3 plus `full_host_frame_v3` is a hard prerequisite for
-attach-v2 durable activation. The daemon may still adopt a selected-v2 shim for
+attach-v2 durable activation. Proof-bound hosted/external activation also
+requires the exact lexically sorted attestation token
+`durable_carrier_proof_v1`; max 3 with the earlier four tokens remains
+ineligible. The daemon may still adopt a selected-v2 shim for
 ownership conservation and authoritative snapshot inspect/emit, but it reports
 the external carrier outcome as
 `durable_host_frame_unsupported`, charges the live shim to capacity, and sends
@@ -218,7 +290,7 @@ Selected v1 retains the existing `authoritative_snapshot_unsupported` outcome.
 Neither reason kills the shim, releases a claim, fabricates Marker/Resize, or
 substitutes semantic reconstruction for exact bytes.
 
-## 9. Failure/crash matrix
+## 10. Failure/crash matrix
 
 | Failure | Required result |
 |---|---|
@@ -230,17 +302,25 @@ substitutes semantic reconstruction for exact bytes.
 | Gap persists but recovery Snapshot does not | Durable cursor stays before the gap; no host ack advances. |
 | Exit HostFrame persists but terminal callback fails | Exact frame remains replayable; lifecycle release remains held until existing terminal proof commits. |
 | Sequence-zero final Snapshot is presented as HostFrame | Typed protocol refusal; high-water unchanged. |
+| Heartbeat ack sidecar fsync is blocked/ambiguous | Do not confirm the Heartbeat; replacement adoption retains the prior floor and exact frame replay remains possible. |
+| External proof boundary successor is below `LocalResumeFrom` | Refuse preparation before Welcome; do not regress or replay ordinary candidate frames. |
+| External proof boundary N is at or ahead of the sidecar ack and Hello K=N | `PreparedAdoption.ResumeFrom` raises exactly to N+1; the proof, not the daemon, is authority. |
+| Hello LastHostSeq K exceeds proof boundary N | Hold K; set ResumeFrom K+1; send `controller_unforwarded` Gap N+1..K then Snapshot K+1/atSeq K. |
+| Hello LastHostSeq is below proof boundary or max uint64 | Refuse before Welcome; release the output barrier with no candidate/gap/Snapshot. |
+| Max-3 attestation omits `durable_carrier_proof_v1` | Preserve v3 ownership/full-frame observation but withhold proof-bound attach-v2 credential/candidate/activation. |
 
-## 10. Migration and rollback
+## 11. Migration and rollback
 
-1. Publish v3 codec/types and the full-host-frame controller event dormant;
+1. Publish v3 codec/types, ACK sidecar, proof-resolved prepared cursor, and the
+   full-host-frame controller event dormant;
    keep protocol max 2 until the v3 RED/GREEN corpus is present.
 2. Release a max-3 shim first. Released max-2 daemons select v2, so no old
    consumer sees the new message.
 3. Release a max-3 daemon/client that treats selected v2 as conservation-only
    and selected v3 as the external-durability prerequisite.
-4. Update composing attestation to exact max/range/capability evidence, then
-   relay/client installed-artifact gates. Keep activation disabled.
+4. Update composing attestation to the exact lexical five-token set including
+   `durable_carrier_proof_v1`, then relay/client installed-artifact gates. Keep
+   activation disabled; max 3/four tokens remains ineligible.
 5. Enable external durable carrier only after real v3 full-frame/gap/snapshot/
    terminal proofs pass.
 
@@ -251,7 +331,7 @@ proof remain readable until every referenced session drains. Rollback never
 rewrites a v3 frame as a legacy semantic event or lowers a live controller/
 carrier generation.
 
-## 11. Conformance and V16 proof obligations
+## 12. Conformance and V16 proof obligations
 
 - [ ] The released max-2 shim and new max-3 daemon select 2; removing the
       selected-v2 carrier-ineligibility gate is RED.
@@ -274,8 +354,24 @@ carrier generation.
 - [ ] Exit uses the one raw event for both durable bytes and terminal semantics;
       a post-Exit sequence-bearing HostFrame and a sequence-zero HostFrame are
       RED.
-- [ ] Registration/refresh/heartbeat and prepare routes require selected v3 plus
-      exact `full_host_frame_v3`; max 3 alone and selected 2 remain refused.
+- [ ] Registration/refresh/heartbeat require the max-3 exact lexical five-token
+      attestation including `durable_carrier_proof_v1` and
+      `full_host_frame_v3`. Per-shim external prepare additionally requires
+      actual selected v3. Max 3 alone and the earlier four-token set refuse
+      hosted auth; selected 2 remains conserved but carrier-ineligible.
+- [ ] For every durable host acknowledgement, block/fail the real `.ack` file
+      write/fsync and prove the Heartbeat does not confirm. Restore and prove a
+      cold adoption loads the exact lifecycle/shim/process/generation cursor.
+      Wrong exact file/directory mode, generation beyond Hello, and ack beyond
+      Hello LastSeq are RED. Released selected-v2 registry scanning must ignore
+      even a corrupt sidecar.
+- [ ] With sidecar ack/proof boundary N and Hello LastHostSeq K, exact
+      `PreparedAdoption.ResumeFrom` is K+1. K=N yields no gap; K>N yields
+      `controller_unforwarded` Gap N+1..K then Snapshot K+1/atSeq K; K<N,
+      output-barrier drift/overflow, a lower override, simultaneous free resume
+      callback/proof prepare, daemon/prior-adoption inference, or silent clamp
+      is RED. No ordinary frame crosses a pre-active carrier, and the shim
+      independently refuses Welcome below its in-memory floor.
 - [ ] Tokens, jtis, prompts, raw frame bytes, and frame digests never enter
       logs, errors, discovery records, heartbeat diagnostics, or quarantine
       display detail.
