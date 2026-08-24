@@ -313,9 +313,16 @@ carrier-epoch floor plus single-use predecessor forces the proof-v2 successor
 strictly higher. The exact carrier readiness field is
 `durable_carrier_proof_v2_ready`. Missing/false readiness, the old unversioned
 `durable_carrier_proof_ready`, a missing/unverified cutover manifest/write-close/
-acknowledgement/tombstone set, any acknowledgement fact not literally true, or a
-v1-only reader keeps credential mint,
+acknowledgement/tombstone set, ACK-bearing schema-2 cutover disk, inherited
+`minimumWriterSchema="3"` marker, any acknowledgement fact not literally true,
+or a v1-only reader keeps credential mint,
 candidate admission, heartbeat, capacity, poll, claim, and `Ready` disabled.
+The cutover response's exact schema-2 minimum is pre-ACK evidence, not the live
+opener floor. Zero manifest entries take the identical four-fact ACK and schema-3
+marker/reload path. An ACK-aware opener may repair only verified ACK-bytes-
+present/marker-not-yet-bound state forward under lock; an ACK-unaware schema-2
+artifact or marker-at-3 without matching current/historical ACK refuses before
+writer/readiness.
 
 Once proof/receipt adoption consumes, that candidate is no longer abandonable.
 A replacement controller server-resolves the consumed adoption and receives the

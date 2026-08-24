@@ -902,9 +902,10 @@ preserving the OSS boundary.
 | V1 cutover crashes before manifest/write-closed commit | V2 readiness remains false; no partial allowset authorizes a legacy row. Exact request retries under the exclusive store lock. |
 | V1 cutover commits but response is lost | Exact request replay returns the first store-bound cutover receipt and never resnapshots surviving v1 rows. |
 | Composing authority has not acknowledged the exact cutover and all four true facts | V2 readiness remains false. Relay-local writer closure/manifest state cannot imply composing writer closure, retained-credential support, the validity gate, or adopted-candidate recovery. |
-| Cutover acknowledgement crashes before bind, or commits and loses its response | Before commit, exact retry leaves readiness false until the fsync/transaction and reload finish. After commit, restart reloads the binding and exact retry returns the first acknowledged result. |
-| Cutover/acknowledgement commits on store A, a response is lost, then authority rotates to B | Retained/migrated control idempotency returns A's first result on exact replay. New B cutover/acknowledgement conflicts until every A entry/reference drains; B inherits permanent v1 closure but requires its own cutover and acknowledgement. |
-| V1 cutover runs on an initialized zero-row store | Relay resolves/returns its own non-empty store authority under lock and freezes an empty manifest/count zero; no prior proof response or caller-supplied authority exists. |
+| Cutover acknowledgement metadata commits but its marker has not upgraded | ACK-aware open verifies the exact ACK members in the schema-2 cutover disk under lock, upgrades/fsyncs/rereads the marker at minimum writer/readiness schema 3, then resumes. The prior strict schema-2 decoder refuses the unknown ACK members before writer/readiness. |
+| Marker is 3 but ACK metadata is absent/mismatched | Fail closed as corruption; never synthesize the ACK, lower the marker, or expose readiness. |
+| Cutover/acknowledgement commits on store A, a response is lost, then authority rotates to B | Retained/migrated control idempotency returns A's first result on exact replay. New B cutover/acknowledgement conflicts until every A entry/reference drains; B inherits permanent v1 closure and schema-3 marker floor but requires its own cutover and acknowledgement. |
+| V1 cutover runs on an initialized zero-row store | Relay resolves/returns its own non-empty store authority under lock and freezes an empty manifest/count zero; the composing authority then persists that response and performs the identical four-fact ACK, schema-3 marker commit/recovery, and reload before readiness. |
 | Unlisted/changed/new proof-v1 row appears after cutover | Refuse into reconciliation and clear v2 readiness; never add it to the immutable base manifest. |
 | Listed v1 entry drains | Commit its shrink-only tombstone before row/secret deletion. Restart and rollback retain permanent ineligibility. |
 | Replacement shim sidecar ack is N and carrier proof boundary is N, both ahead of prior composing adoption M | Keep M unchanged during preparation, set proof-resolved ResumeFrom to N+1, send only the mandatory Snapshot N+1/atSeq N, then advance M to N only in the transaction consuming exact proof plus receipt. |
@@ -946,7 +947,10 @@ The rollout is additive:
    selected v2 both refuse external carrier.
 5. Deploy compatible relays with frozen proof-v1 journal and exact legacy-claim
    readers, the one store-bound v1 eligibility manifest/shrink-only tombstone
-   codec, cutover and acknowledgement control edges, proof-v2 request/proof
+   codec, cutover and acknowledgement control edges, ACK-bearing schema-2
+   cutover-disk decoding, current/rotated/new-store minimum writer/readiness
+   schema-3 markers and
+   interrupted marker-upgrade recovery, proof-v2 request/proof
    codecs, the exact schema-v1 abandonment ledger/route, all-time carrier-epoch
    floor, single-use predecessor lineage, the attach-v2 candidate state machine,
    durable host-frame journal/high-water reload, stable store authority,
@@ -962,10 +966,12 @@ The rollout is additive:
    and manifest reload; the composing side retains that exact response; it proves
    `composingProofV1WritesClosed`, `encryptedOriginalCredentialRetained`,
    `remainingValidityConsumeGate`, and `adoptedCandidateRecovery` all true; it
-   sends the frozen authenticated acknowledgement; and Relay durably binds and
-   reloads that acknowledgement. Before the freeze, the store header raises its
-   mandatory minimum writer schema so unaware rollback binaries fail before
-   write-open. No earlier step makes v2 readiness true.
+   sends the frozen authenticated acknowledgement; Relay durably commits exact
+   ACK bytes in the schema-2 cutover disk; upgrades/fsyncs the marker to
+   `minimumWriterSchema="3"` with the exact current
+   `cutoverAcknowledgementDigest`; and reloads both. The earlier cutover response keeps
+   its exact schema-2 bytes. A zero-row manifest executes the same sequence. No
+   earlier step makes v2 readiness true.
    Missing/false, v1-only, or the old unversioned
    `durable_carrier_proof_ready:true` is ineligible.
    The composing store also retains the original encrypted attach credential
@@ -1004,12 +1010,14 @@ bytes/revisions/reservations, abandonment request/results and predecessor-consum
 state, carrier-epoch floors, and release reconciliation. Once any abandonment
 exists, a four-disposition reader is not a valid rollback artifact; it may drain
 exact retained v1 handoffs but cannot mint or admit a new carrier.
-The v1 base manifest, write-closed flag, exact acknowledgement, tombstones,
-cutover receipt/control-idempotency ledger, and retained rows/secrets survive
-rollback; no artifact may regenerate/enlarge/clear the set or reopen a v1
-writer. An acknowledgement-unaware artifact is rollback-ineligible, and a
-retained acknowledgement cannot make an artifact missing one of its four facts
-ready.
+The v1 base manifest, write-closed flag, exact acknowledgement, schema-2 cutover
+disk, schema-3 current-and-successor markers/history fence, tombstones, cutover
+receipt/control-idempotency ledger, and retained rows/secrets survive rollback; no
+artifact may regenerate/enlarge/clear the set, lower the marker, or reopen a v1
+writer. An acknowledgement-unaware artifact whose writer/readiness maximum is 2
+is mechanically rollback-ineligible before open, not merely described as
+incompatible. A retained acknowledgement cannot make an artifact missing one of
+its four facts ready.
 Consumed-adoption recovery envelopes/correlations remain readable until their
 candidate activates or enters reconciliation; rollback never remints an expired,
 lost, or corrupt bearer.
@@ -1408,6 +1416,19 @@ conflicts. The canonical HTTP binding, RFC 8785 `acknowledgementDigest`,
 201/200 replay, closed error taxonomy, rotation/rollback law, and redaction are
 frozen in `protocol/interactive-attach-v2.md` §2.0.2.
 
+`AcknowledgeV2Cutover` also advances the durable opener fence. Its commit writes
+the exact ACK into the existing schema-2 cutover disk, then atomically upgrades
+the authority marker to minimum writer/readiness schema 3 with the exact current
+`cutoverAcknowledgementDigest`, then reloads both. The manifest, cutover response,
+and cutover-disk schema remain byte/version-exact at 2; the response is historical
+cutover evidence, not the post-ACK opener floor. An ACK-aware opener repairs only
+the verified metadata-committed/marker-not-yet-upgraded state in the forward
+direction. The pre-ACK artifact's strict schema-2 decoder must reject the newly
+present ACK members even while the marker says 2. Marker 3 without a matching
+current or historical ACK is corruption. Rotation/history and every new authority
+marker inherit the floor 3 permanently; a successor store remains not ready until
+its own ACK binds.
+
 `Reserve` runs after authenticated shim `Hello` and
 before `Welcome`; `RecheckAndFence` runs under the same carrier-journal lock or
 revision-CAS critical section that admits/fences the exact candidate. The
@@ -1772,15 +1793,19 @@ append-only content-addressed tombstone removes an entry after drain/abandon/
 terminal/reconciliation. The base set never grows, tombstones never disappear,
 and an unlisted/changed/new v1 row refuses into reconciliation. Manifest,
 write-closed flag, exact `AcknowledgeV2Cutover` binding with all four true facts,
-tombstones, and referenced rows reload before
+the ACK-bearing schema-2 cutover disk, the acknowledgement-bound minimum writer/
+readiness schema-3 marker, tombstones, and referenced rows reload before
 `durable_carrier_proof_v2_ready`; rollback preserves and enforces them rather
 than resampling or reopening v1. The carrier's cutover response cannot prove the
-composing writer/recovery facts and never makes readiness true by itself.
+composing writer/recovery facts and its frozen schema-2 minimum never makes
+readiness true by itself. An empty manifest follows the same ACK/marker/reload
+path.
 The cutover request/response idempotency record lives in retained control metadata
 outside the rotatable journal authority beside the exact acknowledgement record.
 Exact retry always returns the original store's first cutover or acknowledged
 response across rotation; a new store request/acknowledgement stays blocked until
-the old allowset has zero live references and inherits permanent v1 closure.
+the old allowset has zero live references and inherits permanent v1 closure plus
+the schema-3 opener floor.
 
 The signed attach-v2 credential binds exact non-secret claim fields
 `proof_schema_version="2"`, `store_authority_id`, `proof_revision`, `proof_digest`,
@@ -1932,8 +1957,13 @@ arbitrary cross-controller rebind.
 | Admitted candidate remains `preparing` | Commit exact abandonment with null receipt fields, preserve existing high-water/floor, clear active/pending without incumbent rebind, mark the target reservation abandoned, and reserve the successor through its predecessor. |
 | Proof disposition is terminal | Refuse carrier preparation and enter terminal reconciliation; no candidate is created. |
 | Proof resolver timeout, loss, or corruption | Remain recovering with external carrier ineligible; local shim ownership/capacity conservation remains. |
-| Relay restarts | Reload store id, cutover acknowledgement, monotonic revision, proof-v1/v2 reservations, abandonment requests/results and consume state, carrier-epoch floor, high-water, pending proof/receipt, and active binding before proof or WSS readiness. |
-| Four-token/max-3 attestation, proof-v1-only reader, or older relay/controller rollback | Withhold new external carrier proof/credential/admission; preserve existing journal/proof/abandonment/adoption evidence and let already-active carriers drain. |
+| Zero-row cutover | Return the exact empty response, then execute the identical four-fact ACK, schema-2 disk/marker-3 commit, reload, and only then readiness. |
+| Restart sees exact ACK bytes in the schema-2 disk and first-use marker floor 2 | Under exclusive open lock, verify the exact binding, upgrade/fsync/reread the marker at 3, and only then open. Never repair backward or rerun facts. |
+| Successor store inherits marker floor 3 | Open verifies current or historical ACK evidence. Historical A permits the inherited fence but never B readiness; B's own current ACK rewrites the marker digest without lowering its floor. |
+| Restart sees marker floor 3 without matching ACK metadata | Refuse as corruption; no writer, readiness, or fallback. |
+| Exact pre-ACK schema-2 artifact `508ec69c1f5b81709673dd32a623bde99be34daa` opens acknowledged state | Literal RED before writer/readiness, both in the interrupted marker window and after marker 3. |
+| Relay restarts | Reload store id, ACK-bearing schema-2 cutover disk, schema-3 marker, cutover acknowledgement, monotonic revision, proof-v1/v2 reservations, abandonment requests/results and consume state, carrier-epoch floor, high-water, pending proof/receipt, and active binding before proof or WSS readiness. |
+| Four-token/max-3 attestation, proof-v1-only reader, or older relay/controller rollback | Withhold new external carrier proof/credential/admission; an ACK-unaware schema-2 artifact refuses the store, while an ACK-aware rollback preserves existing journal/proof/abandonment/adoption evidence and lets already-active carriers drain. |
 
 ## Acceptance and proof obligations
 
@@ -2231,13 +2261,22 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     and write-closed fact without resnapshot. Persist that exact response in the
     composing authority, prove the four acknowledgement facts true, and invoke
     `AcknowledgeV2Cutover` through the strict authenticated route or equivalent
-    in-process seam. Crash before acknowledgement commit and prove readiness
-    false; crash after commit before response and prove reload plus exact replay
-    returns the first acknowledged result. Independently falsify/omit each fact,
+    in-process seam. Crash before metadata commit and prove readiness false with
+    the marker still at 2. Crash after exact ACK bytes commit in the schema-2 disk but
+    before marker upgrade: the ACK-aware opener must upgrade/fsync/reread the
+    acknowledgement-bound marker at `minimumWriterSchema="3"` under lock, while
+    the exact pre-ACK schema-2 artifact
+    `508ec69c1f5b81709673dd32a623bde99be34daa` is literal RED before writer or
+    readiness. Repeat with marker 3 and require the same RED; restore ACK-aware
+    code and prove exact replay returns the first acknowledged result. Marker 3
+    without matching ACK metadata is closed corruption. Independently
+    falsify/omit each fact,
     change each cutover-request/response/store binding, digest, auth, content-
     encoding, declared/actual size bound, or exact member set and prove no
-    readiness mutation. Delete the acknowledgement durable write, reload, or
-    readiness dependency and observe RED before restoring GREEN. Verify
+    readiness mutation. Delete strict pre-ACK unknown-ACK-member refusal, marker
+    acknowledgement-digest binding, monotonic schema-3 floor, forward-repair
+    lock/fsync/reread,
+    reload, or readiness dependency and observe RED before restoring GREEN. Verify
     deterministic per-row
     reservation/proof/credential digests and byte-identical draft-2 auth only for
     live untombstoned entries. Add/mutate an unlisted v1 row and prove refusal,
@@ -2253,15 +2292,20 @@ Architecture acceptance does not claim implementation. Delivery must satisfy:
     before restoring GREEN.
     Repeat with a freshly initialized zero-v1-row store and no proof response:
     Relay must resolve/return its own non-empty store authority and empty-manifest
-    count zero; requiring caller authority or accepting empty/guessed authority is
-    RED.
+    count zero; the composing authority must persist that exact response, prove
+    the same four facts, send the same ACK, and wait for schema-3 durable marker/
+    reload before readiness. Bypassing ACK because the manifest is empty,
+    requiring caller authority, or accepting empty/guessed authority is RED; the
+    identical zero-row acknowledgement is GREEN.
     Commit on store A, lose the response, rotate to B, and exact-retry: A's first
     response must return from retained/migrated read-only control idempotency,
     while any changed/new B request remains RED until every A entry/reference
     drains. Repeat with A's acknowledgement response lost: exact replay returns
     A's first acknowledged result and never binds it to B. Then freeze and
-    acknowledge B under a new id with v1 still permanently closed. Returning B
-    on exact A replay, losing either record, or reopening v1 is RED.
+    acknowledge B under a new id with v1 still permanently closed. Every rotated/
+    history/new-store marker must inherit schema 3, while B's frozen schema-2
+    response cannot lower it. Returning B on exact A replay, losing either record,
+    lowering the marker, or reopening v1 is RED.
 
 The service-manager smoke uses the installed binary and actual launchd job. A
 unit test that kills a child subprocess does not exercise the failure class.
@@ -2380,13 +2424,19 @@ unit test that kills a child subprocess does not exercise the failure class.
   row already drained or introduced after cutover. The base manifest is one-time
   and store-bound, tombstones are append-only, and minimum-writer-schema refusal
   keeps unaware binaries out of the writer path.
+- **Rollback incompatibility is only prose.** An ACK-unaware artifact can still
+  open during a crash window unless its frozen schema-2 decoder rejects the new
+  ACK members before the marker advances. Persist the ACK first, retain strict
+  unknown-member refusal, repair only the verified marker bind/floor forward, and
+  test the exact pre-ACK artifact as RED.
 - **The carrier derives v2 readiness from its local cutover.** Its manifest cannot
   prove composing writer closure or the three recovery supports. Require the
   exact four-fact composing acknowledgement to bind and reload before readiness.
 - **Store rotation changes the answer to a lost cutover or acknowledgement
   response.** Both idempotency records are retained outside the rotatable journal
   authority; exact replay returns the original store result, and the new store
-  cannot cut over or acknowledge until old references reach zero.
+  cannot cut over or acknowledge until old references reach zero. Every successor
+  marker inherits the schema-3 writer/readiness floor permanently.
 
 ## Alternatives considered
 
