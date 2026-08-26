@@ -229,7 +229,15 @@ control plane must implement consistently.
     terminal receipt from its adopted live owner or a durable shim terminal
     tombstone proving that exact harness process group was reaped. Without proof
     for all correlations, the session and claim enter visible reconciliation
-    quarantine.
+    quarantine. A shim-absent attestation — proving only that a recorded process
+    identity is not running and that its registry record is gone — is explicitly
+    NOT one of those proofs and never permits a release. It exists for the
+    reporting obligation alone: a daemon whose shim was killed without writing a
+    tombstone can otherwise neither report that lineage nor omit it, because a
+    complete batch that drops a correlation the composer still holds is refused.
+    A vanished supervisor says nothing about the process group it supervised, so
+    the attestation closes what the daemon owes the composer and never what the
+    session owes the fence.
 11. **Typed recovery admission:** an externally composed daemon uses additive
     typed registration, refresh, and heartbeat seams. One process presents the
     same once-resolved controller id and exact
