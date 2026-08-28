@@ -986,9 +986,24 @@ supplied by the host.
 ### 4.4 `batch-committed/local-published`
 
 Every served authority scope, including an empty scan, commits its complete
-adoption batch. The daemon then atomically publishes its complete local
-adopted/quarantined/tombstoned set and records local `adoptionComplete`. Durable
-remote commits are not rolled back if later activation fails.
+adoption batch. A batch accounts for every lineage the composing authority
+still holds in its adopted, quarantined, or tombstoned section; it may also
+report a previously quarantined, unterminated lineage in an explicit `cleared`
+section — the same lifecycle identity fields as a quarantined entry plus a
+closed `disposition` whose only member is `abandoned` and a closed `reason`
+whose only member is `acceptance_clear_without_terminal_evidence`. The
+composing authority records a shim-absent attestation from the batch's own
+bytes, converts that lineage's recovery obligation from active to abandoned —
+never resolved, because absence of evidence proves unobservability, not
+death — and removes it from the completeness set and the quarantine projection
+while the adoption revision advances. A `cleared` entry naming anything but a
+currently quarantined unterminated lineage refuses the whole batch, one batch
+cannot both carry and clear a lineage, and a live lineage named in no section
+is still refused; the heartbeat projection contract is unchanged — a lineage
+is cleared only through the batch, never through a heartbeat. The daemon then
+atomically publishes its complete local adopted/quarantined/tombstoned set and
+records local `adoptionComplete`. Durable remote commits are not rolled back
+if later activation fails.
 
 ### 4.5 `active`
 
