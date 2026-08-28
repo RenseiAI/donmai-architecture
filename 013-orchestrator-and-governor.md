@@ -253,6 +253,17 @@ execution-event spine is durable before Redis/SSE/relay nudges, supports strict
 session/project/workflow subjects and exclusive replay cursors, and remains
 separate from agent-to-agent coordination messages.
 
+The accepted execution-event bus sharpens this runtime boundary. Normalized
+runtime facts are committed with their outbox record, then appended to the
+durable event log before any live hint. The consumer evaluates only the closed
+bounded predicate language after append, advances nonmatches by its exclusive
+native cursor, and advances matches only with one deterministic durable target
+admission receipt. Delivery is at-least-once; a handled acknowledgement is the
+only evidence that may claim live delivery. Coordinators observe through the
+durable consumer channel, while A2A and PTY remain separate coordination or
+nudge transports. See
+[`ADR-2026-08-19-durable-execution-event-bus-and-bounded-subscriptions.md`](ADR-2026-08-19-durable-execution-event-bus-and-bounded-subscriptions.md).
+
 Admission/claim is followed by exact-harness adaptation, not immediate spawn.
 Per `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`, the orchestrator
 and execution host compile a versioned `HarnessAdaptationPlan`, apply every

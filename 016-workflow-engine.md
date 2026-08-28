@@ -240,6 +240,20 @@ For gate nodes specifically:
 
 This is durable-enough for the use cases enumerated in the WEFT research. Restate-style cluster-of-actor durability is explicitly declined per the WEFT decline list.
 
+### Durable execution-event subscriptions
+
+The accepted execution-event bus is the typed signal source for internal
+execution facts. A workflow subscription names an exact topic and bounded
+predicate over the generated, secret-free catalogue; it runs only after the
+source event and outbox commit. The consumer uses an exclusive native cursor,
+bounded batch and lease, and at-least-once delivery. A matching event advances
+only after one deterministic durable workflow-instance admission receipt; a
+nonmatch advances directly. Retries, dead-letter/pause state, and loop
+suppression are visible workflow state. This does not create a hidden direct
+agent sink: reactions remain visible workflow nodes, and coordinator
+observation uses a separate durable consumer. Full contract:
+`ADR-2026-08-19-durable-execution-event-bus-and-bounded-subscriptions.md`.
+
 ## Workflow design discipline
 
 The legacy auto-generated SDLC YAML (the default SDLC template) is the canonical example of *what not to do*. Long flat chain of `parent? → ack → dispatch → ack → dispatch` per work type, plus an opaque `Detect Work Type` switch. The pathology W1.b (recursive groups) was imported to fix.
