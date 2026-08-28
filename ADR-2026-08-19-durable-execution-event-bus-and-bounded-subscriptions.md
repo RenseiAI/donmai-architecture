@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-19
 boundary: shared
 split: synchronized-mirror
@@ -7,8 +7,8 @@ split: synchronized-mirror
 
 # ADR-2026-08-19 — Durable execution-event bus and bounded subscriptions
 
-**Status:** Proposed — contract review required before implementation or wire
-freeze.
+**Status:** Accepted architecture — implementation, migration, release, and
+activation remain separately gated.
 **Date:** 2026-08-19
 **Boundary:** shared (the strict execution-event envelope, topic/schema law,
 durable append/replay rules, bounded predicate language, subscription delivery,
