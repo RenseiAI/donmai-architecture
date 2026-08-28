@@ -237,7 +237,21 @@ control plane must implement consistently.
     complete batch that drops a correlation the composer still holds is refused.
     A vanished supervisor says nothing about the process group it supervised, so
     the attestation closes what the daemon owes the composer and never what the
-    session owes the fence.
+    session owes the fence. An adoption batch may deliver that statement
+    itself: a currently quarantined, unterminated lineage may be reported in
+    an explicit `cleared` section carrying the quarantined entry's lifecycle
+    identity fields plus a closed `disposition` whose only member is
+    `abandoned` and a closed `reason` whose only member is
+    `acceptance_clear_without_terminal_evidence`. The composer records the
+    shim-absent attestation from the batch's own bytes, converts that
+    lineage's recovery obligation from active to abandoned — never resolved,
+    because absence of evidence proves unobservability, not death — and
+    removes it from the completeness set and the quarantine projection while
+    advancing the adoption revision. A `cleared` entry naming any other
+    lineage refuses the whole batch, one batch cannot both carry and clear a
+    lineage, and a live lineage named in no section is still refused; the
+    heartbeat projection contract is unchanged — a lineage is cleared only
+    through the batch, never through a heartbeat.
 11. **Typed recovery admission:** an externally composed daemon uses additive
     typed registration, refresh, and heartbeat seams. One process presents the
     same once-resolved controller id and exact
@@ -575,7 +589,10 @@ On daemon start:
     resolution/consumption, and durably retain the opaque adoption receipt;
 11. classify every remaining record as exited, stale, or quarantined;
 12. commit one complete adoption batch for every served scope, including empty
-    scans, and retain every batch receipt;
+    scans, and retain every batch receipt — completeness may account for a
+    currently quarantined unterminated lineage through the batch's explicit
+    `cleared` section (core contract rule 10) instead of its quarantined
+    section, and still refuses a live lineage named in no section;
 13. atomically publish the local adopted/quarantined/tombstoned set and local
     `adoptionComplete`;
 14. cross D13 `OnAdoptionPublished`, obtain `carrier_active` for every exact v2
@@ -1225,7 +1242,11 @@ preparing
   through resolved boundary K.
 - `batch-committed/local-published`: every served scope, including an empty
   scan, has returned its durable batch receipt; Donmai has atomically published
-  the adopted/quarantined/tombstoned set and set local `adoptionComplete`.
+  the adopted/quarantined/tombstoned set and set local `adoptionComplete`. A
+  batch may account for a currently quarantined unterminated lineage through
+  its explicit `cleared` section (core contract rule 10); that lineage leaves
+  the completeness set and the quarantine projection, while a live lineage
+  named in no section still refuses the batch.
 - `active`: only Donmai's post-publication hook may send the v2
   `carrier_activate` control on the exact candidate leg. The relay verifies the
   authenticated PTY/carrier epochs and `receipt-stored` state, atomically makes
