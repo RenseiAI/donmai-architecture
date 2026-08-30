@@ -100,6 +100,13 @@ remote, or a harness working tree. A v2 `repositoryWorktreePath` is always
 `<workspaceRoot>/repos/<repository-key>`. A consumer that treats the root as a
 checkout fails a structural fixture before activation.
 
+Every materialized repository is therefore a sibling of every other one under
+`repos/`. D2 makes the repository key the validated declared repository name,
+so from any selected repository working directory the existing `../<name>`
+contract resolves byte-for-byte to `../<repository-key>`. V2 changes the common
+parent from the root to `repos/`; it does not change the relative sibling path
+an agent observes.
+
 The root's top-level `repos`, `state`, and `.workspace` names are reserved.
 Repository and harness keys cannot name or escape those namespaces. Ownership
 decisions read `manifest.json` and receipts; they never infer content from a
@@ -128,8 +135,7 @@ interface RepositoryDeclarationV2 {
 }
 
 interface DeclaredRepositoryV2 {
-  key: RepositoryKey
-  name: string
+  key: RepositoryKey            // normalized declared name and path key
   sourceRef: string             // stable, non-secret resolver identity
   sourceFingerprint: string     // digest of credential-free source identity
   requestedRef: string
@@ -155,15 +161,23 @@ filesystem. Selecting a lazy secondary or context repository causes the
 orchestrator to call `EnsureRepository` explicitly before spawn; it does not
 make path lookup magical.
 
-`RepositoryKey` is a path key, not a display name. The default OSS producer
-derives it deterministically from the normalized, credential-free source
-identity and declared logical name using a versioned encoding with at least 128
-bits of digest material. The result is lowercase ASCII, length-bounded, and
-path-separator-free. A caller-supplied key must pass the same validator.
-Duplicate keys, duplicate source identities under incompatible declarations,
-or an encoder collision are typed declaration errors naming both entries. No
-runtime appends `-2`, uses declaration order as a tie-breaker, or silently
-reuses another repository's path.
+`RepositoryKey` is both the stable logical name and the path key. The default
+OSS producer derives it deterministically from the explicitly declared name or,
+when absent, the credential-free source basename with any `.git` suffix
+stripped — the existing sibling-context derivation. The v2
+`RepositoryFilter` `{ kind: 'named', name }` compares `name` byte-for-byte with
+this key. The key is lowercase ASCII, length-bounded, path-separator-free,
+neither `.` nor `..`, and outside every reserved namespace. A caller-supplied
+key passes the same validator.
+
+Collision safety is by early refusal, not by an opaque digest or automatic
+rename. Duplicate keys, case-fold collisions on a case-insensitive filesystem,
+or one key reused for incompatible source fingerprints are typed declaration
+errors naming both entries. An author who declares two repositories with the
+same basename supplies two different names, and those names become the stable
+relative paths. No runtime appends `-2`, uses declaration order as a tie-breaker,
+or silently reuses another repository's path. `sourceFingerprint`, not the path,
+provides credential-free source-identity evidence.
 
 ### D3 — EnsureRepository is the only materialization operation
 
@@ -446,8 +460,8 @@ resume; and old-executor projection/refusal in both directions.
 
 The proposal intentionally leaves these for review before acceptance:
 
-1. The exact versioned repository-key encoding, digest length above the 128-bit
-   floor, and total path-length budget on the shortest supported filesystem.
+1. The exact repository-key character set, case-normalization rule, maximum
+   length, and total path-length budget on the shortest supported filesystem.
 2. Whether a selected lazy non-primary repository is ensured during admission
    or in the post-admission/pre-spawn adaptation phase. It must remain an
    explicit recorded call either way.
