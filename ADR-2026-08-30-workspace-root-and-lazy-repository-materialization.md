@@ -166,9 +166,12 @@ OSS producer derives it deterministically from the explicitly declared name or,
 when absent, the credential-free source basename with any `.git` suffix
 stripped — the existing sibling-context derivation. The v2
 `RepositoryFilter` `{ kind: 'named', name }` compares `name` byte-for-byte with
-this key. The key is lowercase ASCII, length-bounded, path-separator-free,
-neither `.` nor `..`, and outside every reserved namespace. A caller-supplied
-key passes the same validator.
+this key. The key preserves the declared name's bytes and case; the producer
+does not lowercase, Unicode-normalize, slugify, digest, or otherwise rewrite it.
+It must pass the Accepted D5 validator unchanged: non-empty, length-bounded,
+within the restricted character set, path-separator-free, neither `.` nor `..`,
+not dot-prefixed, and outside every reserved namespace. A caller-supplied key
+passes the same validator.
 
 Collision safety is by early refusal, not by an opaque digest or automatic
 rename. Duplicate keys, case-fold collisions on a case-insensitive filesystem,
@@ -460,8 +463,10 @@ resume; and old-executor projection/refusal in both directions.
 
 The proposal intentionally leaves these for review before acceptance:
 
-1. The exact repository-key character set, case-normalization rule, maximum
-   length, and total path-length budget on the shortest supported filesystem.
+1. The exact repository-key restricted character set, maximum length, total
+   path-length budget on the shortest supported filesystem, and portable
+   handling of case-fold collisions. The name remains byte- and case-preserving;
+   none of these choices may rewrite it.
 2. Whether a selected lazy non-primary repository is ensured during admission
    or in the post-admission/pre-spawn adaptation phase. It must remain an
    explicit recorded call either way.
