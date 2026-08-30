@@ -93,6 +93,8 @@ The v2 layout is:
       <repository-key>/
     state/
       <harness-key>/                       exact-harness mutable state
+        durable/                           secret-free, archive-eligible
+        ephemeral/                         executor-owned; never archived
 ```
 
 The workspace root itself MUST NOT contain `.git`, source files, a repository
@@ -275,11 +277,26 @@ different adapter version cannot accidentally inherit the same mutable state.
 The manifest binds the key to the harness reference and applied-adaptation
 receipt digest.
 
-Config home, cache home, continuation data, runner-injected extensions, and
-other harness-owned mutable files are projected beneath this directory where
-the adapter supports them. The adaptation plan declares each projection; the
-runner does not guess environment-variable names. The directory is writable to
-the harness but does not widen any `read-only` repository leaf.
+Each exact-harness directory has two closed partitions:
+
+- **`durable/`** is secret-free, resumable, and archive-eligible. Cache,
+  continuation data, and runner-injected extensions may land here only when
+  their serialized bytes contain no credential or broker material.
+- **`ephemeral/`** is executor-owned and never archive-eligible. Session
+  credential stores, broker sockets, short-lived token files, secret-bearing
+  harness config, and other delivery material land only here. Repository
+  processes may read the bindings they are granted, but may not reclassify or
+  move them into `durable/`.
+
+The adaptation plan classifies every state, config, cache, continuation, and
+credential projection as `durable-secret-free` or
+`ephemeral-secret-bearing`. The applied receipt records the destination class
+and a non-secret digest or reference. Unclassified state is a pre-spawn denial.
+The runner does not guess environment-variable names or assume that a harness's
+nominal config file is secret-free. Both partitions are writable only as the
+adapter declares and neither widens any `read-only` repository leaf. An adapter
+that requires credential bytes in a repository or in `durable/` is not
+v2-compatible until it supplies an isolated ephemeral projection.
 
 This session-local directory does not replace the injectable host state home of
 `ADR-2026-06-03-injectable-state-dir.md`. Host identity, daemon configuration,
@@ -287,11 +304,14 @@ and cross-session host records remain outside the workspace. `state/<harness>`
 contains only data owned by this workspace generation.
 
 On resume, the executor loads the recorded exact harness key, re-verifies every
-runner-injected artifact and adaptation digest, and either resumes that state or
-returns a typed incompatibility. It never points a different harness version at
-the old directory. Multiple exact harness keys may coexist when a session graph
-legitimately uses more than one harness, but every directory remains under the
-same root lifecycle.
+runner-injected artifact and durable adaptation digest, and either resumes that
+secret-free state or returns a typed incompatibility. It creates a fresh empty
+`ephemeral/` partition and rehydrates credentials only by resolving the recorded
+`AuthBindingRef` through the current broker. It never recovers credential bytes
+from an archive, continuation file, repository remote, or old ephemeral path,
+and never points a different harness version at the old directory. Multiple
+exact harness keys may coexist when a session graph legitimately uses more than
+one harness, but every directory remains under the same root lifecycle.
 
 ### D6 — Credentials never persist in manifests or repository remotes
 
@@ -315,6 +335,13 @@ the first clone command. Receipts carry stable refs and digests only. Future
 freshen and push operations reacquire an authorized binding; they never recover
 a secret from the checkout.
 
+Harness credential delivery follows the same separation. Credential bytes and
+broker artifacts may exist during active execution only under that exact
+harness's `ephemeral/` partition. They are absent from `durable/`, manifests,
+receipts, repository trees, cache seeds, observation records, and archive input.
+The receipt retains the `AuthBindingRef`, destination class, and delivery
+outcome, never the secret.
+
 ### D7 — Lifecycle, resume, archive, sharing, and cleanup remain root-bound
 
 The workspace root is the single lifecycle object:
@@ -324,7 +351,8 @@ The workspace root is the single lifecycle object:
 - a lazy declaration that was never materialized owns no repository bytes, but
   its declaration and absence remain in the manifest and archive;
 - archive captures the manifest, completed receipts, realized repositories,
-  and exact-harness state. Restore does not eagerly ensure an absent lazy entry;
+  and only each exact harness's `durable/` state. Restore does not eagerly
+  ensure an absent lazy entry;
 - resume reads the manifest and receipts before any repository path. It
   validates every realized destination and leaves every declared-but-absent
   repository absent;
@@ -336,6 +364,18 @@ The workspace root is the single lifecycle object:
   declaration revision are never participant-local;
 - release is one idempotent root operation. No repository or harness-state leaf
   transfers to a later session, becomes a cache seed, or outlives root cleanup.
+
+Before `pause` or `archive` may publish resumable bytes, the lifecycle owner
+must stop and fence the harness, close and revoke broker deliveries, purge every
+`state/<harness-key>/ephemeral/` partition, and scan the candidate root. Archive
+serialization then excludes the ephemeral partitions by construction and scans
+the **serialized archive bytes**, not only metadata or the live source tree. A
+secret residue, an unclassified state path, or a fixture-known canary appearing
+in serialized output is a typed failure: no successful pause/archive receipt is
+written, the root remains quarantined and unreusable, and cleanup remains
+operator-visible. Restore creates new empty ephemeral partitions and rehydrates
+each credential from its recorded `AuthBindingRef` through the current broker.
+An archive never becomes a credential carrier.
 
 Warm repository objects and dependency snapshots remain provider-owned seeds
 outside session roots. An ensure may materialize from a seed, but it still
@@ -416,6 +456,7 @@ type WorkspaceBootstrapFailureCode =
   | 'repository_credential_persistence_detected'
   | 'repository_materialization_corrupt'
   | 'harness_state_incompatible'
+  | 'harness_state_secret_residue'
   | 'workspace_resume_inconsistent'
 ```
 
@@ -443,7 +484,8 @@ Adoption is deliberately staged:
    single-primary implementation behind exact protocol negotiation.
 3. Ship idempotent lazy ensure with crash replay, concurrent-call fixtures, and
    structural read-only negative proof through the real executor.
-4. Ship harness-state projection plus resume/re-verification and whole-root
+4. Ship classified harness-state projection plus resume/re-verification,
+   ephemeral-secret purge, serialized-archive negative proof, and whole-root
    archive/release/adoption proofs.
 5. Enable v2 only for new roots on explicitly capable executors; retain flat and
    v1 readers. Compare materialization, credential, disk, and resume signals.
@@ -457,7 +499,9 @@ path lookup; equivalent concurrent ensure returning one receipt; conflicting
 ensure refusing; crash between stage and publication; credential-bearing clone
 inputs leaving no secret in manifest, receipts, remote/config, argv capture, or
 events; read-only writes failing while a mutable sibling succeeds; exact-version
-resume; and old-executor projection/refusal in both directions.
+resume; a fixture-known credential present during execution but absent from
+durable state and serialized archive bytes after cleanup; and old-executor
+projection/refusal in both directions.
 
 ### D12 — Unresolved decisions
 
