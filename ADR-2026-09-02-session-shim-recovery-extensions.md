@@ -53,6 +53,17 @@ ordinary terminal receipt or a shim terminal tombstone on that host.
 `shim_absent_attestation` is not terminal proof. Malformed stored authority and
 concurrent authority changes fail closed without clearing quarantine.
 
+> **Note 2026-09-02 — four fields for repair, three for terminal-evidence
+> pruning.** Operator repair matches the full
+> `(session, shim, process epoch, controller generation)` lineage because it
+> removes a stored entry on the strength of a human comparison and must never
+> clear a generation the evidence did not name. The terminal-evidence pruning
+> rule added to the shared core contract on the same date
+> (`ADR-2026-08-17-session-shim-adoption.md`, amendment under rule 10) matches
+> `(session, shim, process epoch)` only: quarantine-kind evidence carries no
+> adoption generation, so a four-field match there could never succeed and the
+> revision-stale heartbeat drain the rule exists to prevent would persist.
+
 ## Consequences
 
 ### Positive
