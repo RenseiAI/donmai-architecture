@@ -411,7 +411,7 @@ Adopted    shim -> daemon   accepted generation, exact extension echo, and
 Output     shim -> daemon   shim-owned sequence + raw bytes
 Gap        shim -> daemon   missing inclusive range + closed reason
 Snapshot   shim -> daemon   state after an adoption-time replay gap
-Input      daemon -> shim   generation + attributed input bytes
+Input      daemon -> shim   generation + input bytes verbatim
 Resize     daemon -> shim   generation + authoritative geometry
 Stop       daemon -> shim   generation + typed reason
 Heartbeat  both ways       liveness and acknowledged sequence
@@ -2811,3 +2811,74 @@ live call rather than being consumed as a late one. Only a genuine persistence
 Dropping on a slow write is what connected this to D8: two healthy sessions lost
 their controllers to a write that was merely late, and reaped their own harnesses
 when the 90-second clock expired.
+
+## Amended 2026-09-01 — selected v4 adds AttributedInput
+
+A relay-stamped SYSTEM-authority `Input` frame — today only the operator
+"nudge" rail that wakes an idle harness by writing into its own PTY stdin
+path — needs a last-hop guarantee the wire had no way to carry: a keystroke-
+scale pacing gap before a lone trailing CR/LF, and a dangling bracketed-paste
+close, both applied at the exact PTY write boundary. Applying either requires
+knowing WHO sent an `Input` frame, and the v1-frozen `Input` message (D3)
+never carried that — only the fencing generation and the input bytes. (The v1
+vocabulary table above previously described `Input` as "generation +
+attributed input bytes"; it never was — that wording is now corrected to
+"generation + input bytes verbatim". "Attributed" there always meant §D4's
+generation fence, never sender identity.)
+
+### D3 gains a fourth selected version
+
+<!-- BOUNDARY-SYNC-START: adr-2026-08-17-session-shim-v4-attributed-input -->
+Selected version 4 retains every v1/v2/v3 type and adds one shim-input type:
+
+```text
+AttributedInput  daemon -> shim   generation + length-prefixed relay-stamped
+                                  sender id + input bytes
+```
+
+`AttributedInput` (wire byte `0x10`) carries the same fencing generation as
+`Input` (§D4 authority), then the sender identity a relay stamped onto the
+originating Input frame before forwarding it to the host — most commonly the
+literal never-collides-with-a-platform-id sentinel a SYSTEM-authority write
+is stamped with — then the input bytes verbatim, exactly as `Input` always
+has. It is a NEW message type carrying a NEW payload shape; it does not
+change `Input`'s own byte-identical selected v1/v2/v3 wire in any way.
+Reaching selected v4 requires the SAME `RequireFullHostFrames` opt-in D3
+already required for v3, by construction rather than a second flag: v4's
+vocabulary is a strict superset of v3's (`HostFrame`, `SnapshotRequest`,
+`SnapshotResult` all remain legal), so every existing `selected >= v3` call
+site keeps working unchanged the moment negotiation reaches v4. A peer that
+negotiated below v4 cannot decode the attribution field; a composing daemon
+sending to one degrades to the exact byte-identical `Input` send those
+versions have always received — the write still lands, verbatim, only the
+last-hop delivery guarantee identity enables is unavailable there.
+<!-- BOUNDARY-SYNC-END: adr-2026-08-17-session-shim-v4-attributed-input -->
+
+The rejected-alternatives entries "Add a snapshot-request message to v1" and
+"Add HostFrame to selected v2" already state the governing rule this follows:
+a new capability is a selected-version bump carrying a new type, never a
+silent change to bytes an older selected version already carries. A rejected
+alternative worth naming explicitly for this amendment: **appending the
+sender id directly onto `Input`'s existing payload, gated by selected
+version.** Rejected for the identical reason — it would make `Input`'s own
+byte layout version-dependent, which is exactly the ambiguity the closed v1
+vocabulary exists to foreclose. A new type at a new version is the only move
+that keeps a released v1/v2/v3 peer's `Input` decoder exact.
+
+### Proof this amendment requires
+
+Mirroring the discriminating-fixture discipline `Released-v2/new-v3 overlap
+in both directions` established for v3: a wire-level round-trip proving
+`AttributedInput`'s encoding survives with the sender id both present and
+absent, a real end-to-end write proving a SYSTEM-attributed bare CR/LF is
+paced relative to an ordinary human write in the SAME run (never against a
+fixed wall-clock bound, which flakes under load), and a proof that a
+selected-below-v4 peer receives the exact byte-identical `Input` send instead
+of a frame it cannot decode. The OSS implementation lands this proof as
+`shimwire`'s `TestAttributedInputRoundTrip` /
+`TestSelectedV4AdmitsAttributedInputWithoutChangingV1V2V3`, `sessionshim`'s
+`TestShimAttributedInputSystemPacedHumanImmediate` /
+`TestControllerWriteAttributedInputFallsBackBelowV4`, and the composing
+daemon's own real-in-process-shim equivalents in the `donmai` repository;
+platform-embedder proof (the relay stamping and passing `userId` through its
+own write path) is a separate, later change and is not claimed here.
