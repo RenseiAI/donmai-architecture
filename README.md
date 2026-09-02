@@ -232,7 +232,6 @@ renaming an ADR.
 | [`ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`](ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md) | Accepted | shared | User-facing capabilities compile to per-harness realizations: the registry, the attested surface, and the viability of absence |
 | [`ADR-2026-08-16-one-session-substrate-and-typed-event-spine.md`](ADR-2026-08-16-one-session-substrate-and-typed-event-spine.md) | Accepted | shared | One session substrate and a typed execution-event spine |
 | [`ADR-2026-08-17-session-shim-adoption.md`](ADR-2026-08-17-session-shim-adoption.md) | Accepted | shared | Per-session shim ownership and daemon adoption |
-| [`ADR-2026-09-02-session-shim-recovery-extensions.md`](ADR-2026-09-02-session-shim-recovery-extensions.md) | Accepted | shared | Session-shim recovery extensions |
 | [`ADR-2026-08-19-durable-execution-event-bus-and-bounded-subscriptions.md`](ADR-2026-08-19-durable-execution-event-bus-and-bounded-subscriptions.md) | Accepted | shared | Durable execution-event bus and bounded subscriptions |
 | [`ADR-2026-08-19-session-data-lifecycle-tiering-and-rehydration.md`](ADR-2026-08-19-session-data-lifecycle-tiering-and-rehydration.md) | Proposed | shared | Session data lifecycle tiering and rehydration |
 | [`ADR-2026-08-22-session-owned-multi-repository-workarea.md`](ADR-2026-08-22-session-owned-multi-repository-workarea.md) | Accepted | OSS-only | Session-owned multi-repository workarea |
@@ -241,5 +240,6 @@ renaming an ADR.
 | [`ADR-2026-08-31-continuous-host-holdings-claim.md`](ADR-2026-08-31-continuous-host-holdings-claim.md) | Proposed | shared | A host continuously claims what it holds |
 | [`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md) | Proposed | shared | Session recovery taxonomy and lifecycle state vocabulary |
 | [`ADR-2026-09-02-outcome-unknown-launch-commit-resolution.md`](ADR-2026-09-02-outcome-unknown-launch-commit-resolution.md) | Accepted | shared | Resolving an outcome-unknown launch adoption-batch commit |
+| [`ADR-2026-09-02-session-shim-recovery-extensions.md`](ADR-2026-09-02-session-shim-recovery-extensions.md) | Accepted | shared | Session-shim recovery extensions |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
