@@ -115,6 +115,21 @@ reaper integration live in the platform mirror)
 > Snapshot, or cursor. Implementation, release, migration, and activation remain
 > pending.
 
+> **Quarantine-projection pruning amendment 2026-09-02.** Rule 7 keeps a
+> quarantined shim in every heartbeat payload until it exits or is
+> reconciled, and rule 10 lets only ordinary terminal evidence close a
+> lineage; neither said what the composer's published quarantine set does
+> when that evidence lands. The daemon drops the lineage from its own set
+> only after the evidence is durably accepted, so a composer that kept the
+> stale entry refused every later heartbeat as revision-stale and the host
+> drained. The amendment inside the synchronized region under rule 10 is
+> normative: durable ordinary terminal evidence prunes the matching
+> `(session, shim, process_epoch)` entry from the published quarantine set in
+> the same transaction at the same adoption revision, readiness untouched,
+> heartbeat contract unchanged. `ADR-2026-09-02-session-shim-recovery-extensions.md`
+> records why this match uses three lineage fields where operator repair uses
+> four.
+
 ## Context
 
 An interactive session is currently only as durable as the daemon process that
@@ -252,6 +267,23 @@ control plane must implement consistently.
     lineage, and a live lineage named in no section is still refused; the
     heartbeat projection contract is unchanged — a lineage is cleared only
     through the batch, never through a heartbeat.
+
+    **Amendment 2026-09-02 — terminal evidence prunes the quarantine
+    projection (rules 7 and 10).** When the composing control plane durably
+    records ordinary terminal evidence — an ordinary terminal receipt or a
+    shim terminal tombstone, never a shim-absent attestation, which proves
+    only unobservability — for a lineage the host currently reports as
+    quarantined, it removes that lineage's entry from the host's published
+    quarantine set inside the same transaction, at the same adoption
+    revision, without touching readiness. Identity for this removal is
+    `(session, shim, process_epoch)`; the controller generation is not part
+    of it, because quarantine-kind evidence carries no adoption generation.
+    The heartbeat contract is unchanged: a heartbeat remains an exact
+    authority assertion and never clears or reconciles a lineage. Rationale:
+    the daemon withdraws a quarantined lineage from its own set only after
+    that evidence is durably accepted, so without this rule the next
+    heartbeat — which omits the lineage — is refused as revision-stale
+    forever and the host drains (observed 2026-09-02).
 11. **Typed recovery admission:** an externally composed daemon uses additive
     typed registration, refresh, and heartbeat seams. One process presents the
     same once-resolved controller id and exact
