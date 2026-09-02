@@ -2812,6 +2812,22 @@ Dropping on a slow write is what connected this to D8: two healthy sessions lost
 their controllers to a write that was merely late, and reaped their own harnesses
 when the 90-second clock expired.
 
+## Amended 2026-09-02 — outcome-unknown launch adoption-batch commits
+
+The *Amended 2026-09-01* section above types the OUTCOME-UNKNOWN answer for the
+adoption batch a **restarting** daemon commits while adopting shims it did not
+just create. A **newly launched** shim's own adoption-batch commit meets the
+same ambiguity from the opposite end of a session's life — with no prior
+committed projection to roll back to and a harness that is not yet stopped —
+and is resolved by
+`ADR-2026-09-02-outcome-unknown-launch-commit-resolution.md`: redrive the
+commit exactly once on a fresh detached budget; on a definite or still-
+ambiguous non-success, release by publishing the lineage quarantined and
+stopping the harness before returning; then discharge the recovery obligation
+through the shim's own terminal tombstone, off the accept goroutine. That ADR
+also states the `OnSpawnAborted` contract an embedder may rely on. Nothing
+here changes the synchronized core contract above.
+
 ## Amended 2026-09-01 — selected v4 adds AttributedInput
 
 A relay-stamped SYSTEM-authority `Input` frame — today only the operator
