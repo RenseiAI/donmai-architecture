@@ -228,10 +228,30 @@ control plane must implement consistently.
    unauthenticated shim is quarantined. Adoption refusal never kills its harness.
    Quarantined shims always count against host capacity and are always present in
    host diagnostics and heartbeat payloads until they exit or are reconciled.
+
+   **Amendment 2026-09-02 — quarantine tombstone-withdrawal republish (rule
+   7).** Durable terminal handoff of a quarantined lineage (tombstone
+   withdrawal) republishes the complete projection and rings an immediate
+   heartbeat, so the receiver never holds a lineage the daemon has already
+   withdrawn at the same revision.
 8. **Bounded orphaning:** loss of the controller starts a bounded shim-owned
    orphan deadline. Expiry makes the shim terminate and reap its own harness
    process group, persist the terminal observation, and retain a tombstone for
    later adoption. It never authorizes a claim release by itself.
+
+   **Amendment 2026-09-02 — carrier-fault re-adoption precedes quarantine
+   (rules 8 and 10).** A live shim whose controller stream ended for a
+   carrier fault (the daemon lost its durable carrier, not the shim's socket)
+   is re-adopted through the D4 adoption pipeline before it is quarantined: a
+   bounded re-adoption policy (attempts, backoff, per-attempt timeout;
+   default worst case 60 s) whose whole window is strictly inside the
+   resolved orphan deadline (90 s when the composing deployment sets it
+   explicitly; the derived value otherwise); during the window the lineage
+   remains in the adopted set and every batch or heartbeat projection
+   presents it as adopted at the retained revision (complete-snapshot rule);
+   if the batch does not commit the previous controller is restored; only
+   when every attempt fails is the lineage quarantined `socket_unreachable`
+   as before.
 9. **Fence before restart:** a planned daemon restart deterministically
    partitions every adopted and quarantined shim correlation by authority
    scope, obtains a durable byte-exact acknowledgement for every partition, and
