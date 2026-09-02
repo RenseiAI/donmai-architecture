@@ -212,6 +212,50 @@ Shipped in the OSS execution layer (`donmai`) as
 `republishAfterAmbiguousLaunchDischarge` in `daemon/session_shim_spawn.go`,
 with pinned behavior in `daemon/session_shim_ambiguous_launch_commit_test.go`.
 
+## Addendum 2026-09-02 — the same obligation, one step earlier
+
+The decision above concerns a launch that has already **durably adopted** its
+session and then loses the answer to its adoption-batch commit. The same
+question — what must be true about the host before an aborted spawn is reported
+— arises one step earlier, at the launch's very first gate: a worker that has
+published **no discovery record** when its discovery bound expires (see
+`ADR-2026-08-17-session-shim-adoption.md` §D10, row *Launched worker has not
+published a discovery record when the launch bound expires*, and its
+*Amended 2026-09-02* section). Previously that path returned the accept failure
+and left the process running; it now stops the launched process group and reaps
+the direct child first.
+
+At that earlier point, step 2's release reduces to its process half, and the §4
+`OnSpawnAborted` contract reads as follows — weaker in one bullet because
+nothing exists yet to be published, and STRONGER in another because the proof is
+local:
+
+- **"not adopted"** — unchanged, and unconditional.
+- **"published in a complete snapshot"** — **vacuous here.** The launch never
+  reached its per-session adoption, so the control plane holds nothing live for
+  this lineage, no batch can be refused for omitting it, and a quarantine entry
+  would need a shim identity the missing discovery record never delivered. There
+  is nothing to publish, and nothing is published.
+- **"asked to stop"** — satisfied by a different verb. No controller was ever
+  dialled (the record that would carry the socket is exactly what never
+  appeared), so the generation-fenced Controller-Stop cannot be sent; the
+  process group this daemon itself started is the only handle, which is the same
+  fallback step 2 already takes when its controller is nil.
+- **"terminal evidence reported if its tombstone landed"** — **not applicable.**
+  No lineage was ever durably attested, so no terminal evidence is owed to
+  anyone.
+- **"not guaranteed reaped"** — **stronger here.** The reap is not a tombstone
+  another process must publish and this daemon must wait for; it is waitpid on
+  this daemon's own child, performed synchronously before the error returns. When
+  the stop reports success, the direct child **is** reaped. What remains
+  unprovable is only a surviving descendant that was never this daemon's child —
+  the same limit the direct-child lane carries.
+
+An embedder can therefore read an aborted spawn at this earlier gate as "no
+process of mine is running" whenever the stop succeeded, and must still read the
+general §4 contract — "not guaranteed reaped" — for the post-adoption path the
+decision above governs.
+
 ## Known gaps (recorded as follow-ups)
 
 - **No shim-absent attestation construction exists in production code.**
