@@ -2,7 +2,7 @@
 title: interactive-attach-v1 — interactive PTY session attach wire protocol
 status: Proposed
 date: 2026-07-12
-revision: v1.0-draft5 (2026-07-18) — W5-added § 14/§ 15 degraded-SSE ticket auth addendum (relay-side, W14 F1)
+revision: v1.0-draft6 (2026-09-02) — § 7/§ 13 host-lost / host-still-absent error codes (bounded host-less resume)
 protocol-version: interactive-attach-v1
 boundary: OSS-only
 derived-from: asciinema ALiS live-stream protocol (shape only; NOT byte-compatible)
@@ -16,7 +16,7 @@ sign-off:
 
 **Status:** Proposed
 **Date:** 2026-07-12
-**Revision:** v1.0-draft5 (2026-07-18) — W5-added § 14/§ 15 degraded-SSE ticket auth addendum (relay-side, W14 F1)
+**Revision:** v1.0-draft6 (2026-09-02) — § 7/§ 13 host-lost / host-still-absent error codes (bounded host-less resume)
 **Protocol version:** `interactive-attach-v1`
 **Normative for:** the OSS PTY session host and framing library in `donmai`, the
 relay, and every viewer (web, iOS).
@@ -42,6 +42,22 @@ section may be amended by its owning wave via PR to this file **with the sign-of
 cell updated in the same PR** — never silently.
 
 ## Changelog
+
+### v1.0-draft6 (2026-09-02) — § 7/§ 13 host-lost / host-still-absent error codes
+
+Registers two new `error.code` values (§ 7's code set is `v1-draft`,
+extendable) for the case where a viewer resumes (§ 13) while the relay has no
+live host transport for the room. Neither code is ever presented to the
+host/shim leg — the host stream epoch (§ 4.1) is unaffected. This entry is
+declarative only: it names the codes and their trigger; § 13 carries the
+short normative paragraph.
+
+| Item | Disposition |
+|---|---|
+| `host-lost` | Served on a resume the relay answers while host-less, when the reply would exceed the viewer's remaining send-queue headroom (§ 11.2): the relay serves the current Snapshot plus only the newest ring bytes that fit that headroom, followed by an `error` control message (`code: "host-lost"`) naming the loss instant and the truncated byte count. Message grammar: `"<RFC3339 loss instant> <truncated byte count>"` (§ 7) |
+| `host-still-absent` | Served on a repeat resume from the same viewer leg inside the relay's per-leg throttle window, while the host is still absent and nothing has changed since the last `host-lost` reply: the relay serves the (unchanged) Snapshot again, followed by an `error` control message (`code: "host-still-absent"`) carrying the same loss-instant/truncated-byte-count pair in place of a second truncation notice (§ 7) |
+| Snapshot invariant preserved | Both codes ride a resume that already carries a Snapshot per the § 13 contiguity invariant — a viewer is never brought live without a Snapshot and cursor |
+| Named parameters are relay policy | The viewer send-budget and the per-leg throttle window are deployment-specific (relay-owned); this revision names their existence and effect, not their values |
 
 ### v1.0-draft5 (2026-07-18) — § 14/§ 15 degraded-SSE ticket auth addendum (W14 security F1, relay-shipped)
 
@@ -595,8 +611,11 @@ Notes that are themselves `v1-frozen`:
   in standalone), the § 6 role ceilings, and the standalone single-local-driver
   policy — nothing more.
 - `error.code` values in v1: `framing`, `auth`, `room-mismatch`, `pen-denied`,
-  `ring-miss`, `backpressure`, `rate-limited`, `epoch-stale`, `internal`. The
-  code set is `v1-draft` (extendable); the `error` message itself is frozen.
+  `ring-miss`, `backpressure`, `rate-limited`, `epoch-stale`, `internal`,
+  `host-lost`, `host-still-absent`. The code set is `v1-draft` (extendable);
+  the `error` message itself is frozen. `host-lost` and `host-still-absent`
+  are **viewer-leg only** — the relay never sends either to a host/shim leg —
+  and are defined in § 13.
 
 ---
 
@@ -1017,6 +1036,39 @@ Wrapped in the frozen envelope at `atSeq = 42`:
   correctness).
 - Ring-buffer depth and any persistence for surviving a relay restart are relay
   policy (draft); the resume **contract** above is frozen.
+
+### 13.1 Host-less resume: `host-lost` / `host-still-absent` — `v1-draft`
+
+The frozen resume contract above answers "does the relay have this seq"; this
+subsection answers the orthogonal question of "does the relay have a live
+**host** to resume from at all," and is `v1-draft` (§ 7's code set is
+extendable; the trigger conditions and named parameters below may be tuned by
+the relay-side owner without a version bump).
+
+When a viewer resumes (join or ring miss) while the relay holds **no live
+host transport** for the room (`room_state` other than `"live"` /
+`"degraded"`, § 7), and the resume reply the relay would otherwise serve
+exceeds the viewer's remaining send-queue headroom (the same
+`viewerSendQueueMaxBytes`-bounded budget § 11.2 governs), the relay serves
+the current Snapshot plus **only the newest bytes of the ring that fit the
+viewer's remaining headroom**, followed by an `error` control message
+(`code: "host-lost"`) naming the instant the host transport was lost and the
+number of ring bytes truncated ahead of the served tail. This still
+satisfies the § 13 Snapshot + tail contiguity invariant — the served tail
+starts at `atSeq + 1` as usual, merely shortened from the ring's full
+retained depth to what the viewer's headroom admits. A viewer is never
+brought live without a Snapshot and cursor.
+
+A **repeat** resume from the same viewer leg, arriving inside the relay's
+per-leg throttle window and with nothing in the room changed since the last
+`host-lost` reply, is answered with the same (unchanged) Snapshot again,
+followed by `error.code = "host-still-absent"` in place of a second
+truncation notice — sparing the viewer a redundant loss narrative for a
+condition it has already been told about.
+
+Neither code reaches the host/shim leg; both are relay → viewer only. The
+viewer send-budget and the per-leg throttle window are deployment-specific
+relay policy and are not named here (§ 7).
 
 ---
 
