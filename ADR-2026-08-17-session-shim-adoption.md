@@ -130,6 +130,21 @@ reaper integration live in the platform mirror)
 > records why this match uses three lineage fields where operator repair uses
 > four.
 
+> **Snapshot transmissibility amendment 2026-09-02.** D5 forbids truncation and
+> decode-and-reencode, and says a ring hit replays the exact frames. Neither
+> clause anticipated a frame the local wire cannot carry at all. A Snapshot is
+> the only host frame with no inherent size — Output is capped per frame by the
+> PTY host, Exit and applied Resize are fixed — and it serializes a scrollback
+> tail whose depth is a per-session policy, so a long-lived screen produces a
+> Snapshot above the local-wire message ceiling. Refusing it at the writer, which
+> is what the released code did, closed the controller connection: measured twice
+> in one day on production hosts, on the mandatory resume Snapshot, costing live
+> harnesses their supervision and quarantining healthy lineages. The amendment in
+> D5.1 is normative: the shim MAY re-encode its own Snapshot with the oldest
+> scrollback lines dropped, and only far enough to fit, when and only when the
+> frame would otherwise be untransmittable. Every other frame type, and every
+> other layer, keeps D5's byte-for-byte rule unchanged.
+
 ## Context
 
 An interactive session is currently only as durable as the daemon process that
@@ -736,6 +751,60 @@ An external carrier may need to open a new connection generation when it sees a
 gap. That is a carrier concern. The daemon must expose the gap rather than reset
 the shim sequence, fabricate zero bytes, or claim contiguous replay it does not
 possess.
+
+#### D5.1 — Snapshot transmissibility bound (normative, 2026-09-02)
+
+The byte-for-byte rule above binds every layer downstream of the producer, and
+that is unchanged. This clause carves out exactly one producer-side case it could
+not express: a Snapshot the local wire cannot carry.
+
+A Snapshot whose encoded message would exceed the local-wire ceiling MAY be
+re-encoded by the shim, and only by the shim, with the OLDEST scrollback lines
+dropped — fewest first, stopping at the largest retained tail that fits. The live
+grid, the alternate grid, the frame's sequence and rel-time, and the envelope's
+`at_seq` and snapshot format are preserved exactly. No other frame type may be
+rewritten, and no layer downstream of the shim may rewrite anything: a carrier,
+callback, or ingress that reshapes a frame is still a protocol error. Dropping
+the whole tail and still not fitting is a refusal, not a partial live screen.
+
+Four properties make this compatible with the rest of D5 and are themselves
+normative:
+
+1. **One sequence, one payload.** The bound is a pure function of the frame and
+   the ceiling, and every ceiling is a build-time constant of the local wire. A
+   retained frame therefore bounds to identical bytes on every delivery, so a
+   ring hit replays for sequence N exactly the bytes the first delivery carried,
+   across controller generations and across daemon restarts. "Replays the exact
+   frames" is preserved as an observable property of the wire; what is no longer
+   guaranteed is that the shim's in-process retained copy is byte-identical to
+   what it transmits, and only for a frame that could not be transmitted at all.
+2. **Last resort only.** A Snapshot that already fits is transmitted verbatim and
+   is never decoded. The bound is reachable only on the refusal path.
+3. **History, never state.** Only the scrollback tail is shortened. A viewer
+   loses older history it could scroll back to; it never loses, and is never
+   misinformed about, what the session currently shows.
+4. **Declared, not silent.** The shortening is recorded by the shim with the
+   session, the sequence, and the number of dropped lines. It is deliberately not
+   a wire field: the snapshot screen payload is length-exact and its decoder
+   rejects trailing bytes, so a marker field would make bounded Snapshots
+   undecodable by the very older controllers D3's compatibility range exists to
+   keep adoptable.
+
+**Cross-version caveat.** The ceiling is not one number, so the same screen bounds
+differently per selected version, and a shim serving different controllers may
+retain different amounts of history for each:
+
+| Carrier | Ceiling applied to |
+|---|---|
+| Selected v3+ `HostFrame` | raw encoded attach-frame bytes, against the host-frame ceiling |
+| Selected v1/v2 `Snapshot` | the whole control message, whose screen bytes are base64-inflated by the JSON body |
+| `SnapshotResult`, either mode | the whole result message, header included |
+
+A selected-v2 controller therefore sees a MORE aggressively trimmed screen than a
+selected-v3 one for the same live session — roughly a quarter less retained
+history for the base64 inflation alone. That is a visible-history difference, not
+a state or sequence difference: `at_seq`, the live grid, and the sequence
+namespace are identical on every carrier.
 
 ### D6 — Discovery records contain no secrets
 
