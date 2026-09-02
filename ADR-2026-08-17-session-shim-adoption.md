@@ -918,6 +918,7 @@ preserving the OSS boundary.
 | Harness wedges | Existing stop/no-progress policy reaches the shim as a generation-fenced `Stop`; the shim performs group SIGTERM -> SIGKILL and owns the terminal observation. Interactive human think-time exemptions remain unchanged. |
 | Socket disappears but shim PID/start identity is live | Quarantine. Do not kill, recreate the socket path, or release the claim. The orphan deadline is the shim's escape hatch. |
 | Registry record survives but PID/start identity does not | Classify stale, retain a diagnostic/tombstone, and reconcile lifecycle evidence. Never signal a reused PID. |
+| Launched worker has not published a discovery record when the launch bound expires | While the launched process is proved ALIVE there is still something to wait for: keep waiting to a longer bound derived from the launch timeout (see *Amended 2026-09-02 — a launch abandoned before discovery is stopped and reaped*). A process that EXITS ends the wait immediately with a definite failure. On giving up with the process still alive, terminate its group and reap the direct child before reporting the spawn aborted — a worker that never published a record never reached shim start and therefore never armed its own orphan deadline, so nothing else on the host can ever end it. A launch whose start identity was never pinned is refused rather than signalled, per the reused-PID rule above. |
 | Protocol ranges do not overlap | Quarantine and account capacity. A compatible daemon may adopt; otherwise the shim drains or reaches its orphan deadline. |
 | Cached credential is fresh by expiry but its shim receipt is absent, stale, from another scope, or names another controller/tuple | Refuse the cache and perform typed auth-only registration/refresh. If that cannot complete, remain `recovering`; do not start heartbeat, poll, claim, or adoption with guessed host authority. |
 | Auth-only registration succeeds for only some served scopes | Retain no partial readiness. The successful credentials may be refreshed/retried in memory, but adoption publication and every external loop remain stopped until every scope returns its exact host/revision receipt. |
@@ -2827,6 +2828,63 @@ stopping the harness before returning; then discharge the recovery obligation
 through the shim's own terminal tombstone, off the accept goroutine. That ADR
 also states the `OnSpawnAborted` contract an embedder may rely on. Nothing
 here changes the synchronized core contract above.
+
+## Amended 2026-09-02 — a launch abandoned before discovery is stopped and reaped
+
+The crash matrix above previously had no row for the earliest launch failure of
+all: a worker this daemon exec'd that has published **no discovery record** when
+its launch bound expires. The behaviour it fell back on — give up, return the
+accept failure, leave the process alone — was justified by §D10's prohibition on
+guessing at an unidentifiable launch, with the shim's own orphan deadline named
+as the escape hatch. Measured on an installed host under concurrent launch load,
+both halves of that justification proved wrong for this one case:
+
+- **The bound was the binding constraint, not the worker.** A harness whose
+  bootstrap was slowed by concurrent launches had published nothing 31 seconds
+  after spawn; the identical launch shape adopted in about thirty seconds when it
+  ran alone. The launch timeout is sized for an ordinary cold start, and the
+  short post-deadline grace poll only ever catches a record that is a hair late.
+- **There was no escape hatch.** The orphan deadline is armed by the shim itself,
+  at shim start, *after* it publishes its record. A worker that has not published
+  one has not armed anything, and the launch never reached the adopted set, so no
+  startup, quarantine, or reconciliation pass can see it either. The abandoned
+  worker went on to run its entire prompt un-adopted, sent its messages, exited on
+  its own terms, and left a defunct entry behind — while the spawner had already
+  reported the spawn aborted.
+
+So the rule for this row is:
+
+1. **Liveness, not the clock, decides how long to wait.** While the launched
+   process is proved alive the wait continues to a longer bound **derived from
+   the launch timeout** rather than fixed independently of it — the two bounds
+   answer the same question about the same launch, so an embedder that tunes one
+   must move both. A process that exits ends the wait at once, on the extended
+   budget and on the ordinary launch clock alike; there is nothing left that
+   could publish the record, and the accept deserves its answer now.
+2. **Giving up while the process lives means stopping it.** The daemon
+   terminates the launched process group and reaps the direct child before the
+   accept-work error is returned. This is not the inference §D10 forbids: the
+   target is not resolved from a registry record of unknown provenance, it is
+   the PID and OS-reported start time this daemon pinned when it exec'd the
+   process itself. A launch whose start identity could not be pinned, and whose
+   liveness cannot be established either, is **refused rather than signalled** —
+   the same fail-closed rule the reused-PID row states.
+3. **Liveness is decided by the wait, not by the process table.** The daemon is
+   still the launched worker's parent, so an exited child that nobody waits on
+   is a defunct entry that reads as ALIVE through a start-identity probe,
+   indefinitely. The probe on this path therefore reaps what it observes, which
+   is both what makes "gone" trustworthy and what discharges the reap
+   obligation. A refused stop signal is likewise classified by that evidence
+   rather than by errno: a group whose last member died between the probe and
+   the signal is zombie-only, which some platforms answer with a permission
+   error, and reporting that as a failed stop would state the opposite of the
+   truth about the host.
+
+This row's give-up is the same obligation
+`ADR-2026-09-02-outcome-unknown-launch-commit-resolution.md` §2 discharges one
+step later in the launch, reduced to the part that exists this early: see that
+ADR's *Addendum 2026-09-02* for how its `OnSpawnAborted` contract reads at this
+point. Nothing here changes the synchronized core contract above.
 
 ## Amended 2026-09-01 — selected v4 adds AttributedInput
 
