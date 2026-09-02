@@ -755,7 +755,9 @@ withhold external carrier authority until a compatible daemon/shim pair exists.
 
 When the controller socket closes and no newer controller adopts, the shim
 enters `orphaned` and starts its own monotonic deadline. The first implementation
-uses 90 seconds. The configurable contract is stricter than a number:
+used 90 seconds; see *Amended 2026-09-01* for why that value was replaced by a
+derived one and what the default is now. The configurable contract is stricter
+than a number:
 
 ```text
 orphan deadline + harness termination grace + maximum clock/propagation margin
@@ -2675,3 +2677,137 @@ Adoption is correspondingly simpler rather than harder: a replacement controller
 adopting a shim under D4 computes one root from the identity it already has,
 performs no filesystem walk to discover what the session held, and reads the
 root's declaration record — never a directory listing — for the repository set.
+
+## Amended 2026-09-01 — the orphan deadline is derived, and a batch commit can be re-converged
+
+One night on an installed host produced three failures that share a shape: a
+control-plane condition that was recoverable in principle became terminal in
+practice, because the contract gave the daemon no way to say what it had
+observed. Each amendment below closes one of those, and none of them touches the
+synchronized region above.
+
+### D8's deadline is derived from the inequality, not chosen alongside it
+
+The 90-second first implementation was a number picked to sit comfortably inside
+the inequality. It sat too far inside it. Ninety seconds is shorter than a daemon
+restart, shorter than a control-plane outage, and shorter than an operator
+noticing — so every transient loss of a controller also cost a live harness its
+work, twice in one minute on one host, with nothing wrong at either end.
+
+The inequality is unchanged and remains the whole normative contract. What
+changes is where the number inside it comes from:
+
+- **A composition that declares no external release threshold** has no upper
+  bound to violate. Its deadline is a policy choice, and the recommended default
+  is now **15 minutes** — long enough that a restart, an outage, or a human
+  resolves inside it, while a genuinely abandoned session is still reaped.
+- **A composition that declares a threshold** must derive its deadline from
+  that threshold rather than inherit a default sized for a standalone host:
+
+  ```text
+  deadline = threshold − termination grace − propagation margin − headroom
+  ```
+
+  with `headroom` at least one propagation margin, and the result capped by the
+  configured or default preference. Reserving one margin is not a new bound: the
+  margin is already the unit this policy uses to express the clock and
+  propagation slop the host cannot observe, so the derivation reuses it rather
+  than introducing a second number.
+
+- **A configuration for which no positive deadline satisfies the inequality is
+  still refused at startup**, exactly as before. Deriving a value must never be
+  a way to paper over a threshold that cannot be satisfied — that would hide the
+  double-execution window the bound exists to prevent.
+
+This makes a previously latent hazard explicit: handing a standalone-sized
+default to a composition that declared a threshold does not merely shorten a
+grace, it makes the host **refuse every session at startup**. The deadline
+therefore has to be resolved against the declared threshold at the same moment
+it is defaulted, not validated afterwards.
+
+### The adoption batch carries a digest, and its answers are typed
+
+D4 rule 12 commits one complete adoption batch per served scope. Two answers to
+that commit had no representation in the contract, and both were consequently
+handled as ordinary refusals — which is what turned each of them into a wedged
+or durable-off host.
+
+**The batch digest.** Every adoption batch carries a `batchDigest`: the SHA-256
+of the RFC 8785 canonicalization of a `session-shim-adoption-batch-v1` document
+that **omits its own digest member**, rendered as exactly 64 lowercase
+hexadecimal characters — the same encoding rule the control boundary already
+fixes for every other digest here. The document contains the batch's scope, its
+stable host authority, and the lifecycle-identifying fields of each adopted,
+quarantined, tombstoned, and cleared entry, with every epoch and generation
+carried as a canonical uint64 decimal **string**. It excludes the expected
+compare-and-swap revision, which is state rather than content, and every value
+that moves on its own — an entry's age, an observation timestamp — because the
+digest's purpose is to be identical across two presentations of the same set on
+either side of a lost answer. It is the batch's idempotency key.
+
+**Answer 1 — the expected revision already advanced.** A preparation or commit
+may report that the scope's expected compare-and-swap state has moved past the
+revision the daemon last committed. That answer must name the revision now held,
+the `batchDigest` of the batch committed to reach it, and the receipt issued for
+that batch. When the advance is **exactly one canonical successor** past the
+daemon's last-committed revision **and** the named digest is the digest of the
+batch the daemon is presenting, the advance *is* the outcome of that daemon's
+own commit, whose answer was lost; the daemon adopts the issued receipt and does
+not re-commit. Every other combination — a digest that names a different batch,
+an advance of more than one step, an incomplete receipt — is somebody else's
+commit, and the daemon re-presents its complete current projection at the
+advanced revision instead.
+
+A refusal raised *after* such an advance is recognised — an echoed receipt that
+fails validation, for instance — must remain classified as that advance. Losing
+the classification at the last step returns the daemon to serving a superseded
+revision, which is the failure the typed answer exists to prevent.
+
+**Answer 2 — the evidence is already recorded.** A commit may be refused because
+the receiver already holds durable adoption evidence for a named lineage; a
+planned restart provokes exactly this by re-presenting a still-live shim at a
+higher controller generation. That answer must **name the lineages**. A refusal
+that names none is indistinguishable from a whole-batch refusal and is handled
+as one.
+
+The daemon's response is per-lineage and never host-wide: it quarantines exactly
+the named lineages — presented in the batch's quarantined section, never omitted,
+still counted against capacity — and commits the batch again without them,
+repeating while each answer names another adopted lineage and bounded by the
+number of adopted entries, since every pass must remove at least one. A single
+lineage's bookkeeping collision may not cost a host its durable sessions. The
+quarantined lineage loses the adopting controller's socket, the same disposition
+every other refused per-lineage adoption gets; its shim keeps its harness and
+starts the D8 clock, which is why that clock's length is part of the same
+amendment.
+
+### Re-convergence is unbounded but counted
+
+A bounded reconciliation that gives up leaves the daemon serving a revision the
+receiver has superseded — permanently, since nothing remains to re-trigger it.
+There is no number of attempts after which that becomes correct. Reconciliation
+therefore **re-arms** whenever a pass ends on the advanced-revision answer
+specifically, paced by the same per-stage unit as every other bound here; a
+plain refusal keeps the existing bounded, exhausting behaviour unchanged.
+
+Because that loop is unbounded it must be observable: the re-arm count is
+carried on the daemon's diagnostic surface and escalates from warning to error
+after one publication pipeline's worth of passes. A host that is serving
+correctly but not converging is otherwise indistinguishable from a healthy one,
+which is how one stayed unnoticed for half an hour.
+
+### A persistence receipt that is late is not a dead connection
+
+The durable heartbeat's persistence receipt has a wait bound. That bound bounds
+one caller's wait; it is not a verdict on the connection. A receipt that has not
+arrived within it must leave the controller connection open, leave the durable
+cursor unadvanced — the receiver has not said it stored that sequence — and be
+retried under bounded backoff. A receipt that arrives after the wait is consumed
+as the answer to the heartbeat it answers, never as an unsolicited frame; a
+retry that re-sends the same correlation reclaims it, so its answer resolves the
+live call rather than being consumed as a late one. Only a genuine persistence
+*failure* drops the connection.
+
+Dropping on a slow write is what connected this to D8: two healthy sessions lost
+their controllers to a write that was merely late, and reaped their own harnesses
+when the 90-second clock expired.
