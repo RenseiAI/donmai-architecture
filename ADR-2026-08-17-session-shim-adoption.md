@@ -1065,6 +1065,7 @@ preserving the OSS boundary.
 | Carrier commits abandonment but the response or composing commit is lost | Exact request replay returns the first abandonment revision/digest and bytes. No successor is allocated until the composing authority durably records that result. |
 | Socket dies before proof reservation/admission | Apply the existing non-durable socket fence; no carrier state or receipt is fabricated. |
 | Admitted candidate dies in `preparing` before receipt storage | Its reservation, pending epoch, floor, incumbent fence, and existing high-water are durable. Commit the exact abandonment with null receipt evidence, clear active/pending without rebind, and reprepare through the predecessor above the floor. |
+| Composing authority durably holds ordinary terminal evidence for a lineage whose admitted candidate is still `preparing` or `receipt_stored` under the same controller | Commit the exact abandonment with cause `lineage_terminal`, preserving staged Gap/Snapshot/high-water exactly as any other cause. Never withhold, delay, or roll back the terminal acknowledgement already recorded while this commits, retries, or is lost (see *Amended 2026-09-02 — `lineage_terminal`: durable abandonment for a terminated lineage*). |
 | Proof is terminal, unavailable, corrupt, timed out, replay-changed, revision-regressed, or from another store authority | Refuse external carrier while conserving shim ownership/capacity. No zero/in-memory/prior-adoption fallback. |
 | New daemon adopts a released selected-v2 shim | Preserve ownership and the v2 snapshot proxy, report `durable_host_frame_unsupported`, charge capacity, and withhold external carrier credentials/activation. Never infer missing Marker/Resize bytes. |
 | Released daemon adopts a new v3 shim | Highest overlap selects v2. The shim emits no HostFrame and behaves byte-for-byte like released v2; external v3 durability is not claimed. |
@@ -1761,8 +1762,8 @@ before calling the carrier:
 schema_version = 1
 abandonment_request_id
 abandonment_request_digest
-reason = superseded_before_activation
-cause = controller_changed | preparing_reprepare | credential_lifetime_insufficient
+reason = superseded_before_activation | lineage_terminal
+cause = controller_changed | preparing_reprepare | credential_lifetime_insufficient | lineage_terminal
 expected_candidate_state = preparing | receipt_stored
 store_authority_id
 org_id, session_id, pty_epoch
@@ -1795,7 +1796,20 @@ keep or change controller. `controller_changed` requires source `receipt_stored`
 and distinct source/current controllers. `credential_lifetime_insufficient`
 requires source `receipt_stored` and server proof that the original credential's
 remaining validity is below the post-consume orphan/recovery minimum; it is the
-only same-controller receipt-stored abandonment. Every other combination
+first same-controller receipt-stored abandonment. `lineage_terminal` requires
+source `preparing` or `receipt_stored` — the only cause, besides
+`preparing_reprepare`, available from `preparing`, and the second
+same-controller cause — and requires distinct source/current controllers to be
+false: the caller's authenticated controller identity must equal the source
+controller, and a distinct-controller `lineage_terminal` request is an
+undefined combination that conflicts like any other. It further requires the
+composing authority to durably hold ordinary terminal evidence — an ordinary
+terminal receipt or a shim terminal tombstone, never a shim-absent attestation
+— for the exact `(org_id, session_id)` lifecycle identity named by the request,
+before the request is persisted; `reason` carries the same literal value,
+`lineage_terminal`, because no successor is implied. See *Amended 2026-09-02 —
+`lineage_terminal`: durable abandonment for a terminated lineage* below for the
+full contract. Every other combination
 conflicts. The caller cannot know or supply the carrier-private current state root. Under
 the same journal lock that commits abandonment, the carrier resolves the unique
 current admitted `preparing` or `receipt_stored` state matching every request binding, computes its
@@ -2104,6 +2118,7 @@ arbitrary cross-controller rebind.
 | Old same-jti candidate transport is still live during adopted recovery | Return retryable transport-live refusal; do not evict it with bearer replay. Retry only after it is absent/closed. |
 | Original credential lacks the recovery-validity margin before adoption consume | Keep proof/receipt unconsumed and durably abandon with cause `credential_lifetime_insufficient`, then allocate above the floor. |
 | Original credential is expired/lost/corrupt after adoption consume | Enter reconciliation. Never abandon the consumed evidence or mint equivalent claims. |
+| Composing authority durably holds ordinary terminal evidence (terminal receipt or shim terminal tombstone, never a shim-absent attestation) for the reservation's exact lifecycle identity, candidate still `preparing`/`receipt_stored`, same controller | Commit exact abandonment with cause `lineage_terminal`, preserving high-water/floor exactly as `credential_lifetime_insufficient`. The abandonment commit is isolated from the already-recorded terminal acknowledgement; a lost/corrupt/failed abandonment result never withholds, reopens, or reverses it. |
 | Same-controller, same-token active carrier resumes after ordinary frames advanced to L | Validate AckSeq L against current journal high-water and retained activated proof; do not require equality with original N/K. |
 | Changed controller or fresh JTI encounters active carrier A | Equal-active reconnect at A is forbidden. Use normal proof-v2 `active` disposition, allocate B above A and the all-time floor, and complete candidate -> receipt -> adoption -> batch/local -> activation. Same/lower A cannot rebind. |
 | Socket dies before reservation/in-lock admission | Apply the non-durable socket fence; create no carrier abandonment or receipt evidence. |
@@ -3077,3 +3092,106 @@ of a frame it cannot decode. The OSS implementation lands this proof as
 daemon's own real-in-process-shim equivalents in the `donmai` repository;
 platform-embedder proof (the relay stamping and passing `userId` through its
 own write path) is a separate, later change and is not claimed here.
+
+## Amended 2026-09-02 — `lineage_terminal`: durable abandonment for a terminated lineage
+
+A terminal-evidence consumer that already holds ordinary terminal evidence for
+a lineage — the same evidence core contract rule 10's *Amendment 2026-09-02 —
+terminal evidence prunes the quarantine projection* durably records to prune a
+quarantined lineage — can find that the lineage still has an admitted `preparing`
+or `receipt_stored` durable-carrier-proof reservation open against it. Nothing
+will ever reserve a successor for that reservation: the lineage is over, not
+superseded. The exact retained-candidate abandonment schema above has no cause
+for this. `preparing_reprepare` and `controller_changed` both exist to let a
+live successor reserve past the current candidate; `credential_lifetime_insufficient`
+exists to let the same controller reserve past a candidate whose credential is
+expiring. All three encode `reason=superseded_before_activation`, and a
+terminal-evidence consumer is not superseding anything — closing a same-controller
+reservation with no successor in view is, under the closed request grammar
+(§"Exact retained-candidate abandonment"), an undefined combination that
+conflicts, most concretely because `controller_changed` requires *distinct*
+source/current controllers and every other listed cause requires a live
+credential-refresh reason that a terminated lineage does not have.
+
+### Precedent, and why this is not that mechanism reused
+
+Core contract rule 10 already lets a composing authority resolve a lineage's
+disposition purely from durably-held evidence it already possesses, without a
+fresh mutating call from a live shim: a `cleared`-section entry converts a
+quarantined lineage's recovery obligation from active to abandoned on the
+strength of a shim-absent attestation alone, and the *terminal evidence prunes
+the quarantine projection* amendment separately lets ordinary terminal evidence
+(never a shim-absent attestation) remove a lineage from the published
+quarantine set in the same transaction that evidence lands. Both are precedent
+for a platform-synthesised disposition change driven by stored evidence rather
+than a live request. Neither is this operation. The quarantine mechanism
+mutates a *reported projection* (the host's published quarantine set); this
+cause mutates a *durable-carrier-proof reservation*, a different content-addressed
+object with its own idempotency, floor, and predecessor-lineage rules. And where
+the quarantine mechanism explicitly excludes shim-absent attestation from ever
+counting as evidence for anything but the reporting obligation, `lineage_terminal`
+requires the strict positive case: ordinary terminal evidence only.
+
+### Decision
+
+Add a fourth cause, `lineage_terminal`, to the closed `cause` enum in the
+"Exact retained-candidate abandonment" request schema, and a second member,
+also spelled `lineage_terminal`, to the closed `reason` enum (every other cause
+keeps `reason=superseded_before_activation` unchanged — the two enums collapse
+to the identical string here only because this cause is currently the sole
+member of its own reason, not because `reason` and `cause` are merged).
+
+- **Eligibility.** `lineage_terminal` is available for an admitted candidate in
+  `preparing` or `receipt_stored` — the same pair of states the schema already
+  splits by the two null/non-null Snapshot-receipt fields, so no new field is
+  needed to carry which state applies.
+- **Controller.** `lineage_terminal` is same-controller only: the request's
+  current controller must equal the source controller. This is required, not a
+  conflict — the inverse of `controller_changed`, which requires the two to
+  differ. A distinct-controller `lineage_terminal` request is undefined and
+  conflicts like any other combination the schema does not list; if the
+  controller has genuinely changed and a successor is actually wanted,
+  `controller_changed` is the applicable cause, not this one.
+- **Terminal-evidence gate.** Before persisting the frozen request, the
+  composing authority MUST durably hold ordinary terminal evidence — an
+  ordinary terminal receipt or a shim terminal tombstone, never a shim-absent
+  attestation, which proves only unobservability (core contract rule 10) — for
+  the exact `(org_id, session_id)` lifecycle identity the request names. No
+  terminal evidence, no `lineage_terminal` request; a caller without it uses one
+  of the three existing causes, or none, exactly as before this amendment.
+- **Composing authority.** This ADR names no single caller. Two compositions
+  are both exact instances of the existing generic "control-authenticated
+  caller": the platform's own terminal-evidence consumption path, acting the
+  moment it durably records terminal evidence for a lineage it already knows
+  holds an open reservation; and a reaper sweep that iterates durable-carrier-proof
+  reservations whose named session is terminal and finds terminal evidence
+  already on file. Neither is privileged over the other, and a third composition
+  meeting the same gate is equally valid.
+- **Request/result bytes.** Unchanged from every other cause. The frozen
+  schema-v1 request, its RFC 8785 canonical digest, the carrier-resolved source
+  state, and the frozen result are exactly the content-addressed bytes the
+  general abandonment machinery already defines; `lineage_terminal` adds no
+  field, no alternate encoding, and no synthesized substitute for any of them.
+  The v1 cutover-manifest gate (a source reservation at
+  `admitted_proof_schema_version="1"` must match one live untombstoned
+  cutover-manifest entry) applies unchanged. Exact id/body replay after either
+  process crashes returns the frozen first result; the same id with changed
+  bytes, a different id for the same candidate, changed source/proof/
+  reservation/receipt/epoch/high-water evidence, activation or adoption racing
+  the request, or result-digest mismatch is a typed conflict with no state
+  mutation — identical to the rule that already governs `controller_changed`,
+  `preparing_reprepare`, and `credential_lifetime_insufficient`.
+- **Isolation from the terminal acknowledgement.** Abandoning the reservation is
+  cleanup, never a precondition, of the terminal fact that authorized it. A
+  carrier fault, timeout, lost response, or corrupt result while committing
+  `lineage_terminal` follows the existing "Abandonment result is missing or
+  corrupt after possible commit" rule — external v2 stays unavailable in
+  reconciliation, never reconstructed or cleared — and MUST NOT withhold,
+  delay, retry-block, or roll back the already-durable terminal acknowledgement.
+  A carrier that cannot close the reservation still leaves the lineage
+  correctly terminal; the reservation is retried later or left for
+  reconciliation, exactly like any other lost abandonment result.
+
+Nothing here changes the synchronized core contract above; rule 10's
+*Amendment 2026-09-02 — terminal evidence prunes the quarantine projection* is
+cited, not amended, by this section.
