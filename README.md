@@ -241,6 +241,7 @@ renaming an ADR.
 | [`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md) | Proposed | shared | Session recovery taxonomy and lifecycle state vocabulary |
 | [`ADR-2026-09-02-outcome-unknown-launch-commit-resolution.md`](ADR-2026-09-02-outcome-unknown-launch-commit-resolution.md) | Accepted | shared | Resolving an outcome-unknown launch adoption-batch commit |
 | [`ADR-2026-09-02-session-shim-recovery-extensions.md`](ADR-2026-09-02-session-shim-recovery-extensions.md) | Accepted | shared | Session-shim recovery extensions |
+| [`ADR-2026-09-03-carrier-epoch-floor-survives-retirement.md`](ADR-2026-09-03-carrier-epoch-floor-survives-retirement.md) | Accepted | shared | Carrier-epoch floor survives stream retirement |
 | [`ADR-2026-09-03-readoption-exhaustion-withdraws.md`](ADR-2026-09-03-readoption-exhaustion-withdraws.md) | Accepted | shared | An exhausted readoption window withdraws the lineage unconditionally |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->

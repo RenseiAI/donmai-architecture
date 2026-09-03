@@ -495,6 +495,33 @@ control plane must implement consistently.
     only from one fsync-backed store-authority-bound immutable manifest frozen
     after v1 writers close; append-only tombstones make the set shrink-only across
     restart and rollback, and unlisted or changed rows reconcile rather than open.
+
+    **Amendment 2026-09-03 — carrier-epoch floor survives stream retirement
+    (rule 14).** A journal bounded by a memory budget retires per-stream state
+    under pressure, which deletes the retired stream's live reservation,
+    disposition, and in-memory floor together. Retirement MUST NOT delete the
+    fact that a carrier-epoch floor was reserved: before a stream is dropped,
+    the journal persists write-once retirement evidence naming the retired
+    stream and its last carrier-epoch floor (schema 3; existing schema-2
+    retirement evidence names only the stream and retirement cause, no floor),
+    and derives a durable per-lineage floor watermark from that evidence — at
+    retirement time, and again by replaying every retained retirement record
+    before v2 readiness on restart, exactly as every other durable proof state
+    is replayed. A successor reservation for a retired lineage is admitted
+    under proof-request schema v2 when the caller's
+    `expected_carrier_epoch_floor` equals that watermark, as if the stream's
+    live state had never been dropped; the journal never re-issues an epoch at
+    or below a retired floor. A schema-2 retirement record decodes with an
+    unknown floor, treated as zero with a warning, never as corruption — it
+    predates this amendment and names a stream whose true floor the journal
+    can no longer prove, not one that never had a floor. Refusing to retire a
+    stream that still holds a durable, admitted reservation is out of
+    contract: the memory bound applies uniformly regardless of reservation
+    state. A reservation returned by `Reserve` but never reaching in-lock
+    admission installs no pending candidate; retiring it needs no abandonment
+    call, before or after retirement, exactly as the existing non-durable-fence
+    rule already provides for a socket that dies before admission. See
+    `ADR-2026-09-03-carrier-epoch-floor-survives-retirement.md`.
 <!-- BOUNDARY-SYNC-END: adr-2026-08-17-session-shim-core-contract -->
 
 ### D1 — Process ownership moves to a per-session shim
@@ -1861,6 +1888,14 @@ durable receipt, but after in-lock admission its reservation, pending epoch,
 floor, incumbent fence, and existing high-water are durable; it uses the same
 content-addressed abandonment with null receipt fields before reprepare. Only a
 socket that dies before proof reservation/admission uses the non-durable fence.
+A reservation `Reserve` returns is not itself a candidate: admission is what
+installs one. A reservation that never reaches in-lock admission is not an
+abandonment candidate and needs no relay operation — the composing authority
+closes its own row through that same non-durable fence, and a successor
+reservation for the lineage proceeds directly. See *Amendment 2026-09-03 —
+carrier-epoch floor survives stream retirement* above; this holds identically
+whether the unadmitted reservation's stream is still live or has since been
+retired.
 Terminal, unavailable, corrupt, timeout, stale
 store, revision rollback, or conflicting active/pending state refuses before
 `Welcome`.
