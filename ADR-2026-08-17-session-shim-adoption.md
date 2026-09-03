@@ -284,7 +284,15 @@ control plane must implement consistently.
    presents it as adopted at the retained revision (complete-snapshot rule);
    if the batch does not commit the previous controller is restored; only
    when every attempt fails is the lineage quarantined `socket_unreachable`
-   as before.
+   as before. A shim whose controller socket is connected but whose durable
+   acknowledgement from the control plane is outstanding is ambiguous, not
+   lost: the daemon holds the event-backlog stall open, bounded by a durable-
+   acknowledgement ambiguity bound equal to this rule's lineage-live
+   re-adoption window (default 10 min), degrading on exhaustion through the
+   distinct reason `durable_ack_timeout` — re-adopting before withdrawing,
+   never quarantining directly as `socket_unreachable`, which stays reserved
+   for a socket that actually failed or a control plane that explicitly
+   refused — see `ADR-2026-09-03-durable-ack-ambiguity-bound.md`.
 
    **Amendment 2026-09-03 — re-adoption window bounded by observed liveness
    (rule 8).** Supersedes the window bound of the 2026-09-02 amendment. The
