@@ -130,6 +130,21 @@ reaper integration live in the platform mirror)
 > records why this match uses three lineage fields where operator repair uses
 > four.
 
+> **Readiness-degradation amendment 2026-09-03.** Rule 11 made the heartbeat
+> conditional on a live readiness resolution, and every seam that consulted
+> readiness read an error from the resolver as a refusal. A readiness
+> dependency that was unreachable for an extended window therefore took every
+> host in a fleet out of the heartbeat stream at once, and a composer with no
+> beats has to treat live sessions as lost: the blast radius of one unavailable
+> dependency was every running session. The amendment inside the synchronized
+> region under rule 11 is normative. Readiness is a tri-state; a resolver
+> failure is `unknown` and withdraws nothing at any seam; a definite
+> `not-ready` withdraws as before while the host keeps beating `draining` at
+> zero capacity; an `unknown` past a configurable ten-minute bound becomes
+> withdrawn `stale`; readiness resolves once per heartbeat cadence and is
+> cached for every other consumer; and a healthy beat's bytes are unchanged, so
+> only a degraded beat carries the new readiness fields.
+
 > **Snapshot transmissibility amendment 2026-09-02.** D5 forbids truncation and
 > decode-and-reencode, and says a ring hit replays the exact frames. Neither
 > clause anticipated a frame the local wire cannot carry at all. A Snapshot is
@@ -347,7 +362,68 @@ control plane must implement consistently.
     credential may be installed or cached. Missing, changed, or stale cached
     evidence is a refusal. Auth-only registration/refresh may run in
     `recovering` before adoption; heartbeat, capacity publication, poll, claim,
-    and `Ready` remain stopped.
+    and `Ready` remain stopped until adoption completes. After that the
+    heartbeat is governed by the 2026-09-03 amendment below and is no longer
+    conditional on a live readiness resolution.
+
+    **Amendment 2026-09-03 — readiness degrades to unknown; the heartbeat is
+    independent (rule 11).** The clause above governs the pre-adoption startup
+    order and is unchanged. This amendment governs the steady state after
+    adoption completes, where the released rule made the heartbeat conditional
+    on a live readiness resolution and every seam that consulted readiness read
+    an error from the resolver as a refusal — so a readiness dependency that
+    was unreachable for an extended window took every host in a fleet out of
+    the heartbeat stream at once, and a composer with no beats has to treat
+    live sessions as lost.
+
+    Readiness is a tri-state: `ready`, `not-ready`, and `unknown`. Every
+    non-ready state carries a reason and an observed-at timestamp, where
+    observed-at is the time the CURRENT non-ready state was first observed and
+    therefore, for a continuing `unknown`, the onset of the degradation rather
+    than the time of the latest retry.
+
+    A resolver error or timeout yields `unknown` and MUST NOT withdraw a
+    previously established readiness at ANY seam — heartbeat, poll/claim, work
+    admission, credential refresh, adoption preparation, carrier activation, or
+    composition declaration. A definite `not-ready` — the resolver answered and
+    the answer is incomplete — withdraws exactly as before, closing every
+    new-work rail, and MUST take effect within one heartbeat interval of that
+    answer: the resolution cadence throttles how often the resolver is
+    consulted and MUST NOT mask a definite `not-ready` beyond that bound. An
+    `unknown` that persists past a configurable staleness bound — ten minutes
+    by default, exposed in the daemon's own configuration — becomes withdrawn
+    with reason `stale`, so an outage that never ends cannot leave a host
+    serving on an unanswerable readiness forever.
+
+    The heartbeat MUST be sent on its normal schedule whatever readiness says.
+    It is a liveness signal, and a host that stops beating is a host the
+    composer has to treat as lost. A host whose readiness is withdrawn keeps
+    beating, advertising `draining` status and zero capacity: every new-work
+    rail stays closed, and a beat that claims no capacity is not one of them.
+    Only a beat that published an established readiness can be the acknowledged
+    recovery beat that reopens admission.
+
+    Readiness is resolved once per cadence per host — the heartbeat's own
+    cadence, thirty seconds by default — and that answer is cached for every
+    other consumer, so the resolver is not consulted once per session, per poll
+    tick, per admission and per credential refresh. A failed resolution
+    SHORTENS the cadence rather than lengthening it, retrying on a backoff from
+    five seconds to a thirty-second cap, so recovery is never held back. A seam
+    that installs new credential authority resolves live, because a cached
+    answer predates the authority being installed.
+
+    The cache MUST NOT change the wire representation of a healthy beat. A beat
+    whose readiness is established carries NO readiness fields at all, so its
+    bytes are unchanged and a consumer that has not been updated keeps working;
+    only an `unknown` or `not-ready` beat carries `readinessState`,
+    `readinessReason`, and `readinessObservedAt`. Those beats omit the five
+    readiness facts entirely rather than publishing them as false — false facts
+    read to an unaware consumer as exactly the hard refusal this amendment
+    exists to stop reporting. Heartbeat responses continue to echo the complete
+    projection exactly, which makes the consumer's support for the three fields
+    a PRECONDITION for deploying any daemon that can emit them: a degraded beat
+    that is not echoed fails the echo check and the liveness this amendment
+    promises is not delivered. Deploy the consumer first, the daemon second.
 12. **Activation and durable output:** a v2 carrier takeover advances only
     `preparing -> receipt-stored -> adoption-committed ->
     batch-committed/local-published -> active`. Before `active`, the relay may
