@@ -145,6 +145,22 @@ reaper integration live in the platform mirror)
 > frame would otherwise be untransmittable. Every other frame type, and every
 > other layer, keeps D5's byte-for-byte rule unchanged.
 
+> **Amendment 2026-09-03 — readiness degrades to unknown; heartbeat is
+> independent.** The daemon heartbeat is a liveness signal and MUST remain
+> independent from the session-shim readiness resolver. A timeout, network
+> failure, or upstream server error is reported as `readinessState: "unknown"`
+> with a bounded `readinessReason` and `readinessObservedAt`; the heartbeat is
+> still sent on schedule. A definite `not-ready` answer keeps the existing
+> withdrawal and admission-pause rules. A transient failure MUST NOT withdraw
+> established readiness by itself. After a configurable staleness bound — ten
+> minutes by default — unknown MUST become `not-ready` with reason `stale`.
+> Readiness resolution runs on its own cadence with capped retry backoff (30 s
+> cap; 30 s healthy cadence and 5 s initial failure retry). The healthy wire
+> shape remains source-compatible: ready projections leave the new readiness
+> fields empty, while unknown and not-ready projections carry the state,
+> bounded reason, and observed-at timestamp and omit the five fact booleans.
+> Heartbeat responses continue to echo the complete projection exactly.
+
 ## Context
 
 An interactive session is currently only as durable as the daemon process that
@@ -302,6 +318,14 @@ control plane must implement consistently.
     lineage, and a live lineage named in no section is still refused; the
     heartbeat projection contract is unchanged — a lineage is cleared only
     through the batch, never through a heartbeat.
+
+    **Amendment 2026-09-03 — readiness degrades to unknown; heartbeat is
+    independent (rule 11).** A readiness resolver failure caused by a timeout,
+    network error, or upstream server error is a transient `unknown`
+    projection, not a heartbeat failure. The daemon keeps posting its normal
+    heartbeat with bounded reason and observed-at metadata, and MUST withdraw
+    only for a definite `not-ready` answer or an expired ten-minute default
+    staleness bound (`reason: "stale"`).
 
     **Amendment 2026-09-02 — terminal evidence prunes the quarantine
     projection (rules 7 and 10).** When the composing control plane durably
