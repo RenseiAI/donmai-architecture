@@ -306,10 +306,13 @@ control plane must implement consistently.
    terminal observation, and retains a tombstone within one orphan deadline
    of exhaustion — see `ADR-2026-09-03-readoption-exhaustion-withdraws.md`. A
    lineage MAY re-enter a window only before its previous window exhausts;
-   once exhausted it is withdrawn and reaped, never re-entered. The
-   complete-snapshot rule (rules 8 and 10) applies throughout; the mode is
-   chosen by the composing deployment and the zero-value policy is
-   fixed-attempt mode.
+   once exhausted it is withdrawn and reaped, never re-entered. A controller
+   lost again within one window of the lineage's last automatic re-adoption
+   is quarantined `socket_unreachable` rather than re-entering a second
+   lineage-live window; an operator-initiated rebind does not consume this
+   re-entry budget. The complete-snapshot rule (rules 8 and 10) applies
+   throughout; the mode is chosen by the composing deployment and the
+   zero-value policy is fixed-attempt mode.
 9. **Fence before restart:** a planned daemon restart deterministically
    partitions every adopted and quarantined shim correlation by authority
    scope, obtains a durable byte-exact acknowledgement for every partition, and
