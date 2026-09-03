@@ -297,11 +297,17 @@ control plane must implement consistently.
    window the daemon MUST extend the shim's orphan clock with a periodic
    keepalive so the shim does not reap a lineage the daemon still observes; a
    shim that becomes unobservable falls back to the resolved orphan deadline
-   immediately. Window exhaustion with a live shim yields the configured
-   post-window outcome (default: quarantine `socket_unreachable`, carrying a
-   reason that distinguishes it from the dead-shim outcome). A lineage MAY
-   re-enter a window only after the previous window's deadline has passed.
-   The complete-snapshot rule (rules 8 and 10) applies throughout; the mode is
+   immediately. Window exhaustion with a live shim fires
+   `OnReadoptionWindowExhausted` and then withdraws the lineage
+   unconditionally: no configured post-window outcome exists. The daemon
+   stops extending the shim's orphan-clock keepalive at exhaustion, so the
+   shim's own bounded orphan deadline (this rule's opening clause) runs out
+   on schedule and the shim reaps its own harness process group, persists the
+   terminal observation, and retains a tombstone within one orphan deadline
+   of exhaustion — see `ADR-2026-09-03-readoption-exhaustion-withdraws.md`. A
+   lineage MAY re-enter a window only before its previous window exhausts;
+   once exhausted it is withdrawn and reaped, never re-entered. The
+   complete-snapshot rule (rules 8 and 10) applies throughout; the mode is
    chosen by the composing deployment and the zero-value policy is
    fixed-attempt mode.
 9. **Fence before restart:** a planned daemon restart deterministically
