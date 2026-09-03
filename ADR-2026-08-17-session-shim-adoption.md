@@ -141,9 +141,12 @@ reaper integration live in the platform mirror)
 > failure is `unknown` and withdraws nothing at any seam; a definite
 > `not-ready` withdraws as before while the host keeps beating `draining` at
 > zero capacity; an `unknown` past a configurable ten-minute bound becomes
-> withdrawn `stale`; readiness resolves once per heartbeat cadence and is
-> cached for every other consumer; and a healthy beat's bytes are unchanged, so
-> only a degraded beat carries the new readiness fields.
+> withdrawn `stale`; readiness resolves once per cadence and is cached for
+> every other consumer; and a healthy beat's bytes are unchanged, so only a
+> degraded beat carries the new readiness fields. Two answers still fail closed:
+> a daemon with no readiness resolver configured at all, which is a composition
+> fault rather than a readiness state, and an `unknown` on a host that has never
+> established a readiness to keep serving on.
 
 > **Snapshot transmissibility amendment 2026-09-02.** D5 forbids truncation and
 > decode-and-reencode, and says a ring hit replays the exact frames. Neither
@@ -385,32 +388,47 @@ control plane must implement consistently.
     A resolver error or timeout yields `unknown` and MUST NOT withdraw a
     previously established readiness at ANY seam — heartbeat, poll/claim, work
     admission, credential refresh, adoption preparation, carrier activation, or
-    composition declaration. A definite `not-ready` — the resolver answered and
-    the answer is incomplete — withdraws exactly as before, closing every
+    composition declaration. A host that has never established readiness is not
+    covered by that rule: until one resolution has produced a definite answer,
+    an `unknown` fails closed at every new-work seam — daemon start and
+    composition declaration included — because a host that has proved nothing
+    has no readiness to keep serving on. Only a degradation FROM an established
+    readiness is ridden out. A definite `not-ready` — the resolver answered
+    and the answer is incomplete — withdraws exactly as before, closing every
     new-work rail, and MUST take effect within one heartbeat interval of that
     answer: the resolution cadence throttles how often the resolver is
     consulted and MUST NOT mask a definite `not-ready` beyond that bound. An
     `unknown` that persists past a configurable staleness bound — ten minutes
     by default, exposed in the daemon's own configuration — becomes withdrawn
     with reason `stale`, so an outage that never ends cannot leave a host
-    serving on an unanswerable readiness forever.
+    serving on an unanswerable readiness forever. That bound measures from an
+    established readiness and applies only after one: a host that never
+    established a readiness is already refusing new work, and withdrawing a
+    readiness that was never granted would assert something untrue.
 
     The heartbeat MUST be sent on its normal schedule whatever readiness says.
     It is a liveness signal, and a host that stops beating is a host the
-    composer has to treat as lost. A host whose readiness is withdrawn keeps
-    beating, advertising `draining` status and zero capacity: every new-work
-    rail stays closed, and a beat that claims no capacity is not one of them.
+    composer has to treat as lost. That obligation covers the readiness answers
+    — `ready`, `unknown`, `not-ready`, and the derived `stale` — and not the
+    fourth thing a resolution can report: a daemon with NO readiness resolver
+    configured is a composition fault rather than a readiness state. It is
+    never degraded to `unknown`, it produces no projection, and it fails closed
+    — the beat is refused, and that refusal is a deployment error to be
+    repaired, not an outage to be ridden out. A host whose readiness is
+    withdrawn keeps beating, advertising `draining` status and zero capacity:
+    every new-work rail stays closed, and a beat that claims no capacity is not
+    one of them.
     Only a beat that published an established readiness can be the acknowledged
     recovery beat that reopens admission.
 
-    Readiness is resolved once per cadence per host — the heartbeat's own
-    cadence, thirty seconds by default — and that answer is cached for every
-    other consumer, so the resolver is not consulted once per session, per poll
-    tick, per admission and per credential refresh. A failed resolution
-    SHORTENS the cadence rather than lengthening it, retrying on a backoff from
-    five seconds to a thirty-second cap, so recovery is never held back. A seam
-    that installs new credential authority resolves live, because a cached
-    answer predates the authority being installed.
+    Readiness is resolved once per cadence per host — the shorter of the
+    negotiated heartbeat interval and thirty seconds — and that answer is
+    cached for every other consumer, so the resolver is not consulted once per
+    session, per poll tick, per admission and per credential refresh. A failed
+    resolution SHORTENS the cadence rather than lengthening it, retrying on a
+    backoff from five seconds to a thirty-second cap, so recovery is never held
+    back. A seam that installs new credential authority resolves live, because
+    a cached answer predates the authority being installed.
 
     The cache MUST NOT change the wire representation of a healthy beat. A beat
     whose readiness is established carries NO readiness fields at all, so its
