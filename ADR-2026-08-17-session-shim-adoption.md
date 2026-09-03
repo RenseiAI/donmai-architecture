@@ -267,6 +267,25 @@ control plane must implement consistently.
    if the batch does not commit the previous controller is restored; only
    when every attempt fails is the lineage quarantined `socket_unreachable`
    as before.
+
+   **Amendment 2026-09-03 — re-adoption window bounded by observed liveness
+   (rule 8).** Supersedes the window bound of the 2026-09-02 amendment. The
+   re-adoption policy has two modes. Fixed-attempt mode is the 2026-09-02
+   behaviour: bounded attempts with a default worst case of 60 s, strictly
+   inside the resolved orphan deadline. Lineage-live mode: while the daemon
+   observes the shim process alive and still holds the lineage, re-adoption
+   retries with exponential backoff capped at 30 s for a configurable window
+   (default 10 min) that MAY exceed the resolved orphan deadline. During the
+   window the daemon MUST extend the shim's orphan clock with a periodic
+   keepalive so the shim does not reap a lineage the daemon still observes; a
+   shim that becomes unobservable falls back to the resolved orphan deadline
+   immediately. Window exhaustion with a live shim yields the configured
+   post-window outcome (default: quarantine `socket_unreachable`, carrying a
+   reason that distinguishes it from the dead-shim outcome). A lineage MAY
+   re-enter a window only after the previous window's deadline has passed.
+   The complete-snapshot rule (rules 8 and 10) applies throughout; the mode is
+   chosen by the composing deployment and the zero-value policy is
+   fixed-attempt mode.
 9. **Fence before restart:** a planned daemon restart deterministically
    partitions every adopted and quarantined shim correlation by authority
    scope, obtains a durable byte-exact acknowledgement for every partition, and
