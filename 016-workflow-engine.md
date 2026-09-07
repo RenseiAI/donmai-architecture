@@ -1,14 +1,14 @@
 # 016 — Workflow Engine
 
-**Status:** Reference (initial draft)
-**Last updated:** 2026-04-27
+**Status:** Reference (accepted grammar; implementation status is runtime-specific)
+**Last updated:** 2026-09-07
 **Related:** `001-layered-execution-model.md`, `015-plugin-spec.md`, `013-orchestrator-and-governor.md`, ADR-2026-04-27.
 
 ## Why this exists
 
-The platform shipped a workflow engine inspired by [WeaveMindAI/weft](https://github.com/WeaveMindAI/weft) (Accepted 2026-04-17). Workflows are graphs of typed nodes that compose plugin verbs into runnable processes — the SDLC dispatch, custom QA pipelines, eventual scheduled flows. The engine is the runtime substrate the orchestrator embeds; the corpus needs to specify it formally because every Plugin's verbs are invoked through it.
+The workflow engine is inspired by [WeaveMindAI/weft](https://github.com/WeaveMindAI/weft) (Accepted 2026-04-17). Workflows are graphs of typed nodes that compose plugin verbs into runnable processes — the SDLC dispatch, custom QA pipelines, and scheduled flows. The engine is the runtime substrate an orchestrator embeds; the corpus specifies it formally because every Plugin's verbs are invoked through it.
 
-The engine is **versioned grammar** (`apiVersion: workflow/v1`), **typed nodes**, **durable execution**, **compile-time validation**. It inherits from WEFT's "if it compiles, it runs" property and adds domain-specific patterns (BFSI approval gates, multi-tracker scoping, agent dispatch as a first-class action class).
+The engine is **versioned grammar** (`apiVersion: workflow/v1` and `apiVersion: workflow/v2`), **typed nodes**, **durable execution**, and **compile-time validation**. It inherits from WEFT's "if it compiles, it runs" property and adds domain-specific patterns (BFSI approval gates, multi-tracker scoping, agent dispatch as a first-class action class). This document defines the shared grammar and its semantics. Runtime support and release status are established by each implementation's own source and release evidence; a platform deployment does not by itself establish OSS executable support.
 
 ### What we adopted from WEFT
 
@@ -218,7 +218,7 @@ Workflow Definitions go through a compile pass before deploy. The engine validat
 3. **Schema validation** — templated inputs (Handlebars `${...}` against the trigger payload + step outputs) match the verb's input schema.
 4. **Branch enums** — for switch conditions, declared `cases` are members of the verb's output enum.
 5. **Topology** — DAG (no cycles), every step reachable from at least one trigger, terminal steps don't claim non-existent next-step ids.
-6. **Type compatibility (W1)** — when inter-node output piping is implemented (see Open Questions), upstream output types must satisfy downstream input types.
+6. **Inter-node output piping and type compatibility (W1)** — in `workflow/v2`, references to upstream node outputs are resolved against the graph. Unknown node references are errors; when an output schema is declared, an unknown field is a diagnostic and declared source/consumer types must be compatible. Untyped outputs remain permissive.
 7. **Scope** — provider scope (`002`) admits the workflow's tenant/project; plugins with insufficient scope reject installation.
 8. **Provider-enabled gating** — every verb's owning provider (the prefix segment of the verb id, e.g., `linear` in `linear.agent_session.acknowledge`) must be registered AND enabled in the workflow's bound tenant/project. A workflow that references `linear.*` verbs against a GitHub-Issues-bound subscription fails to publish. This is the compile-time enforcement of `ADR-2026-05-10-native-rich-providers.md`.
 
@@ -230,7 +230,7 @@ Failed compilation produces structured errors with line numbers (when YAML) or n
 
 Sessions and workflows run for minutes to days. Crashes happen. Re-orchestration must not double-effect.
 
-The engine persists **every step output** to the platform's database (`stepExecutions` table, memoized by `(workflowRunId, stepId, attempt)`). On orchestrator restart, the engine resumes by replaying memoized outputs and re-invoking only steps not yet complete.
+The engine persists **every step output** to its durable execution store (`stepExecutions` table, memoized by `(workflowRunId, stepId, attempt)`). The store and transport are implementation-specific. On orchestrator restart, the engine resumes by replaying memoized outputs and re-invoking only steps not yet complete.
 
 For gate nodes specifically:
 
@@ -351,9 +351,9 @@ When reviewing a PR, ADR, or workflow template, ask:
 
 The corollaries above are the test, not the principle itself; new corollaries can be added when an unanticipated coupling pattern shows up. See `ADR-2026-05-03-locus-of-workflow-definition.md` for the full decision record and the wave-7 + legacy-SDLC inventory that motivated it.
 
-## Templating and the inter-node output piping gap
+## Templating and inter-node output piping
 
-The current `apiVersion: workflow/v1` supports Handlebars-style templating against the trigger payload only (`{{ trigger.data.* }}`):
+`apiVersion: workflow/v1` supports Handlebars-style templating against the trigger payload (`{{ trigger.data.* }}`):
 
 ```yaml
 config:
@@ -361,16 +361,14 @@ config:
   promptContext: "{{ trigger.data.body }}"
 ```
 
-What's **missing** today: references to the output of upstream steps in the graph. A WEFT-style typed port between intermediate nodes — `{{ steps.detect.output.workType }}` — does not yet work.
+`apiVersion: workflow/v2` adds typed references to upstream node outputs. The canonical form is `{{ nodes.<id>.output.<field> }}`:
 
-The user has confirmed this is a **gap to close**, not an intentional restriction. The fix is part of a future `apiVersion: workflow/v2` migration:
+- Each node may declare an `outputSchema` describing its fields and types.
+- Downstream nodes reference upstream outputs with `{{ nodes.<id>.output.<field> }}`.
+- The engine validates references and declared type compatibility at compile time (W1).
+- `{{ trigger.* }}` is shorthand for a trigger output and remains valid for runtime-typed trigger payloads.
 
-- Each step's output schema declares its shape.
-- Downstream steps reference upstream outputs via `{{ steps.<id>.output.<field> }}`.
-- The engine validates type compatibility at compile time (W1).
-- The current trigger-only model continues to work as a special case (`{{ trigger.* }}` is shorthand for `{{ steps.<trigger-id>.output.* }}`).
-
-Tracked as a `009` net-new issue: *"Inter-node output piping for workflow/v2"*. Priority is high — without it, every step has to encode all needed state in its config from the trigger payload, which makes complex pipelines write-only.
+The accepted canonical choice and migration guidance are recorded in `ADR-2026-04-28-workflow-piping-uses-nodes.md`. The v1 form `{{ trigger.data.* }}` continues to work unchanged; it is not silently reinterpreted as an implementation-specific v1.1 carrier. Platform-specific validator and deployment details belong in the platform extension; this grammar section does not claim an OSS release from platform evidence.
 
 ## Versioning
 
@@ -378,7 +376,7 @@ Three layers of versioning compose:
 
 ### 1. Engine `apiVersion`
 
-`workflow/v1` is the current workflow grammar — groups, switch conditions, signal gates, durable execution. (Note: an earlier draft of this spec briefly used `workflow/v2` because the model was Weft-imported; with low adoption and no actual v0 in production, the version space resets to `v1`.) `workflow/v2` is the next bump and adds inter-node output piping (per Open Question above).
+`workflow/v1` remains the grammar named by this OSS corpus and its accepted ADRs. `workflow/v2` is the accepted grammar that adds inter-node output piping, declared output schemas, and the corresponding reference/type validation. An implementation may expose an additional versioned carrier such as `v1.1`; that carrier is implementation-specific and is not silently substituted for the corpus's `workflow/v1`. The `apiVersion` identifies the document grammar; implementation release status is tracked by the implementation that consumes it.
 
 Engine version bump policy: patch (input-compatible), minor (additive), major (breaking; requires verb-version pinning and deprecation window). Major bumps run multiple `apiVersion` workflows simultaneously during a deprecation window — when the field is exercised at scale.
 
@@ -400,7 +398,7 @@ Detail in `013-orchestrator-and-governor.md`. Worth knowing here: the engine emi
 
 | Concern | OSS | SaaS |
 |---|---|---|
-| Workflow grammar (`apiVersion: workflow/v1`) | ✅ owns | consumes |
+| Workflow grammar (`apiVersion: workflow/v1` and `workflow/v2`) | ✅ owns and ships the shared contract | consumes/extends |
 | YAML parser + AST | ✅ owns | consumes |
 | Compile-time validation | ✅ ships | inherits |
 | Durable execution runtime | ✅ ships (sqlite + in-process) | ✅ ships (Postgres + Redis pubsub) |
@@ -410,11 +408,11 @@ Detail in `013-orchestrator-and-governor.md`. Worth knowing here: the engine emi
 | Cross-tenant workflow templates | ❌ | ✅ owns |
 | Migration tooling for apiVersion bumps | ✅ ships | inherits |
 
-OSS users get a working workflow engine, can author YAML by hand, run it locally. SaaS adds the visual designer, the marketplace, and multi-tenant administration.
+The OSS corpus owns the shared contract and ships a usable local validation and runtime path that can operate without a SaaS control plane. A hosted implementation may add a visual designer, marketplace, and multi-tenant administration; those additions do not change the shared grammar. The responsibility rows above are normative; platform deployment evidence alone does not establish that a particular OSS release includes a given implementation revision.
 
 ## Open questions
 
-1. **Inter-node output piping (workflow/v2).** Confirmed as a gap to close. Concrete grammar and migration path land as an ADR when implementation starts.
+1. **Inter-node output piping (workflow/v2).** Resolved. The canonical form is `{{ nodes.<id>.output.<field> }}`, with `{{ trigger.* }}` shorthand; `{{ trigger.data.* }}` remains the v1 form. See `ADR-2026-04-28-workflow-piping-uses-nodes.md`.
 2. **Group versioning.** Groups can ship as separate files (`./groups/research.yaml`). Should groups be versionable independently of their parent workflow? Default: yes — a group is a Workflow Definition with declared interface ports; pin like a plugin.
 3. **Workflow as kit contribution.** Should kits (`005`) be allowed to contribute workflow templates? Default: yes — a Spring kit might ship a "Spring-typical QA pipeline" template. Plugins (`015`) can also; kits are a sibling.
 4. **Compile-time vs install-time validation cost.** Compile is fast on small workflows; on large workflows with many groups + cross-plugin dependencies, validation cost grows. Mitigation: incremental compile (only re-validate changed steps + their type-frontier).
