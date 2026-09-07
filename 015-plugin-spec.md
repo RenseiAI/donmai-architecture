@@ -258,6 +258,9 @@ everything the frontend needs that the verb declaration does not already carry.
 ```ts
 interface NodeSurface {
   category: string                     // palette grouping
+  codex?: {
+    subcategories?: string[]           // ordered semantic-group candidates
+  }
   displayName: string
   providerId: string                   // the provider this node binds to
   ports: PortSpec                      // inputs/outputs surfaced on the canvas
@@ -271,6 +274,20 @@ interface NodeSurface {
                                        // before the node can run
 }
 ```
+
+`codex.subcategories` carries ordered semantic-group candidates for a visible
+node. The host resolves the first entry that appears in its canonical semantic
+group order; later entries are fallbacks. A node with no matching entry is
+unresolvable and falls into the `other` presentation bucket only for diagnostic
+or compatibility views. Publish validation rejects a manifest node whose
+declared candidates do not resolve to a canonical group. Verbs without a
+`node` block are headless and are not subject to this node-surface check.
+
+The standard delivered-node taxonomy reserves `integrations` as the dedicated
+top-level group for plugin-delivered nodes. A vendor-specific subgroup may be
+the next candidate, for example `['integrations', 'example-vendor']`; the
+top-level match remains the stable palette contract while subgroup names stay
+publisher-defined.
 
 **Two validation rules attach to this block**, checked at install alongside
 namespace and reserved-prefix enforcement:
