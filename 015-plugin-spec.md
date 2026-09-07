@@ -276,18 +276,20 @@ interface NodeSurface {
 ```
 
 `codex.subcategories` carries ordered semantic-group candidates for a visible
-node. The host resolves the first entry that appears in its canonical semantic
-group order; later entries are fallbacks. A node with no matching entry is
-unresolvable and falls into the `other` presentation bucket only for diagnostic
-or compatibility views. Publish validation rejects a manifest node whose
-declared candidates do not resolve to a canonical group. Verbs without a
-`node` block are headless and are not subject to this node-surface check.
+node. The host iterates the declared list in order and selects the first entry
+that is a member of its canonical semantic-group set; it does not reorder the
+declared list by canonical-group priority. Later entries are fallback
+candidates. A node with no matching entry is unresolvable and falls into the
+`other` presentation bucket only for diagnostic or compatibility views. Publish
+validation rejects a manifest node whose declared candidates do not resolve to
+a canonical group. Verbs without a `node` block are headless and are not
+subject to this node-surface check.
 
 The standard delivered-node taxonomy reserves `integrations` as the dedicated
 top-level group for plugin-delivered nodes. A vendor-specific subgroup may be
 the next candidate, for example `['integrations', 'example-vendor']`; the
-top-level match remains the stable palette contract while subgroup names stay
-publisher-defined.
+top-level match is the stable palette result, while the subgroup is preserved
+as metadata/hint and its name stays publisher-defined.
 
 **Two validation rules attach to this block**, checked at install alongside
 namespace and reserved-prefix enforcement:
