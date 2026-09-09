@@ -355,6 +355,16 @@ application failure is an adaptation denial, not permission to select a new
 cell behind the receipt. Runtime and cleanup outcomes are append-only records
 linked to the initial adaptation receipt.
 
+**Amendment 2026-09-09:** for explicitly negotiated
+`execution-runtime-binding/v2`,
+[controller-registered host preflight](ADR-2026-09-09-controller-registered-host-preflight.md)
+adds an authenticated admission-owner acknowledgement of the actual fsynced
+receipt before credential hooks/spawn. It binds the exact request, worker,
+placement, claim, operational digest and public correlation challenge through
+the trusted configured registrar. It creates no new SessionRef or authority,
+and changes no v1 behavior. Codec support is distinct from runtime readiness;
+implementation and activation remain pending.
+
 ### D6 — One SessionRef for every session mode
 
 `SessionRef` is the common lifecycle handle for autonomous,

@@ -431,6 +431,17 @@ the admitted harness, model, endpoint, auth binding, placement, session mode,
 capability grants, or fallback result. A required adaptation failure requires a
 new dispatch/admission attempt if a different cell is desired.
 
+**Amendment 2026-09-09:**
+[controller-registered host preflight](ADR-2026-09-09-controller-registered-host-preflight.md)
+adds an order constraint for negotiated `execution-runtime-binding/v2` only:
+after the actual host receipt is validated/fsynced and before credential hooks
+or spawn, register its exact bytes and receive the admission owner's committed,
+authenticated acknowledgement. The host selects the registrar from trusted
+configuration, never caller work-item URLs; a challenge only correlates the
+context. Missing/refused/ambiguous acknowledgement permits no materialization
+or spawn. V1 plan/receipt vocabulary and ordering remain unchanged. This
+accepted amendment is not evidence of v2 implementation or runtime readiness.
+
 ### D6 — Interactive, replay, and approval adapters
 
 Headless and interactive execution are modes of the same admitted harness, but

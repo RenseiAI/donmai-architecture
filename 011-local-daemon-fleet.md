@@ -17,6 +17,24 @@ The motivating user pain (called out during architectural review):
 
 The architectural answer is the daemon model from `004`. This doc makes it real for users.
 
+## Controller-registered preflight (accepted architecture; implementation pending)
+
+Per [controller-registered host preflight](ADR-2026-09-09-controller-registered-host-preflight.md),
+an explicitly negotiated `execution-runtime-binding/v2` requires the daemon to
+compile/validate and fsync its actual host-adaptation receipt, then register the
+exact bytes through its trusted configured registrar before credential hooks
+or spawn. The registrar is never chosen by a work-item URL, and the response
+is authenticated through the existing trusted channel. A matching public
+challenge is correlation, not authentication or a grant.
+
+Both advertised v2 codec support and independently proven runtime readiness
+are necessary. Missing, refused or ambiguous acknowledgement leaves zero
+credential/spawn effects and a protected admission; exact retry uses the
+existing stored receipt and live claim, not a new session or recompiled plan.
+Already-started readback is not start permission. V1 remains unchanged; old
+hosts refuse unknown versions before materialization. The OSS implementation
+must ship a usable local registrar, not require a hosted controller.
+
 ## The user model
 
 > "I have a Mac. I want to install Donmai once, configure it once, and have any project's work execute on this Mac as long as the project is allowed and credentials are wired up. I never want to think about the worker fleet again."
