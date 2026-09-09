@@ -272,6 +272,16 @@ pre-spawn entry, and persist an initial `AppliedAdaptationReceipt`. Only a
 cannot trigger implicit cell fallback; selecting a different cell requires a
 new dispatch intent and admission receipt.
 
+For negotiated `execution-runtime-binding/v2`, a ready local receipt also
+requires the admission owner's committed acknowledgement under
+[controller-registered host preflight](ADR-2026-09-09-controller-registered-host-preflight.md)
+before credential hooks or spawn. The host uses its trusted configured
+registrar and authenticates the response on that channel; caller URLs and
+correlation challenges convey no authority. Capability negotiation does not
+prove runtime readiness. Missing or ambiguous acknowledgement preserves the
+existing admission/claim for exact replay, without a new session or inferred
+termination. V1 order is unchanged; v2 implementation/activation remain pending.
+
 The adaptation plan covers independently owned base/role/user prompt layers,
 hooks, MCP, native tool definitions, permission grammar, skills, services,
 credential-reference binding, environment, config/config-home, endpoint

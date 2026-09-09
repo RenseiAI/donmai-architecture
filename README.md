@@ -247,4 +247,4 @@ renaming an ADR.
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
 
-- [Controller-registered host preflight](ADR-2026-09-09-controller-registered-host-preflight.md) — **Proposed**: closed runtime-binding v2, actual host receipt registration and acknowledgement before credentials/spawn; v1 unchanged.
+- [Controller-registered host preflight](ADR-2026-09-09-controller-registered-host-preflight.md) — **Accepted architecture; implementation pending**: closed runtime-binding v2, trusted registrar and authenticated acknowledgement of the actual host receipt before credentials/spawn; v1 unchanged.

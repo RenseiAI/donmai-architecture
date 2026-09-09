@@ -601,6 +601,15 @@ compiling a `HarnessAdaptationPlan` and persisting an
 `AppliedAdaptationReceipt` per
 `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`.
 
+For negotiated `execution-runtime-binding/v2`, the accepted
+[controller-registration contract](ADR-2026-09-09-controller-registered-host-preflight.md)
+also requires the actual fsynced host receipt to receive an authenticated,
+binding-matched admission-owner acknowledgement before credential hooks or
+spawn. Registrar selection comes from trusted local/controller configuration,
+never a work-item URL. Codec support and actual runtime readiness are separate
+requirements; neither replaces the receipt or acknowledgement. V1 behavior
+and the adaptation vocabulary below are unchanged; v2 implementation is pending.
+
 The harness/version adaptation manifest declares support and evidence for these
 independent channels:
 

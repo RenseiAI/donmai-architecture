@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-09-09
 boundary: shared
 split: sibling-extensions
@@ -11,7 +11,7 @@ split: sibling-extensions
 
 A host can compile and durably record a valid adaptation plan without its controller having recorded that fact. A controller requiring durable registration must not substitute a declaration, a capability advertisement, or an arbitrary non-null receipt reference for the actual host receipt.
 
-The existing `host-adaptation/v1` producer is `runner.ProviderView.PreflightExecution`. It compiles the actual `PreparedHarness`, whose plan is digest-only, validates it, and returns ready/denied evidence. The daemon validates the request/worker/placement/claim binding and fsyncs the receipt before credentials or child spawn. This ADR proposes an additional, explicitly negotiated controller acknowledgement for callers that require it. It changes no v1 behavior and grants no implementation or activation authority while Proposed.
+The existing `host-adaptation/v1` producer is `runner.ProviderView.PreflightExecution`. It compiles the actual `PreparedHarness`, whose plan is digest-only, validates it, and returns ready/denied evidence. The daemon validates the request/worker/placement/claim binding and fsyncs the receipt before credentials or child spawn. This ADR accepts an additional, explicitly negotiated controller acknowledgement for callers that require it. It changes no v1 behavior. Architecture acceptance does not claim implementation or authorize a release, host rollout, or activation.
 
 ## D1 — Closed runtime-binding version
 
@@ -50,6 +50,8 @@ Preserve `host-adaptation/v1`. After compiling/validating and fsyncing the actua
 }
 ```
 
+The host selects its registrar exclusively from trusted local/controller configuration using the existing authenticated authority channel. A caller's work item, queued payload, workarea, or callback URL cannot choose or redirect the registrar. Authenticate the response through that same trusted channel before treating any response fields as an acknowledgement; matching a challenge or digest is not response authentication. The challenge remains public correlation only. This adds no bearer token or second authority.
+
 The receiver authenticates the execution context through its existing authority, resolves the live admission/claim, and compares every binding field and challenge. A challenge alone never authenticates the sender. It strictly decodes the actual HostAdaptationReceipt, PreparedHarness, PromptDeliveryReceipt and ToolLifecycleReceipt and verifies all nested identity, decision and digest relations. The operational digest must match the actual admitted/forwarded execution payload. A ready outer receipt cannot hide denied or mismatched inner evidence.
 
 Retain the original receipt bytes: `planDigest` hashes the original serialized plan. Parsing and reserializing through an unordered object store is not byte preservation. The plan contains digests/declared channel metadata, not prompt, environment, credential or config values. Reject unsupported fields rather than placing arbitrary submitted JSON in evidence.
@@ -82,13 +84,13 @@ V1 callers retain their existing local preflight order. V2 must be selected from
 
 ## Verification and adoption
 
-Before implementation acceptance, prove: old-version refusal before compiler/credential/spawn effects; malformed/duplicate/unknown fields; raw plan byte preservation; wrong worker/placement/claim/challenge/digest; denied inner receipt; forged authorized response; receiver rollback; lost ACK and exact replay; changed receipt retry; already-started/terminal refusal; local store persistence failure; and two contenders producing at most one start. Removing registration from the v2 path must produce RED with observed credential/spawn effects, then restored GREEN. Capability negotiation tests and real runtime-readiness tests are distinct.
+Before implementation acceptance, prove: old-version refusal before compiler/credential/spawn effects; malformed/duplicate/unknown fields; raw plan byte preservation; wrong worker/placement/claim/challenge/digest; denied inner receipt; caller-selected registrar refusal; forged or unauthenticated authorized response; receiver rollback; lost ACK and exact replay; changed receipt retry; already-started/terminal refusal; local store persistence failure; and two contenders producing at most one start. Removing registration from the v2 path must produce RED with observed credential/spawn effects, then restored GREEN. Capability negotiation tests and real runtime-readiness tests are distinct.
 
 Source baseline: donmai v0.72.26 (commit `f33d4524b4b10c794b63a1630b2d71a10a10175f`; annotated tag object `9b236cd9ed57189b4c308b72659a7500752f89bc`), `executioncell/runtime_binding.go`, `daemon/daemon.go`, `daemon/execution_preflight_store.go`, `runner/provider_view.go`, `agent/prepared_harness.go`. Architecture acceptance, implementation, release/internal-build qualification and activation remain separate.
 
-## Reference updates at acceptance
+## Reference amendments
 
-The accepting change must update the relevant preflight/adaptation sections of `002-provider-base-contract.md`, `011-local-daemon-fleet.md`, `ADR-2026-08-05-versioned-execution-cell-and-session-reference.md` and `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`. This Proposed change adds no normative v2 behavior to those Accepted references yet. The hosted storage/permission/root-admission counterpart lives in the private extension corpus.
+The accepting commit updates the preflight/adaptation sections of `002-provider-base-contract.md`, `011-local-daemon-fleet.md`, `013-orchestrator-and-governor.md`, `ADR-2026-08-05-versioned-execution-cell-and-session-reference.md` and `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`. These references require the additional acknowledgement only for negotiated v2; v1 stays unchanged. The hosted storage/permission/root-admission counterpart lives in the private extension corpus. Implementation and activation remain pending.
 
 ### Observed legacy refusal
 
