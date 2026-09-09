@@ -246,3 +246,5 @@ renaming an ADR.
 | [`ADR-2026-09-03-readoption-exhaustion-withdraws.md`](ADR-2026-09-03-readoption-exhaustion-withdraws.md) | Accepted | shared | An exhausted readoption window withdraws the lineage unconditionally |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
+
+- [Controller-registered host preflight](ADR-2026-09-09-controller-registered-host-preflight.md) — **Proposed**: closed runtime-binding v2, actual host receipt registration and acknowledgement before credentials/spawn; v1 unchanged.
