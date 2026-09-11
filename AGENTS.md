@@ -172,3 +172,7 @@ a blanket `.guard-allowlist` entry suppressing every rule in one.
 ## Status
 
 **Wave 10 Phase 3 migration complete.** OSS-only and shared-with-OSS-substance docs have migrated from `rensei-architecture` here in a series of per-doc commits. Cross-reference rewrites (Phase 4) come next; expect some markdown cross-links to currently point at bare filename references that Phase 4 promotes to absolute `donmai-architecture` URLs or platform-extensions sibling URLs as appropriate.
+
+## Proposed complete retired-source lifecycle
+
+Read [ADR-2026-09-11-retired-source-complete-lifecycle.md](ADR-2026-09-11-retired-source-complete-lifecycle.md) when designing retired-root disposal/retry or profile negotiation. It is Proposed and grants no implementation/release authority. The hosted schema/control delta is in the companion private corpus.

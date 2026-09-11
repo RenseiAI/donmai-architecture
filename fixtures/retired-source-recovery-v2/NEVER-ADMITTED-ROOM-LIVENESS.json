@@ -1,0 +1,56 @@
+{
+  "status": "PROPOSED_CONTROL_NOT_OBSERVED",
+  "scope": "real loopback carrier API, actual room lifecycle and file journal; fake clock only replaces time, never authority",
+  "fixture": {
+    "originState": "applied_nonretired_unadmitted_root",
+    "roomCreated": true,
+    "viewerPresent": true,
+    "durableCandidateAdmitted": false,
+    "finiteConfiguredReapAndRetirementWindows": true,
+    "reapAndReclaimLoopsRunning": true
+  },
+  "sequence": [
+    "Create actual origin retirement then real root CAS; create a room without successful candidate admission.",
+    "Attempt the same stale candidate through actual admission/control entry point repeatedly with exact immutable request/credential. Every attempt must refuse before binding a transport or admitting a durable candidate.",
+    "Verify failed attempts do not advance host-unbound/idle clocks, create pending journal admission, or replace/recreate a room after it is reaped. Viewer reconnect cannot make this held source perpetually new.",
+    "Drive actual normal room reaper after its admitted hostless bound. Reaping is transport state only; no adoption/terminal release or old-correlation resolution follows.",
+    "Keep stale failures running across the room reaper and journal retirement ticks. Denied attempts may not replace ended-room authority before the source retirement resolves. A newly eligible real admission may instead win and switch to A; it must block B retirement.",
+    "Run the normal journal reclaimer with its existing eligibility, current room guard and exact high-water. Require actual Retire success plus the new canonical retirement record and protected projection witness.",
+    "Only after successful current no-stream CAS against that NEW witness may a new root be returned. Preserve all original request/result bytes and correlation ancestry."
+  ],
+  "expected": {
+    "staleFailuresNeverRenewLiveness": true,
+    "repeatedRoomRecreationPrevented": true,
+    "actualRetireObserved": true,
+    "timerOrInspectionAloneCreatesAuthority": false,
+    "oneNewCASRoot": true,
+    "oldCorrelationsResolvedWithoutEvidence": false
+  },
+  "negativeControls": [
+    {
+      "id": "failed_dial_resets_room_clock",
+      "remove": "refused-dial/no-liveness-renewal predicate",
+      "expect": "liveness test RED: ordinary reaper cannot reach actual Retire within its configured healthy-service bound"
+    },
+    {
+      "id": "failed_dial_recreates_reaped_room",
+      "remove": "held-source stale room-recreation guard",
+      "expect": "liveness test RED across room reaper and journal reclaimer ticks"
+    },
+    {
+      "id": "timer_substitutes_for_retirement",
+      "remove": "require actual current Retire witness before CAS",
+      "expect": "authority test RED before any retirement mutation"
+    },
+    {
+      "id": "accepted_admission_ignored",
+      "remove": "pending/admitted candidate prevents retirement",
+      "expect": "actual admission/Retire XOR test RED"
+    },
+    {
+      "id": "room_reap_resolves_lineage",
+      "remove": "transport room event is not terminal release evidence",
+      "expect": "correlation/terminal-obligation conservation test RED"
+    }
+  ]
+}

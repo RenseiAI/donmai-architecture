@@ -431,3 +431,7 @@ Every claimed coverage item follows Agent Operating Protocol V16: disable the
 named production seam, observe the discriminating fixture RED for the intended
 reason, restore it, and observe GREEN. A copied encoder, hand-authored frame, or
 argument-discarding fake is not evidence.
+
+## Related complete-lifecycle proposal
+
+The [complete retired-source lifecycle proposal](../ADR-2026-09-11-retired-source-complete-lifecycle.md) covers proposed proof4/Snapshot3 negotiation and full root ancestry for existing proof3/ordinary2 consumers. It also requires complete client selection before a first v1 retired root. This cross-reference does not change the current selectors or synchronized rules.

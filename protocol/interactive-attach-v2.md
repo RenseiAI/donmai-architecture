@@ -1447,3 +1447,7 @@ Per Agent Operating Protocol V16, a green suite alone proves none of these.
 Each named production seam is removed/disabled independently, the intended
 fixture is observed RED for the intended reason, and the restored exact code is
 observed GREEN.
+
+## Related complete-lifecycle proposal
+
+The [complete retired-source lifecycle proposal](../ADR-2026-09-11-retired-source-complete-lifecycle.md) covers proposed proof4/Snapshot3 negotiation and full root ancestry for existing proof3/ordinary2 consumers. It also requires complete client selection before a first v1 retired root. This cross-reference does not change the current selectors or synchronized rules.

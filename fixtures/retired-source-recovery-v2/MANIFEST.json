@@ -1,0 +1,17 @@
+{
+  "status": "PROPOSED_NOT_RATIFIED",
+  "profile": "retired_source_recovery_v2",
+  "counts": {
+    "positiveWireScenarios": 9,
+    "negativeWireScenarios": 71,
+    "firstRootRefusals": 12,
+    "roomLivenessLiteralControls": 5
+  },
+  "files": {
+    "PROPOSED-WIRE-VECTORS.json": "3929f13999650cf443edc6d0dddb9bdab58ae867638fd4f7f96add88e8551a32",
+    "PROPOSED-NEGATIVE-VECTORS.json": "f855058913476f97eee9f8d31b375e5866e11de92e2921fb9ae323287b112b72",
+    "PROPOSED-CONTROL-VECTORS.json": "3f54452375cc71046fe7e506a05c4a337806396d4f50886803ef51d141847916",
+    "FIRST-ROOT-NEGOTIATION-VECTORS.json": "2a808425cb69e9b5e24c7fef095851ecf6a332fdbc481bf8952e5b3bced45b84",
+    "NEVER-ADMITTED-ROOM-LIVENESS.json": "dd7f4d9960d53f2ac5da5c39502416ed7f72dec16e7e556a2ac4c70fd455af02"
+  }
+}

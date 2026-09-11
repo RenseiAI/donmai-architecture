@@ -1,0 +1,293 @@
+{
+  "status": "PROPOSED_NOT_RATIFIED",
+  "capability": {
+    "status": 200,
+    "body": {
+      "schemaVersion": 2,
+      "profile": "retired_source_recovery_v2",
+      "ready": true,
+      "storeAuthorityId": "relay-retired-fixture",
+      "requestSchemaVersion": 2,
+      "receiptSchemaVersion": 2,
+      "proofSchemaVersion": 4,
+      "snapshotReceiptSchemaVersion": 3
+    }
+  },
+  "inspect": {
+    "request": {
+      "schemaVersion": 1,
+      "storeAuthorityId": "relay-retired-fixture",
+      "orgId": "org_retired_fixture",
+      "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "ptyEpoch": "1"
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1",
+        "state": "retired",
+        "retirementRecord": {
+          "schemaVersion": "3",
+          "orgId": "org_retired_fixture",
+          "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "ptyEpoch": "1",
+          "highWater": "416",
+          "terminalSequence": "0",
+          "reason": "carrier_idle",
+          "idleSinceUnixNano": "6000000000",
+          "retiredAtUnixNano": "7000000000",
+          "carrierEpochFloor": "3",
+          "stateDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+          "evidenceDigest": "d5336a67fc6ff30c6b7238596b36c466f1217365c6e08b0d441cc1d171e2b7ae"
+        }
+      }
+    }
+  },
+  "reconcileResponse": {
+    "status": 200,
+    "body": {
+      "receipt": {
+        "schemaVersion": 2,
+        "state": "retired_source_reserved",
+        "reconciliationRequestId": "00000014-1111-4111-8111-111111111111",
+        "reconciliationRequestDigest": "8111bfb3c00bb6a3f15693f006b897aa205ad6e35b09d7cb9c589528d5eb88a5",
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1",
+        "retirementEvidenceDigest": "d5336a67fc6ff30c6b7238596b36c466f1217365c6e08b0d441cc1d171e2b7ae",
+        "retiredCarrierEpochFloor": "3",
+        "retiredHighWater": "416",
+        "source": {
+          "kind": "reservation_only",
+          "reservationRequestId": "44444444-4444-4444-8444-444444444444",
+          "reservationRequestDigest": "092db13d5c4e1f8f101c75371f2ff78a1430c9945b935654dbfb8d3f853c2e55",
+          "reservedCarrierEpoch": "3",
+          "originProfile": "retired_source_recovery_v1",
+          "originReconciliationRequestId": "33333333-3333-4333-8333-333333333333",
+          "originReconciliationReceiptDigest": "c7fd768fe9fad481c17360e9606f821b6ebfc4dc3c15e759292ab53e0e00fe6c",
+          "originProofDigest": "cabaa72aa3f34277db27f52ed05a13da7561bd34bcbb18c6299208eacfbbe8cc"
+        },
+        "sourceAdmissionOutcome": "unknown",
+        "successorReservationRequestId": "00000015-1111-4111-8111-111111111111",
+        "successorReservationRequestDigest": "b984a07c3938491927feb68d761d837a5149e8230493de585d0d496ea09ebd82",
+        "reservedCandidateCarrierEpoch": "4",
+        "reconciliationRevision": "2",
+        "receiptDigest": "0ea633944f5da48397d69bc92990bfa7fc503e894e974a6f1bb2a19fd51ff762"
+      },
+      "proof": {
+        "schemaVersion": 4,
+        "disposition": "retired",
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1",
+        "proofRevision": "1",
+        "reservationRequestId": "00000015-1111-4111-8111-111111111111",
+        "reservationRequestDigest": "b984a07c3938491927feb68d761d837a5149e8230493de585d0d496ea09ebd82",
+        "localResumeFrom": "417",
+        "lastHostSeq": "416",
+        "activeCarrierEpoch": "0",
+        "pendingCarrierEpoch": "0",
+        "reservedCandidateCarrierEpoch": "4",
+        "carrierEpochFloor": "4",
+        "predecessorAbandonment": null,
+        "highWater": "416",
+        "boundary": "416",
+        "retirementAnchor": {
+          "reconciliationRequestId": "00000014-1111-4111-8111-111111111111",
+          "retirementEvidenceDigest": "d5336a67fc6ff30c6b7238596b36c466f1217365c6e08b0d441cc1d171e2b7ae",
+          "retiredCarrierEpochFloor": "3",
+          "retiredHighWater": "416",
+          "reconciliationReceiptDigest": "0ea633944f5da48397d69bc92990bfa7fc503e894e974a6f1bb2a19fd51ff762"
+        },
+        "proofDigest": "a457373c0df8045d581fe8bee2682c8c2214b36bfdb71d88b652117933c8369c"
+      }
+    }
+  },
+  "positiveRefusals": [
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_v2_conflict",
+        "rule": "request_invalid"
+      },
+      "meaning": "this attempt refused before NEW mutation only"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_v2_conflict",
+        "rule": "store_mismatch"
+      },
+      "meaning": "this attempt refused before NEW mutation only"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_v2_conflict",
+        "rule": "retirement_missing"
+      },
+      "meaning": "this attempt refused before NEW mutation only"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_v2_conflict",
+        "rule": "retirement_mismatch"
+      },
+      "meaning": "this attempt refused before NEW mutation only"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_v2_conflict",
+        "rule": "stream_live"
+      },
+      "meaning": "this attempt refused before NEW mutation only"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_v2_conflict",
+        "rule": "replay_mismatch"
+      },
+      "meaning": "this attempt refused before NEW mutation only"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_v2_conflict",
+        "rule": "successor_conflict"
+      },
+      "meaning": "this attempt refused before NEW mutation only"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_v2_conflict",
+        "rule": "origin_mismatch"
+      },
+      "meaning": "this attempt refused before NEW mutation only"
+    }
+  ],
+  "heldCases": [
+    {
+      "cause": "unsupported_profile",
+      "status": 503,
+      "body": {
+        "code": "retired_source_v2_unavailable"
+      }
+    },
+    {
+      "cause": "missing_consumer",
+      "status": 503,
+      "body": {
+        "code": "retired_source_v2_unavailable"
+      }
+    },
+    {
+      "cause": "origin_missing",
+      "status": 503,
+      "body": {
+        "code": "retired_source_v2_unavailable"
+      }
+    },
+    {
+      "cause": "origin_incomplete_result",
+      "status": 503,
+      "body": {
+        "code": "retired_source_v2_unavailable"
+      }
+    },
+    {
+      "cause": "origin_corrupt_canonical_result",
+      "status": 503,
+      "body": {
+        "code": "retired_source_v2_unavailable"
+      }
+    },
+    {
+      "cause": "origin_retirement_witness_missing",
+      "status": 503,
+      "body": {
+        "code": "retired_source_v2_unavailable"
+      }
+    },
+    {
+      "cause": "ledger_corrupt",
+      "status": 503,
+      "body": {
+        "code": "retired_source_v2_unavailable"
+      }
+    },
+    {
+      "cause": "quota",
+      "status": 503,
+      "body": {
+        "code": "retired_source_v2_unavailable"
+      }
+    },
+    {
+      "cause": "post_durable_failure",
+      "status": 503,
+      "body": {
+        "code": "retired_source_v2_unavailable"
+      }
+    }
+  ],
+  "negativeRefusals": [
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_v2_conflict",
+        "rule": "future_rule"
+      },
+      "expected": "ambiguous"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_conflict",
+        "rule": "origin_mismatch"
+      },
+      "expected": "ambiguous"
+    },
+    {
+      "status": 503,
+      "body": {
+        "code": "retired_source_v2_conflict",
+        "rule": "stream_live"
+      },
+      "expected": "ambiguous"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_v2_conflict",
+        "rule": "request_invalid",
+        "extra": true
+      },
+      "expected": "ambiguous"
+    },
+    {
+      "status": 409,
+      "rawBody": "{\"code\":\"retired_source_v2_conflict\",\"rule\":\"stream_live\",\"rule\":\"stream_live\"}",
+      "expected": "ambiguous"
+    },
+    {
+      "status": 409,
+      "rawBody": "{}{}",
+      "expected": "ambiguous"
+    }
+  ],
+  "limits": {
+    "requestAndResponseMaxBytes": 32768,
+    "snapshotReceiptMaxBytes": 4096,
+    "bodyRules": "Declared and actual sizes checked independently before parsing; legal-whitespace over-limit controls required; duplicate keys/trailing JSON/unknown keys/version selectors refuse."
+  }
+}

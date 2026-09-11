@@ -183,3 +183,7 @@ fences to retry. Each either invents authority or loses a race boundary.
 This amends the session-shim adoption ADR (2026-08-17), the carrier-floor
 retirement ADR (2026-09-03), the attach-v2 protocol and local-daemon reference.
 It does not accept the broader Proposed stateful-link recovery ADR.
+
+## Related proposal — not current authority
+
+[ADR-2026-09-11-retired-source-complete-lifecycle.md](ADR-2026-09-11-retired-source-complete-lifecycle.md) proposes complete admitted disposal, reservation-only retry and initial full-client negotiation. Its status is Proposed; the accepted v1 contract and frozen v1 bytes remain unchanged until paired ratification.

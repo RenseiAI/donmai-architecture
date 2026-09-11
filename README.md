@@ -251,3 +251,5 @@ renaming an ADR.
 
 - **[ADR-2026-09-11-retired-carrier-source-reconciliation.md](ADR-2026-09-11-retired-carrier-source-reconciliation.md)** — Accepted architecture; explicit retired-history proof3, current-no-stream CAS and one successor without invented historical outcomes. Implementation/release/consumer acceptance gated. Shared profile; hosted policy is a companion extension.
 - **[protocol/retired-carrier-proof-v3.md](protocol/retired-carrier-proof-v3.md)** — closed versioned request, receipt, proof and signed-claim semantics with frozen codec fixtures.
+
+- **[ADR-2026-09-11-retired-source-complete-lifecycle.md](ADR-2026-09-11-retired-source-complete-lifecycle.md)** — Proposed shared complete disposal/retry, initial client bundle, full token/Snapshot ancestry and actual retirement progress; no implementation authority.
