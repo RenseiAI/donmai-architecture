@@ -30,3 +30,11 @@ acceptance. Source suites must execute the named production boundaries and
 record literal predicate-removal RED and restored GREEN controls. Current
 store authority, recreated-stream races, journal crash/replay, actual shim
 acceptance and full adoption remain separate integration requirements.
+
+`INSPECTION-VECTORS.json` freezes the closed read-only inspection envelope,
+six positive cases and twelve refusal transformations. SHA256:
+`c035b6c1f7ee547dafd0efbb2d29239c5f3e4a3942cd12c6f6d537b0cc3aa9c4`. Original happy and negative fixtures remain unchanged.
+
+`REFUSAL-VECTORS.json` fixes the seven-rule no-new-mutation409 enum and
+ambiguous outcomes. SHA256 `0f18c41ea520b7fa32001e943773aed53a1ad579b87227b54eeae3b5fbba35f1`. It grants no
+cleanup/remint authority and says nothing about earlier operations.

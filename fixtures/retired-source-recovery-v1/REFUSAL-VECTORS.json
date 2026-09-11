@@ -1,0 +1,108 @@
+{
+  "profile": "retired_source_refusal_v1",
+  "meaning": "Only this attempt refused before new mutation. No statement about an earlier same-ID operation or original abandonment. Every outcome preserves immutable operation/source/epoch; none permits remint, retirement or cleanup.",
+  "positive": [
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_conflict",
+        "rule": "request_invalid"
+      },
+      "expected": "refused"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_conflict",
+        "rule": "store_mismatch"
+      },
+      "expected": "refused"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_conflict",
+        "rule": "retirement_missing"
+      },
+      "expected": "refused"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_conflict",
+        "rule": "retirement_mismatch"
+      },
+      "expected": "refused"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_conflict",
+        "rule": "stream_live"
+      },
+      "expected": "refused"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_conflict",
+        "rule": "replay_mismatch"
+      },
+      "expected": "refused"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_conflict",
+        "rule": "successor_conflict"
+      },
+      "expected": "refused"
+    }
+  ],
+  "negative": [
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_conflict",
+        "rule": "future_rule"
+      },
+      "expected": "ambiguous"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "other_conflict",
+        "rule": "request_invalid"
+      },
+      "expected": "ambiguous"
+    },
+    {
+      "status": 409,
+      "body": {
+        "code": "retired_source_conflict",
+        "rule": "request_invalid",
+        "extra": true
+      },
+      "expected": "ambiguous"
+    },
+    {
+      "status": 503,
+      "body": {
+        "code": "retired_source_conflict",
+        "rule": "request_invalid"
+      },
+      "expected": "ambiguous"
+    },
+    {
+      "status": 409,
+      "rawBody": "{\"code\":\"retired_source_conflict\",\"rule\":\"stream_live\",\"rule\":\"stream_live\"}",
+      "expected": "ambiguous"
+    },
+    {
+      "status": 409,
+      "rawBody": "{}{}",
+      "expected": "ambiguous"
+    }
+  ],
+  "serverMapping": "Unsupported profile, quota, corrupt/incomplete ledger or a failure after durable CAS use 503/held, never this 409. The server must classify before any new mutation. Unknown rules and malformed 409 remain ambiguous."
+}
