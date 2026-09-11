@@ -905,3 +905,7 @@ donmai session restore-workarea <session-id> --to ~/debug/sess-XYZ
 4. **Daemon-to-daemon delegation.** Two daemons on the same LAN: should one delegate work to the other when overloaded? Or always go through the orchestrator? Default: through the orchestrator (preserves audit chain, scope resolution, cost attribution). Direct delegation is a P3 optimization.
 
 These are intentional gaps for ADRs after operational experience.
+
+## Retired carrier recovery profile
+
+The [retired-source reconciliation ADR](ADR-2026-09-11-retired-carrier-source-reconciliation.md) permits one independently fenced current-authority reconciliation and higher successor while retaining a retired prefix anchor. It never treats a missing stream as non-admission, lowers a live shim resume floor or manufactures terminal proof. Hosted retry grants belong to the companion extension; actual old/current daemon and shim compatibility must precede use.

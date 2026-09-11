@@ -248,3 +248,6 @@ renaming an ADR.
 <!-- ADR-INDEX:END -->
 
 - [Controller-registered host preflight](ADR-2026-09-09-controller-registered-host-preflight.md) — **Accepted architecture; implementation pending**: closed runtime-binding v2, trusted registrar and authenticated acknowledgement of the actual host receipt before credentials/spawn; v1 unchanged.
+
+- **[ADR-2026-09-11-retired-carrier-source-reconciliation.md](ADR-2026-09-11-retired-carrier-source-reconciliation.md)** — Accepted architecture; explicit retired-history proof3, current-no-stream CAS and one successor without invented historical outcomes. Implementation/release/consumer acceptance gated. Shared profile; hosted policy is a companion extension.
+- **[protocol/retired-carrier-proof-v3.md](protocol/retired-carrier-proof-v3.md)** — closed versioned request, receipt, proof and signed-claim semantics with frozen codec fixtures.
