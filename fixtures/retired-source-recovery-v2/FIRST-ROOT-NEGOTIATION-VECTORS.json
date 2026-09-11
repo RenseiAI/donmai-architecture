@@ -1,5 +1,5 @@
 {
-  "status": "PROPOSED_NOT_RATIFIED",
+  "status": "ACCEPTED_ARCHITECTURE_NOT_IMPLEMENTED",
   "note": "Inventory is derived from actual installed consumers and bound to the authenticated current process and selected shim. The authoritativeChecks are fixture setup requirements, not caller-supplied booleans or a manual feature flag. An omitted selection means unsupported. The bundle is required before the FIRST v1 root and retained for every A/B descendant; no later upgrade assumption.",
   "positive": {
     "inventory": {

@@ -535,6 +535,39 @@ control plane must implement consistently.
     call, before or after retirement, exactly as the existing non-durable-fence
     rule already provides for a socket that dies before admission. See
     `ADR-2026-09-03-carrier-epoch-floor-survives-retirement.md`.
+
+    **Amendment 2026-09-11 — complete retired-source lifecycle (rule14).**
+    The first retired proof3 root requires the authenticated current
+    `retired_source_lifecycle_v2` client bundle: actual proof2/3/4 and
+    Snapshot2/3 consumers, complete root/predecessor/correlation validation,
+    actual admitted3/4 disposal, repeated reservation-only recovery and finite
+    working reclaimer progress. A v1-only client cannot enter before later
+    proof4 support exists. Freeze current selection evidence against the exact
+    handoff/prepared-correlation digest; never rehash old correlations or
+    backfill historical capability authority.
+
+    Actual admitted3/4 preparing or receipt-stored candidates may use the
+    exact schema1 abandonment with their true proof selector and unchanged
+    cause/receipt/consume rules. A fresh ordinary proof2 names one actual
+    unconsumed nonterminal predecessor; it is not another root of the original
+    reconciliation. Direct proof3 and descendant proof2 token/Snapshot2
+    consumers validate the complete canonical root and every real abandonment,
+    predecessor and unresolved correlation. Matching leaf scalars or a null
+    immediate root link never substitute for this chain. Actual activation or
+    adoption consume excludes disposal; lineage_terminal grants no successor.
+
+    A reservation-only source uses request2/receipt2/proof4 and Snapshot3 under
+    `retired_source_recovery_v2`, never fake abandonment fields. Its origin is
+    already reconciled with canonical request/result/proof and its exact root
+    is covered by a NEW actual eligible Retire projection witness. All anchor
+    fields name that immediate operation/retirement; origin facts are bound
+    through receipt2.source. Pending candidates still block retirement under
+    ordinary eligibility. Failed pre-admission retries cannot renew hostless
+    clocks or recreate reaped rooms indefinitely; only actual normal Retire,
+    not a timer, inspection or room event, authorizes the next CAS. Original
+    bytes, cursor floors and full correlation/release obligations survive.
+    See `ADR-2026-09-11-retired-source-complete-lifecycle.md`. Architecture is
+    accepted; implementation and every new profile advertisement remain gated.
 <!-- BOUNDARY-SYNC-END: adr-2026-08-17-session-shim-core-contract -->
 
 ### D1 — Process ownership moves to a per-session shim
@@ -1409,6 +1442,14 @@ equal to stable-host, worker-registration, runtime-token-jti, or a known prior
 token correlation is a typed refusal. A token rotation never supplies a new
 controller id; a replacement process never inherits the old one.
 
+For any retired root or descendant, the current attested inventory must also
+select `retired_source_lifecycle_v2` before the first v1 CAS/grant/token. This
+is a separate exact profile inventory, not an extra member silently inserted
+into the frozen ordinary capability set below. It requires the actual current
+daemon/shim tuple to support proof2/3/4, Snapshot2/3 and the complete lifecycle;
+missing or legacy selection refuses before new authority. Preserve the exact
+handoff/prepared digest when binding that current admission evidence.
+
 For D14/D15 external durable carrier, the tuple includes protocol max at least 3
 and the exact lexically sorted, duplicate-free capability set
 `authoritative_snapshot_v2`, `carrier_epoch_prepare_commit`,
@@ -1702,6 +1743,16 @@ inventing sequence/output. This selected-v3 behavior changes no v1/v2 wire byte.
 
 #### D15.2 — Generic durable-carrier proof and reservation
 
+**Accepted lifecycle registration (2026-09-11).** Ordinary request/proof1/2
+bytes remain frozen. The registered proof3/v1 and proof4/v2 retired families
+use the complete lifecycle companion, including full root-chain validation
+for token mint and Snapshot2 consumption on direct3/fresh2 descendants.
+The true admitted-proof selector in schema1 abandonment additionally accepts
+3/4 only for their registered actual admitted roots. Request-only origin state
+is not a reconciled receipt; proof4 and Snapshot3 select the reservation-only
+source explicitly. No ordinary reserve operation may mint those roots.
+
+
 A compatible external carrier exposes a small control-authenticated interface
 over its durable journal. The public semantic interface is brand-neutral:
 
@@ -1793,8 +1844,10 @@ The member is always present. It is null unless this reservation immediately
 follows the exact durable abandonment below. A non-null object must equal the
 retained abandonment result byte-for-byte and can be consumed by exactly one new
 reservation request; exact replay of that request returns its first proof, while
-another request using the same predecessor conflicts. New external admission
-uses request/proof schema v2 only. Schema v1 remains decodable for exact retained
+another request using the same predecessor conflicts. Ordinary new external
+admission uses request/proof schema v2; registered retired roots use proof3 or
+proof4 only through their current-authority combined CAS and complete lifecycle
+gates. Schema v1 remains decodable for exact retained
 same-handoff replay and drain; it cannot express or follow abandonment and never
 authorizes a new changed-controller candidate.
 
@@ -2141,8 +2194,8 @@ response across rotation; a new store request/acknowledgement stays blocked unti
 the old allowset has zero live references and inherits permanent v1 closure plus
 the schema-3 opener floor.
 
-The signed attach-v2 credential binds exact non-secret claim fields
-`proof_schema_version="2"`, `store_authority_id`, `proof_revision`, `proof_digest`,
+For the ordinary path, the signed attach-v2 credential binds exact non-secret
+claim fields `proof_schema_version="2"`, `store_authority_id`, `proof_revision`, `proof_digest`,
 `carrier_epoch_floor`, and the always-present nullable
 `predecessor_abandonment` object,
 `carrier_boundary=N`, `resolved_boundary=K`, `last_host_seq=K`,

@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-09-11
 boundary: shared
 split: sibling-extensions
@@ -7,9 +7,11 @@ split: sibling-extensions
 
 # ADR-2026-09-11 — Complete retired-source disposal and retry
 
-**Status:** Proposed. This draft does not grant implementation, format upgrade,
-release or live-operation authority. The accepted v1 contract remains unchanged
-until this amendment and its companion are accepted together.
+**Decision:** Accepted 2026-09-11 by the root coordinator under delegated
+architecture authority. This contract and its paired extension are binding.
+Implementation, format upgrade, release and live-consumer acceptance remain
+unimplemented/gated; no new profile is ready or advertised by this decision.
+Old v1 canonical request/result bytes remain unchanged.
 
 ## Context
 
@@ -27,7 +29,7 @@ root receipt. This remains true when a disposed root is followed by an ordinary
 proof2 and schema2 Snapshot receipt. Introducing a new Snapshot version for a
 later branch does not make the earlier scalar-only path authoritative.
 
-## Decision proposed
+## Decision
 
 ### A. Actual admitted disposal, then a fresh ordinary proof
 
@@ -108,7 +110,7 @@ and excludes retirement/CAS.
 
 ### Versions and truthful proof anchors
 
-The [frozen proposed vectors](fixtures/retired-source-recovery-v2/README.md)
+The [frozen vectors](fixtures/retired-source-recovery-v2/README.md)
 specify every closed object and digest. Request2 includes the complete child
 request4; the child references only the new operation ID. Receipt2 binds both
 request digests; proof4 binds receipt2. No digest cycle is introduced.
@@ -212,7 +214,7 @@ Test each real process-crash/fsync boundary, mixed-history replay and rollback.
 
 ## Required controls and implementation units
 
-The byte-identical proposed attachments contain9 positive wire scenarios,
+The byte-identical frozen attachments contain9 positive wire scenarios,
 71 materialized negatives,12 first-root refusal scenarios and five room-liveness
 literal controls. Rehash semantic mutants before testing actual boundaries.
 The unsafe-A controls leave immediate token/Snapshot scalars valid while
@@ -238,8 +240,10 @@ retries would preserve the original stranding failure and is rejected.
 
 ## Affected documents
 
-On acceptance, amend the retired-source ADR, session-shim adoption ADR and
-`protocol/interactive-attach-v2.md` selector/credential/Snapshot sections in the
-same paired change. Local capability consequences belong in
-`protocol/session-shim-v3.md`. This draft adds proposal cross-references only;
-it does not silently change accepted synchronized rules.
+This accepting change amends the retired-source ADR, synchronized session-shim
+adoption rule14 and its detailed proof/capability clauses, and the actual
+`protocol/interactive-attach-v2.md` selection/abandonment/credential/Snapshot
+sections. `protocol/session-shim-v3.md` binds complete client selection before
+the first retired root. `protocol/retired-carrier-proof-v4.md` specifies the new
+versioned companion; the proof3 companion retains its exact v1 bytes and binds
+these lifecycle gates. The paired synchronized text is byte-identical.

@@ -1,6 +1,8 @@
-# Proposed complete retired-source lifecycle fixtures
+# Complete retired-source lifecycle fixtures
 
-These attachments are proposed, not accepted architecture or runtime evidence.
+Accepted architecture on2026-09-11; these synthetic fixtures are not implemented
+consumers or runtime evidence. PROPOSED-prefixed filenames retain their original
+fixture names; their wire objects/digests are unchanged by ratification.
 Both corpora carry byte-identical copies. MANIFEST.json freezes every file.
 The earlier retired-source-recovery-v1 corpus stays byte-identical.
 

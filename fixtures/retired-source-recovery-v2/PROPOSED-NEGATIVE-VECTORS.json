@@ -1,6 +1,6 @@
 {
-  "status": "PROPOSED_NOT_RATIFIED",
-  "positiveSha256": "3929f13999650cf443edc6d0dddb9bdab58ae867638fd4f7f96add88e8551a32",
+  "status": "ACCEPTED_ARCHITECTURE_NOT_IMPLEMENTED",
+  "positiveSha256": "fa33b3141bafec533060236e72da6e75d4d9a1f4ef37005117be2f7cece84aea",
   "rules": "Each materialized vector contains exact proposed JSON objects after the listed edits and digest resealing. Resealing never repairs semantic source/scope/profile/anchor values. All projection-only token cases require real signing/authentication tests later. Runtime authorityPreconditions are setup requirements, not authority evidence. No new consumer/codec implementation is represented by this file.",
   "cases": [
     {

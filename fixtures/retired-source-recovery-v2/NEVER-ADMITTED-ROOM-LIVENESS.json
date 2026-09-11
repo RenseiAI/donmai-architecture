@@ -1,5 +1,5 @@
 {
-  "status": "PROPOSED_CONTROL_NOT_OBSERVED",
+  "status": "REQUIRED_CONTROL_NOT_OBSERVED",
   "scope": "real loopback carrier API, actual room lifecycle and file journal; fake clock only replaces time, never authority",
   "fixture": {
     "originState": "applied_nonretired_unadmitted_root",

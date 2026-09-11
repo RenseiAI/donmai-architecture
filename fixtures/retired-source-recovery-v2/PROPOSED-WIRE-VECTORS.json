@@ -1,5 +1,5 @@
 {
-  "status": "PROPOSED_NOT_RATIFIED",
+  "status": "ACCEPTED_ARCHITECTURE_NOT_IMPLEMENTED",
   "profile": "retired_source_recovery_v2",
   "note": "Synthetic canonical codec vectors; state/precondition entries are test setup requirements, not observed authority or signed JWTs. Each scenario is isolated. Real tests must Retire actual origins and load canonical reconciled results.",
   "capabilities": {
