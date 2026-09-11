@@ -170,3 +170,42 @@ quota and corrupt/incomplete protected state refuse. Transport/5xx ambiguity is
 replay-only and never licenses replacement. Missing-stream remains a refusal,
 not non-admission. An older proof/storage reader cannot silently accept or
 downgrade the new profile.
+
+## Exact inspection envelope
+
+Inspection request schema 1 is the closed object `{schemaVersion:1,
+storeAuthorityId, orgId, sessionId, ptyEpoch}`. Its response is the closed object
+`{schemaVersion:1, state, storeAuthorityId, orgId, sessionId, ptyEpoch}`, where
+state is exactly `retired`, `live` or `unavailable`. Only `retired` adds the
+required `retirementRecord`, containing the complete existing canonical record
+and its floor, high-water and evidenceDigest. `live` and `unavailable` forbid
+that member. No envelope-level floor/high-water aliases are allowed. Validate
+record digest/scope/profile eligibility and compare response scope against the
+exact request. The service also checks its actual current store authority under
+the journal lock; wrong-store/auth is a typed refusal, never a successful stale
+echo. Inspection remains read-only and grants no recreation or allocation.
+
+The shared companion `fixtures/retired-source-recovery-v1/INSPECTION-VECTORS.json`
+(SHA256 `c035b6c1f7ee547dafd0efbb2d29239c5f3e4a3942cd12c6f6d537b0cc3aa9c4`) contains six positive envelopes
+and twelve rejection transformations with record re-digest rules. These are
+codec fixtures, not journal authority evidence. The capabilities profile and
+endpoint select this profile; the inspection envelope adds no profile member.
+Reconciliation success remains the closed `{receipt,proof}` envelope.
+
+## Closed no-new-mutation refusal
+
+The retired control profile uses HTTP409 with the closed object
+`{code:"retired_source_conflict",rule}`. The complete rule enum is
+`request_invalid`, `store_mismatch`, `retirement_missing`, `retirement_mismatch`,
+`stream_live`, `replay_mismatch`, `successor_conflict`. It states only that this
+attempt refused before new mutation. It says nothing about a prior same-ID
+operation or the historical abandonment. Even a recognized refusal preserves
+the immutable operation/source/epoch and grants no remint, retirement or cleanup
+authority. Unknown rule, malformed409 or another status remains held ambiguous.
+Unsupported profile, quota, corrupt/incomplete protected state or any failure
+after durable CAS uses503/held; those cases must never be mapped into this409.
+
+`fixtures/retired-source-recovery-v1/REFUSAL-VECTORS.json` freezes seven positive
+and six negative response cases; SHA256
+`0f18c41ea520b7fa32001e943773aed53a1ad579b87227b54eeae3b5fbba35f1`. HTTP body limits and closed/duplicate-key
+checks apply before recognizing any refusal.

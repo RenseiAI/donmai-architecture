@@ -1,0 +1,292 @@
+{
+  "profile": "retired_source_inspection_v1",
+  "happyVectorSha256": "2b059d10e60a05ed929acbe706d3bf892b6a1fadb3aca4693d4ca0f52f61a7e4",
+  "note": "Synthetic strict codec/comparison fixtures, not current authority. The real reader inspects under the journal lock; wrong current authority/auth is a typed refusal, never a successful stale echo.",
+  "positive": [
+    {
+      "name": "studio_shape_retired",
+      "request": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1"
+      },
+      "response": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1",
+        "state": "retired",
+        "retirementRecord": {
+          "schemaVersion": "3",
+          "orgId": "org_retired_fixture",
+          "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "ptyEpoch": "1",
+          "highWater": "416",
+          "terminalSequence": "0",
+          "reason": "carrier_idle",
+          "idleSinceUnixNano": "1000000000",
+          "retiredAtUnixNano": "2000000000",
+          "carrierEpochFloor": "2",
+          "stateDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "evidenceDigest": "7ee41d59e39b511ea317b10b5885629c102ae331464ddfa5644f1ade4756225e"
+        }
+      }
+    },
+    {
+      "name": "studio_shape_live",
+      "request": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1"
+      },
+      "response": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1",
+        "state": "live"
+      }
+    },
+    {
+      "name": "studio_shape_unavailable",
+      "request": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1"
+      },
+      "response": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1",
+        "state": "unavailable"
+      }
+    },
+    {
+      "name": "independent_counters_retired",
+      "request": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1"
+      },
+      "response": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1",
+        "state": "retired",
+        "retirementRecord": {
+          "schemaVersion": "3",
+          "orgId": "org_retired_fixture",
+          "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "ptyEpoch": "1",
+          "highWater": "416",
+          "terminalSequence": "0",
+          "reason": "carrier_idle",
+          "idleSinceUnixNano": "1000000000",
+          "retiredAtUnixNano": "2000000000",
+          "carrierEpochFloor": "17",
+          "stateDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "evidenceDigest": "0f86d7863f510c3e70f9dc634de01bb3a9b166ac349674a479e9fb60d0ee538e"
+        }
+      }
+    },
+    {
+      "name": "independent_counters_live",
+      "request": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1"
+      },
+      "response": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1",
+        "state": "live"
+      }
+    },
+    {
+      "name": "independent_counters_unavailable",
+      "request": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1"
+      },
+      "response": {
+        "schemaVersion": 1,
+        "storeAuthorityId": "relay-retired-fixture",
+        "orgId": "org_retired_fixture",
+        "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ptyEpoch": "1",
+        "state": "unavailable"
+      }
+    }
+  ],
+  "negative": [
+    {
+      "id": "wrong_store",
+      "base": "studio_shape_retired",
+      "edit": {
+        "pointer": "/storeAuthorityId",
+        "value": "another-current-store"
+      },
+      "redigestRetirementRecord": false,
+      "expected": "reject scope comparison; never return stale success"
+    },
+    {
+      "id": "wrong_org",
+      "base": "studio_shape_retired",
+      "edit": {
+        "pointer": "/orgId",
+        "value": "org_other_fixture"
+      },
+      "redigestRetirementRecord": false,
+      "expected": "reject scope comparison"
+    },
+    {
+      "id": "wrong_session",
+      "base": "studio_shape_retired",
+      "edit": {
+        "pointer": "/sessionId",
+        "value": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+      },
+      "redigestRetirementRecord": false,
+      "expected": "reject scope comparison"
+    },
+    {
+      "id": "wrong_pty",
+      "base": "studio_shape_retired",
+      "edit": {
+        "pointer": "/ptyEpoch",
+        "value": "2"
+      },
+      "redigestRetirementRecord": false,
+      "expected": "reject scope comparison"
+    },
+    {
+      "id": "unsupported_version",
+      "base": "studio_shape_retired",
+      "edit": {
+        "pointer": "/schemaVersion",
+        "value": 2
+      },
+      "redigestRetirementRecord": false,
+      "expected": "reject closed selector"
+    },
+    {
+      "id": "unknown_envelope_member",
+      "base": "studio_shape_retired",
+      "edit": {
+        "pointer": "/highWater",
+        "value": "416"
+      },
+      "redigestRetirementRecord": false,
+      "expected": "reject duplicated scalar alias"
+    },
+    {
+      "id": "unavailable_with_record",
+      "base": "studio_shape_unavailable",
+      "edit": {
+        "pointer": "/retirementRecord",
+        "value": {
+          "schemaVersion": "3",
+          "orgId": "org_retired_fixture",
+          "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "ptyEpoch": "1",
+          "highWater": "416",
+          "terminalSequence": "0",
+          "reason": "carrier_idle",
+          "idleSinceUnixNano": "1000000000",
+          "retiredAtUnixNano": "2000000000",
+          "carrierEpochFloor": "2",
+          "stateDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "evidenceDigest": "7ee41d59e39b511ea317b10b5885629c102ae331464ddfa5644f1ade4756225e"
+        }
+      },
+      "redigestRetirementRecord": false,
+      "expected": "reject forbidden record on unavailable"
+    },
+    {
+      "id": "live_with_record",
+      "base": "studio_shape_live",
+      "edit": {
+        "pointer": "/retirementRecord",
+        "value": {
+          "schemaVersion": "3",
+          "orgId": "org_retired_fixture",
+          "sessionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "ptyEpoch": "1",
+          "highWater": "416",
+          "terminalSequence": "0",
+          "reason": "carrier_idle",
+          "idleSinceUnixNano": "1000000000",
+          "retiredAtUnixNano": "2000000000",
+          "carrierEpochFloor": "2",
+          "stateDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "evidenceDigest": "7ee41d59e39b511ea317b10b5885629c102ae331464ddfa5644f1ade4756225e"
+        }
+      },
+      "redigestRetirementRecord": false,
+      "expected": "reject forbidden record on live"
+    },
+    {
+      "id": "retired_without_record",
+      "base": "studio_shape_retired",
+      "edit": {
+        "pointer": "/retirementRecord",
+        "value": null
+      },
+      "redigestRetirementRecord": false,
+      "expected": "reject missing record"
+    },
+    {
+      "id": "wrong_record_scope",
+      "base": "studio_shape_retired",
+      "edit": {
+        "pointer": "/retirementRecord/orgId",
+        "value": "org_other_fixture"
+      },
+      "redigestRetirementRecord": true,
+      "expected": "reject fully re-digested record scope mismatch"
+    },
+    {
+      "id": "terminal_record",
+      "base": "studio_shape_retired",
+      "edit": {
+        "pointer": "/retirementRecord/terminalSequence",
+        "value": "417"
+      },
+      "redigestRetirementRecord": true,
+      "expected": "reject terminal retirement for this profile"
+    },
+    {
+      "id": "unknown_record_floor",
+      "base": "studio_shape_retired",
+      "edit": {
+        "pointer": "/retirementRecord/carrierEpochFloor",
+        "value": "0"
+      },
+      "redigestRetirementRecord": true,
+      "expected": "reject unknown/zero floor"
+    }
+  ],
+  "negativeRules": "Deep-copy the named positive response, apply the JSON-pointer replacement, and when redigestRetirementRecord=true recompute its evidenceDigest using RFC8785/SHA256 with only evidenceDigest omitted. Then validate the complete response against its unchanged request. Missing record case uses null, which is invalid just like omission. No HTTP refusal outcome or effect is fabricated by these fixtures."
+}
