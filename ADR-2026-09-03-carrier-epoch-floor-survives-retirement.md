@@ -15,6 +15,8 @@ OSS-canonical here; a composing control plane's memory-pressure tiering,
 retirement triggers, and deploy/operations response are a platform extension)
 **Authors:** session-continuity design lane
 
+> **Amendment 2026-09-11:** [Retired carrier source reconciliation](ADR-2026-09-11-retired-carrier-source-reconciliation.md) registers an explicit current-no-stream CAS and retired-history proof3 profile. Only that fresh atomic profile may seed logical high-water from validated retirement evidence; ordinary recreation remains floor-only. Original unknown outcomes, local resume floors and all terminal release obligations are preserved.
+
 ## Context
 
 `ADR-2026-08-17-session-shim-adoption.md` D14/D15 defines the durable-carrier

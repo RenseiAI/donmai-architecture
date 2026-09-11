@@ -71,6 +71,8 @@ commit raises the live store's minimum writer/readiness schema to 3. An ACK-awar
 opener repairs the one forward crash window; an ACK-unaware schema-2 artifact
 must mechanically refuse the acknowledged store.
 
+> **Registered recovery exception:** [Retired proof schema3](retired-carrier-proof-v3.md) adds an explicit retired-history anchor and current-authority CAS for a pre-consume source whose stream is retired. Proof1/2 remain frozen; every statement below requiring a new schema2 reservation describes the ordinary path. The registered schema3 path requires its own readiness and actual consumer compatibility gates.
+
 ## 1. Version selection is independent and exact
 
 - A v2 WSS host offers `Sec-WebSocket-Protocol: interactive-attach-v2`. The
