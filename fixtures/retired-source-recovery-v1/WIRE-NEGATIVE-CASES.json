@@ -1,0 +1,880 @@
+{
+  "profile": "retired_source_recovery_negative_v1",
+  "happyVectorSha256": "2b059d10e60a05ed929acbe706d3bf892b6a1fadb3aca4693d4ca0f52f61a7e4",
+  "rules": {
+    "edits": "Apply JSON-pointer assignments to a deep copy of base; absent final keys are inserted. Never mutate the base or retirement record. Then execute redigest. Wire transforms run last on the canonical selected request or response envelope {receipt,proof}.",
+    "request_chain": [
+      "Reseal successorRequest omitting only reservationRequestDigest.",
+      "Reseal request omitting only reconciliationRequestDigest.",
+      "Update receipt.reconciliationRequestDigest and receipt.successorReservationRequestDigest only; execute receipt_proof.",
+      "Do not repair semantic scope, IDs, floor, cursor, versions or outcome fields."
+    ],
+    "receipt_proof": [
+      "Reseal receipt omitting only receiptDigest.",
+      "Update proof.retirementAnchor.reconciliationReceiptDigest; execute proof_only."
+    ],
+    "proof_only": [
+      "Update proof.reservationRequestDigest from child except if that exact pointer is an intentional edit.",
+      "Reseal proof omitting only proofDigest.",
+      "Update signedClaimProjection.proof_digest and reservation_request_digest, and copy the full proof retirementAnchor into its snake_case claim projection. Never treat this projection as a signed JWT."
+    ],
+    "none": "No resealing: encoding or body-boundary mutation only.",
+    "hashing": "RFC8785 UTF-8 SHA-256, omitting only the digest member owned by that object, including deliberately unknown fields. All strings/keys here are ASCII; no floating-point numeric inputs.",
+    "entrypoints": "Request cases reject at strict request validation before any journal mutation. Receipt/proof cases reject comparison with complete accompanying request/receipt, not just digest validation. exact_replay first commits the unchanged happy request using actual journal Retire/CAS, then submits the redigested mutation. frozen_request_bytes compares against stored canonical bytes before dispatch. HTTP response body is the {receipt,proof} envelope.",
+    "behavior": "Materialization and valid digest checks are fixture integrity only. Implementations must exercise actual named boundaries; HTTP size controls use legal whitespace padding so digest failure is not the rejection. Restore-one-predicate controls must make the targeted invalid case pass and then reject again with predicate restored."
+  },
+  "cases": [
+    {
+      "id": "expected_floor_context_mismatch",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/expectedCarrierEpochFloor",
+          "value": "1"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "expected floor must equal context F"
+    },
+    {
+      "id": "parent_floor_context_mismatch",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/expectedRetiredCarrierEpochFloor",
+          "value": "1"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "parent and context F must agree"
+    },
+    {
+      "id": "context_high_water_mismatch",
+      "base": "independent_counters",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/retirementContext/retiredHighWater",
+          "value": "417"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "parent and context H must agree"
+    },
+    {
+      "id": "resume_beyond_retired_boundary",
+      "base": "independent_counters",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/localResumeFrom",
+          "value": "418"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "L must be at most H+1 even when S covers L"
+    },
+    {
+      "id": "resume_zero",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/localResumeFrom",
+          "value": "0"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "L must be positive"
+    },
+    {
+      "id": "source_cursor_below_high_water",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/lastHostSeq",
+          "value": "415"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "S must cover H"
+    },
+    {
+      "id": "source_cursor_next_overflow",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/lastHostSeq",
+          "value": "18446744073709551615"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "S must be strictly below maxuint64"
+    },
+    {
+      "id": "source_cursor_overflow",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/lastHostSeq",
+          "value": "18446744073709551616"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "S must fit uint64"
+    },
+    {
+      "id": "source_epoch_zero",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/sourceReservedCarrierEpoch",
+          "value": "0"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "source epoch must be positive"
+    },
+    {
+      "id": "source_epoch_above_floor",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/sourceReservedCarrierEpoch",
+          "value": "3"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "source epoch must not exceed F"
+    },
+    {
+      "id": "successor_equal_floor",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/reservedCandidateCarrierEpoch",
+          "value": "2"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "C must strictly exceed F"
+    },
+    {
+      "id": "successor_overflow",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/reservedCandidateCarrierEpoch",
+          "value": "18446744073709551616"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "C must fit uint64"
+    },
+    {
+      "id": "generation_substituted_for_carrier",
+      "base": "independent_counters",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/reservedCandidateCarrierEpoch",
+          "value": "3"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "G3 cannot replace C18 above F17"
+    },
+    {
+      "id": "noncanonical_decimal",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/lastHostSeq",
+          "value": "0416"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "unsigned decimal strings must be canonical"
+    },
+    {
+      "id": "numeric_cursor",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/lastHostSeq",
+          "value": 416
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "cursor must be a string"
+    },
+    {
+      "id": "negative_cursor",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/lastHostSeq",
+          "value": "-1"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "cursor must be unsigned"
+    },
+    {
+      "id": "request_version",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/schemaVersion",
+          "value": 2
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "unsupported parent schema"
+    },
+    {
+      "id": "request_version_string",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/schemaVersion",
+          "value": "1"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "schema selector must be integer"
+    },
+    {
+      "id": "child_version",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/schemaVersion",
+          "value": 2
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "retired child must use schema 3"
+    },
+    {
+      "id": "unknown_request_key",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/unexpected",
+          "value": true
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "closed parent schema"
+    },
+    {
+      "id": "unknown_context_key",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/retirementContext/unexpected",
+          "value": true
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "closed nested schema"
+    },
+    {
+      "id": "context_operation_mismatch",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/retirementContext/reconciliationRequestId",
+          "value": "55555555-5555-4555-8555-555555555555"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "child must bind parent operation ID"
+    },
+    {
+      "id": "context_evidence_mismatch",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/retirementContext/retirementEvidenceDigest",
+          "value": "4444444444444444444444444444444444444444444444444444444444444444"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "child must bind parent retirement evidence"
+    },
+    {
+      "id": "nonzero_active",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/expectedActiveCarrierEpoch",
+          "value": "1"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "retired request requires zero active"
+    },
+    {
+      "id": "nonzero_pending",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/expectedPendingCarrierEpoch",
+          "value": "1"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "retired request requires zero pending"
+    },
+    {
+      "id": "child_scope_orgId",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/orgId",
+          "value": "org_other_fixture"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "parent and child scope must match"
+    },
+    {
+      "id": "child_scope_sessionId",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/sessionId",
+          "value": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "parent and child scope must match"
+    },
+    {
+      "id": "child_scope_ptyEpoch",
+      "base": "studio_shape",
+      "entrypoint": "request",
+      "edits": [
+        {
+          "pointer": "/request/successorRequest/ptyEpoch",
+          "value": "2"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "parent and child scope must match"
+    },
+    {
+      "id": "receipt_storeAuthorityId",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/storeAuthorityId",
+          "value": "other-store"
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "receipt_orgId",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/orgId",
+          "value": "org_other_fixture"
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "receipt_sessionId",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/sessionId",
+          "value": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "receipt_ptyEpoch",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/ptyEpoch",
+          "value": "2"
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "receipt_successorReservationRequestId",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/successorReservationRequestId",
+          "value": "55555555-5555-4555-8555-555555555555"
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "receipt_successorReservationRequestDigest",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/successorReservationRequestDigest",
+          "value": "4444444444444444444444444444444444444444444444444444444444444444"
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "receipt_retiredCarrierEpochFloor",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/retiredCarrierEpochFloor",
+          "value": "1"
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "receipt_retiredHighWater",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/retiredHighWater",
+          "value": "417"
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "receipt_sourceReservedCarrierEpoch",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/sourceReservedCarrierEpoch",
+          "value": "1"
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "receipt_priorAbandonmentOutcome",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/priorAbandonmentOutcome",
+          "value": "never_admitted"
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "receipt_schemaVersion",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/schemaVersion",
+          "value": 2
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "receipt_unexpected",
+      "base": "studio_shape",
+      "entrypoint": "receipt_against_request",
+      "edits": [
+        {
+          "pointer": "/receipt/unexpected",
+          "value": true
+        }
+      ],
+      "redigest": "receipt_proof",
+      "expected": "receipt must satisfy closed schema and match full request"
+    },
+    {
+      "id": "proof_storeAuthorityId",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/storeAuthorityId",
+          "value": "other-store"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_orgId",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/orgId",
+          "value": "org_other_fixture"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_sessionId",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/sessionId",
+          "value": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_ptyEpoch",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/ptyEpoch",
+          "value": "2"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_reservationRequestId",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/reservationRequestId",
+          "value": "55555555-5555-4555-8555-555555555555"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_reservationRequestDigest",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/reservationRequestDigest",
+          "value": "4444444444444444444444444444444444444444444444444444444444444444"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_boundary",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/boundary",
+          "value": "417"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_carrierEpochFloor",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/carrierEpochFloor",
+          "value": "4"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_activeCarrierEpoch",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/activeCarrierEpoch",
+          "value": "1"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_pendingCarrierEpoch",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/pendingCarrierEpoch",
+          "value": "1"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_schemaVersion",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/schemaVersion",
+          "value": 2
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_disposition",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/disposition",
+          "value": "empty"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_unexpected",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/unexpected",
+          "value": true
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_retirementAnchor_retiredHighWater",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/retirementAnchor/retiredHighWater",
+          "value": "417"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_retirementAnchor_reconciliationRequestId",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/retirementAnchor/reconciliationRequestId",
+          "value": "55555555-5555-4555-8555-555555555555"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_retirementAnchor_reconciliationReceiptDigest",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/retirementAnchor/reconciliationReceiptDigest",
+          "value": "7ee41d59e39b511ea317b10b5885629c102ae331464ddfa5644f1ade4756225e"
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "proof_retirementAnchor_unexpected",
+      "base": "studio_shape",
+      "entrypoint": "proof_against_request_and_receipt",
+      "edits": [
+        {
+          "pointer": "/proof/retirementAnchor/unexpected",
+          "value": true
+        }
+      ],
+      "redigest": "proof_only",
+      "expected": "proof must match full request and receipt, including independent receipt anchor"
+    },
+    {
+      "id": "changed_canonical_request_same_operation",
+      "base": "studio_shape",
+      "entrypoint": "exact_replay",
+      "edits": [
+        {
+          "pointer": "/request/sourceAbandonmentRequestDigest",
+          "value": "4444444444444444444444444444444444444444444444444444444444444444"
+        }
+      ],
+      "redigest": "request_chain",
+      "expected": "valid fresh digest does not permit changed bytes under an already committed operation ID"
+    },
+    {
+      "id": "duplicate_root_key",
+      "base": "studio_shape",
+      "entrypoint": "request_bytes",
+      "edits": [],
+      "redigest": "none",
+      "wireTransform": {
+        "kind": "duplicate_identical",
+        "pointer": "/schemaVersion"
+      },
+      "expected": "reject duplicate key even if a last-wins decoder retains valid digests"
+    },
+    {
+      "id": "duplicate_nested_key",
+      "base": "studio_shape",
+      "entrypoint": "request_bytes",
+      "edits": [],
+      "redigest": "none",
+      "wireTransform": {
+        "kind": "duplicate_identical",
+        "pointer": "/successorRequest/retirementContext/retiredHighWater"
+      },
+      "expected": "reject nested duplicate key even if digests still validate"
+    },
+    {
+      "id": "trailing_document",
+      "base": "studio_shape",
+      "entrypoint": "request_bytes",
+      "edits": [],
+      "redigest": "none",
+      "wireTransform": {
+        "kind": "append",
+        "text": "{}"
+      },
+      "expected": "reject trailing JSON document"
+    },
+    {
+      "id": "frozen_whitespace_change",
+      "base": "studio_shape",
+      "entrypoint": "frozen_request_bytes",
+      "edits": [],
+      "redigest": "none",
+      "wireTransform": {
+        "kind": "append",
+        "text": " "
+      },
+      "expected": "reject changed persisted canonical request bytes despite same parsed values"
+    },
+    {
+      "id": "declared_request_limit",
+      "base": "studio_shape",
+      "entrypoint": "http_request",
+      "edits": [],
+      "redigest": "none",
+      "wireTransform": {
+        "kind": "declared_length",
+        "bytes": 32769
+      },
+      "expected": "reject declared size above 32 KiB independently of actual body size"
+    },
+    {
+      "id": "actual_request_limit",
+      "base": "studio_shape",
+      "entrypoint": "http_request",
+      "edits": [],
+      "redigest": "none",
+      "wireTransform": {
+        "kind": "pad_to",
+        "bytes": 32769,
+        "omitContentLength": true
+      },
+      "expected": "reject actual size above 32 KiB with no declared length"
+    },
+    {
+      "id": "declared_response_limit",
+      "base": "studio_shape",
+      "entrypoint": "http_response",
+      "edits": [],
+      "redigest": "none",
+      "wireTransform": {
+        "kind": "declared_length",
+        "bytes": 32769
+      },
+      "expected": "reject declared size above 32 KiB independently of actual body size"
+    },
+    {
+      "id": "actual_response_limit",
+      "base": "studio_shape",
+      "entrypoint": "http_response",
+      "edits": [],
+      "redigest": "none",
+      "wireTransform": {
+        "kind": "pad_to",
+        "bytes": 32769,
+        "omitContentLength": true
+      },
+      "expected": "reject actual size above 32 KiB with no declared length"
+    }
+  ]
+}

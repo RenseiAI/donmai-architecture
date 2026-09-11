@@ -16,7 +16,10 @@ bound. A content digest is not a digital signature.
 
 The exact synthetic [wire vectors](../fixtures/retired-source-recovery-v1/WIRE-VECTORS.json)
 are byte-identical in both corpora. Their state/source commitments are codec
-fixtures, not current no-stream or historical-admission evidence.
+fixtures, not current no-stream or historical-admission evidence. The companion
+[negative cases](../fixtures/retired-source-recovery-v1/WIRE-NEGATIVE-CASES.json)
+fix strict semantic, version, scope, overflow, encoding, size and replay controls
+with explicit re-digest rules.
 
 ## Inspection
 
@@ -45,7 +48,7 @@ successorRequest = strict proof-request schema 3 below
 
 The source is an exact schema 2 pre-receipt prepared candidate with no source
 Snapshot/adoption/terminal evidence. Other source profiles are not inferred.
-The carrier verifies source epoch<=F; the composing authority verifies its
+The carrier verifies 0<source epoch<=F; the composing authority verifies its
 retained source references and immutable request. Their historical effect is
 not inferred from current absence.
 
@@ -73,7 +76,9 @@ retirementContext = {
 C>F, S>=H, H+1>=L, L>0, S<maxuint64. The composing authority additionally
 requires S to cover every retained source/correlation cursor and honors its
 existing numeric projection ceiling. Shim generation G is independent of C.
-The context is exact; it is not a caller-selectable alternative authority.
+The context is exact: expectedCarrierEpochFloor equals context F, and the
+parent and child agree on scope, operation ID, retirement evidence, F and H.
+It is not a caller-selectable alternative authority.
 
 ## Successful reconciliation receipt, schema 1
 
