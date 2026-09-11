@@ -1,0 +1,17 @@
+{
+  "status": "ACCEPTED_ARCHITECTURE_NOT_IMPLEMENTED",
+  "profile": "retired_source_recovery_v2",
+  "counts": {
+    "positiveWireScenarios": 9,
+    "negativeWireScenarios": 71,
+    "firstRootRefusals": 12,
+    "roomLivenessLiteralControls": 5
+  },
+  "files": {
+    "PROPOSED-WIRE-VECTORS.json": "fa33b3141bafec533060236e72da6e75d4d9a1f4ef37005117be2f7cece84aea",
+    "PROPOSED-NEGATIVE-VECTORS.json": "abe2c04cfc39ebd0479499f5d3775d189e77697148d9eeca6a0b3f37b8ecdad3",
+    "PROPOSED-CONTROL-VECTORS.json": "1c9751ac0cf4d47235ae75623c3db94fdea290501808c6d17cfb3007484e9a0b",
+    "FIRST-ROOT-NEGOTIATION-VECTORS.json": "ad9a89bdb31d42e8490d589e08c70c61841786d7f77542b44d2f9a4585d677bc",
+    "NEVER-ADMITTED-ROOM-LIVENESS.json": "ab8e615c12f41cb59e175e60486d118005e8857ae64aa5286cd8771928df4847"
+  }
+}

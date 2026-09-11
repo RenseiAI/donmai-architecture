@@ -183,3 +183,13 @@ fences to retry. Each either invents authority or loses a race boundary.
 This amends the session-shim adoption ADR (2026-08-17), the carrier-floor
 retirement ADR (2026-09-03), the attach-v2 protocol and local-daemon reference.
 It does not accept the broader Proposed stateful-link recovery ADR.
+
+## Accepted complete-lifecycle amendment (2026-09-11)
+
+The [complete lifecycle ADR](ADR-2026-09-11-retired-source-complete-lifecycle.md)
+is Accepted architecture. Before the first v1 retired root, require the actual
+complete client bundle, full A token/Snapshot2 ancestry consumers and functioning
+retirement progress. Actual admitted3/4 disposal can precede one fresh ordinary2;
+reservation-only sources use explicit request2/receipt2/proof4/Snapshot3 and a new
+actual Retire witness. Frozen v1 bytes remain unchanged. New source is not yet
+implemented and no new profile advertisement or live acceptance follows here.

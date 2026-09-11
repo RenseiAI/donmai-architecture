@@ -66,6 +66,20 @@ maximum supported live-session overlap. Rollback may put a new shim behind an
 old daemon, selecting v2, but it may not claim durable external output while
 that downgrade is in force.
 
+### 1.1 Accepted complete retired-source lifecycle selection
+
+Before the first v1 retired root, the authenticated current daemon must select
+`retired_source_lifecycle_v2` from its actual inventory and this selected shim's
+conformant tuple. The bundle includes proof2/3/4, Snapshot2/3 and complete A/B
+recovery; selected3/4 and full_host_frame_v3 alone do not establish it. Missing
+or legacy selection refuses before grant/root/token creation. This changes no
+v1/v2 local wire byte or selected-v3 frame mapping. Reusing this local wire for
+the full bundle requires an actual retained/current consumer test; otherwise
+an explicitly versioned bridge precedes advertisement. Bind current admission
+evidence to the exact existing handoff/prepared digest, preserving all floors,
+old correlations and consumed-candidate recovery. Architecture is Accepted;
+implementation and new readiness remain gated.
+
 ## 2. Closed v3 vocabulary
 
 Selected v3 retains the selected-v2 registry `0x01`–`0x0E` unchanged and assigns:
@@ -431,3 +445,11 @@ Every claimed coverage item follows Agent Operating Protocol V16: disable the
 named production seam, observe the discriminating fixture RED for the intended
 reason, restore it, and observe GREEN. A copied encoder, hand-authored frame, or
 argument-discarding fake is not evidence.
+
+## Complete-lifecycle conformance
+
+The [Accepted lifecycle ADR](../ADR-2026-09-11-retired-source-complete-lifecycle.md)
+requires first-root refusal for v1-only clients, full root-chain token/Snapshot2
+checks for A, explicit proof4/Snapshot3 for B, and actual retirement progress for
+never-admitted rooms. The complete consumer tuple must pass real lifecycle
+controls; source inspection or max-version alone is not acceptance.

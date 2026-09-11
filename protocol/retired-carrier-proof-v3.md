@@ -5,6 +5,18 @@ This is a registered pre-consume recovery profile, not a replacement for
 ordinary proof 1/2. Hosted authentication/transport and persistence policy are
 extension concerns.
 
+## Accepted complete lifecycle gate (2026-09-11)
+
+This profile's request1/receipt1/proof3 bytes remain frozen. Before its FIRST
+root, enforce the full authenticated current client bundle and complete token/
+Snapshot2 ancestry consumers in the [Accepted lifecycle ADR](../ADR-2026-09-11-retired-source-complete-lifecycle.md).
+Actual admitted3 may be abandoned through the exact schema1 operation and
+followed by a NEW ordinary2 with its real predecessor, retaining this root and
+anchor. A missing genuine source abandonment is not encoded into v1: the
+[proof4 companion](retired-carrier-proof-v4.md) uses explicit request2/receipt2
+and a new actual Retire witness. No new profile is implemented/ready by this
+architectural registration alone.
+
 ## Canonical encoding
 
 Objects are closed and reject duplicate/unknown keys. Schema selectors are JSON

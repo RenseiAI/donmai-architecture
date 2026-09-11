@@ -1,0 +1,617 @@
+{
+  "status": "ACCEPTED_ARCHITECTURE_NOT_IMPLEMENTED",
+  "note": "Inventory is derived from actual installed consumers and bound to the authenticated current process and selected shim. The authoritativeChecks are fixture setup requirements, not caller-supplied booleans or a manual feature flag. An omitted selection means unsupported. The bundle is required before the FIRST v1 root and retained for every A/B descendant; no later upgrade assumption.",
+  "positive": {
+    "inventory": {
+      "schemaVersion": 1,
+      "supportedRecoveryProfiles": [
+        "retired_source_lifecycle_v2"
+      ],
+      "proofSchemaVersions": [
+        "2",
+        "3",
+        "4"
+      ],
+      "snapshotReceiptSchemaVersions": [
+        2,
+        3
+      ]
+    },
+    "prepareSelection": {
+      "retiredRecoveryProfile": "retired_source_lifecycle_v2"
+    },
+    "authoritativeChecks": {
+      "registeredProcessIdentityMatches": true,
+      "actualSelectedShimVersion": 3,
+      "fullHostFrameV3": true,
+      "consumerTupleConformant": true,
+      "currentCarrierProfiles": [
+        "retired_source_recovery_v1",
+        "retired_source_recovery_v2"
+      ],
+      "actualAdmitted3And4DisposalInstalled": true,
+      "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+      "finiteReaperAndRetirementProgressConfigured": true
+    }
+  },
+  "negative": [
+    {
+      "id": "v1_only_client",
+      "mutation": {
+        "pointer": "/inventory/proofSchemaVersions",
+        "value": [
+          "2",
+          "3"
+        ]
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2,
+            3
+          ]
+        },
+        "prepareSelection": {
+          "retiredRecoveryProfile": "retired_source_lifecycle_v2"
+        },
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": true,
+          "actualSelectedShimVersion": 3,
+          "fullHostFrameV3": true,
+          "consumerTupleConformant": true,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1",
+            "retired_source_recovery_v2"
+          ],
+          "actualAdmitted3And4DisposalInstalled": true,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+          "finiteReaperAndRetirementProgressConfigured": true
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    },
+    {
+      "id": "selection_omitted",
+      "mutation": {
+        "pointer": "/prepareSelection",
+        "value": {}
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3",
+            "4"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2,
+            3
+          ]
+        },
+        "prepareSelection": {},
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": true,
+          "actualSelectedShimVersion": 3,
+          "fullHostFrameV3": true,
+          "consumerTupleConformant": true,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1",
+            "retired_source_recovery_v2"
+          ],
+          "actualAdmitted3And4DisposalInstalled": true,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+          "finiteReaperAndRetirementProgressConfigured": true
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    },
+    {
+      "id": "legacy_profile_selected",
+      "mutation": {
+        "pointer": "/prepareSelection/retiredRecoveryProfile",
+        "value": "retired_source_recovery_v1"
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3",
+            "4"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2,
+            3
+          ]
+        },
+        "prepareSelection": {
+          "retiredRecoveryProfile": "retired_source_recovery_v1"
+        },
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": true,
+          "actualSelectedShimVersion": 3,
+          "fullHostFrameV3": true,
+          "consumerTupleConformant": true,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1",
+            "retired_source_recovery_v2"
+          ],
+          "actualAdmitted3And4DisposalInstalled": true,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+          "finiteReaperAndRetirementProgressConfigured": true
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    },
+    {
+      "id": "client_snapshot2_only",
+      "mutation": {
+        "pointer": "/inventory/snapshotReceiptSchemaVersions",
+        "value": [
+          2
+        ]
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3",
+            "4"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2
+          ]
+        },
+        "prepareSelection": {
+          "retiredRecoveryProfile": "retired_source_lifecycle_v2"
+        },
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": true,
+          "actualSelectedShimVersion": 3,
+          "fullHostFrameV3": true,
+          "consumerTupleConformant": true,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1",
+            "retired_source_recovery_v2"
+          ],
+          "actualAdmitted3And4DisposalInstalled": true,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+          "finiteReaperAndRetirementProgressConfigured": true
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    },
+    {
+      "id": "stale_registered_process",
+      "mutation": {
+        "pointer": "/authoritativeChecks/registeredProcessIdentityMatches",
+        "value": false
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3",
+            "4"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2,
+            3
+          ]
+        },
+        "prepareSelection": {
+          "retiredRecoveryProfile": "retired_source_lifecycle_v2"
+        },
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": false,
+          "actualSelectedShimVersion": 3,
+          "fullHostFrameV3": true,
+          "consumerTupleConformant": true,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1",
+            "retired_source_recovery_v2"
+          ],
+          "actualAdmitted3And4DisposalInstalled": true,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+          "finiteReaperAndRetirementProgressConfigured": true
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    },
+    {
+      "id": "old_selected_shim",
+      "mutation": {
+        "pointer": "/authoritativeChecks/actualSelectedShimVersion",
+        "value": 2
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3",
+            "4"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2,
+            3
+          ]
+        },
+        "prepareSelection": {
+          "retiredRecoveryProfile": "retired_source_lifecycle_v2"
+        },
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": true,
+          "actualSelectedShimVersion": 2,
+          "fullHostFrameV3": true,
+          "consumerTupleConformant": true,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1",
+            "retired_source_recovery_v2"
+          ],
+          "actualAdmitted3And4DisposalInstalled": true,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+          "finiteReaperAndRetirementProgressConfigured": true
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    },
+    {
+      "id": "no_full_host_frame",
+      "mutation": {
+        "pointer": "/authoritativeChecks/fullHostFrameV3",
+        "value": false
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3",
+            "4"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2,
+            3
+          ]
+        },
+        "prepareSelection": {
+          "retiredRecoveryProfile": "retired_source_lifecycle_v2"
+        },
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": true,
+          "actualSelectedShimVersion": 3,
+          "fullHostFrameV3": false,
+          "consumerTupleConformant": true,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1",
+            "retired_source_recovery_v2"
+          ],
+          "actualAdmitted3And4DisposalInstalled": true,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+          "finiteReaperAndRetirementProgressConfigured": true
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    },
+    {
+      "id": "unproven_consumer_tuple",
+      "mutation": {
+        "pointer": "/authoritativeChecks/consumerTupleConformant",
+        "value": false
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3",
+            "4"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2,
+            3
+          ]
+        },
+        "prepareSelection": {
+          "retiredRecoveryProfile": "retired_source_lifecycle_v2"
+        },
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": true,
+          "actualSelectedShimVersion": 3,
+          "fullHostFrameV3": true,
+          "consumerTupleConformant": false,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1",
+            "retired_source_recovery_v2"
+          ],
+          "actualAdmitted3And4DisposalInstalled": true,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+          "finiteReaperAndRetirementProgressConfigured": true
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    },
+    {
+      "id": "server_v1_only",
+      "mutation": {
+        "pointer": "/authoritativeChecks/currentCarrierProfiles",
+        "value": [
+          "retired_source_recovery_v1"
+        ]
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3",
+            "4"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2,
+            3
+          ]
+        },
+        "prepareSelection": {
+          "retiredRecoveryProfile": "retired_source_lifecycle_v2"
+        },
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": true,
+          "actualSelectedShimVersion": 3,
+          "fullHostFrameV3": true,
+          "consumerTupleConformant": true,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1"
+          ],
+          "actualAdmitted3And4DisposalInstalled": true,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+          "finiteReaperAndRetirementProgressConfigured": true
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    },
+    {
+      "id": "missing_admitted4_disposal",
+      "mutation": {
+        "pointer": "/authoritativeChecks/actualAdmitted3And4DisposalInstalled",
+        "value": false
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3",
+            "4"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2,
+            3
+          ]
+        },
+        "prepareSelection": {
+          "retiredRecoveryProfile": "retired_source_lifecycle_v2"
+        },
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": true,
+          "actualSelectedShimVersion": 3,
+          "fullHostFrameV3": true,
+          "consumerTupleConformant": true,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1",
+            "retired_source_recovery_v2"
+          ],
+          "actualAdmitted3And4DisposalInstalled": false,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+          "finiteReaperAndRetirementProgressConfigured": true
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    },
+    {
+      "id": "unsafe_A_scalar_consumers",
+      "mutation": {
+        "pointer": "/authoritativeChecks/fullRootChainTokenAndSnapshot2ConsumersInstalled",
+        "value": false
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3",
+            "4"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2,
+            3
+          ]
+        },
+        "prepareSelection": {
+          "retiredRecoveryProfile": "retired_source_lifecycle_v2"
+        },
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": true,
+          "actualSelectedShimVersion": 3,
+          "fullHostFrameV3": true,
+          "consumerTupleConformant": true,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1",
+            "retired_source_recovery_v2"
+          ],
+          "actualAdmitted3And4DisposalInstalled": true,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": false,
+          "finiteReaperAndRetirementProgressConfigured": true
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    },
+    {
+      "id": "reclaimer_disabled",
+      "mutation": {
+        "pointer": "/authoritativeChecks/finiteReaperAndRetirementProgressConfigured",
+        "value": false
+      },
+      "materialized": {
+        "inventory": {
+          "schemaVersion": 1,
+          "supportedRecoveryProfiles": [
+            "retired_source_lifecycle_v2"
+          ],
+          "proofSchemaVersions": [
+            "2",
+            "3",
+            "4"
+          ],
+          "snapshotReceiptSchemaVersions": [
+            2,
+            3
+          ]
+        },
+        "prepareSelection": {
+          "retiredRecoveryProfile": "retired_source_lifecycle_v2"
+        },
+        "authoritativeChecks": {
+          "registeredProcessIdentityMatches": true,
+          "actualSelectedShimVersion": 3,
+          "fullHostFrameV3": true,
+          "consumerTupleConformant": true,
+          "currentCarrierProfiles": [
+            "retired_source_recovery_v1",
+            "retired_source_recovery_v2"
+          ],
+          "actualAdmitted3And4DisposalInstalled": true,
+          "fullRootChainTokenAndSnapshot2ConsumersInstalled": true,
+          "finiteReaperAndRetirementProgressConfigured": false
+        }
+      },
+      "requiredBoundary": "authenticated inventory/selection gate BEFORE first v1 root CAS, successor reservation, credential mint or new continuation grant",
+      "expected": {
+        "newJournalOperations": 0,
+        "newRootReservations": 0,
+        "credentialMints": 0,
+        "newContinuationGrants": 0,
+        "correlationsResolved": 0
+      }
+    }
+  ]
+}

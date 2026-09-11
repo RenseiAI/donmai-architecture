@@ -71,7 +71,7 @@ commit raises the live store's minimum writer/readiness schema to 3. An ACK-awar
 opener repairs the one forward crash window; an ACK-unaware schema-2 artifact
 must mechanically refuse the acknowledged store.
 
-> **Registered recovery exception:** [Retired proof schema3](retired-carrier-proof-v3.md) adds an explicit retired-history anchor and current-authority CAS for a pre-consume source whose stream is retired. Proof1/2 remain frozen; every statement below requiring a new schema2 reservation describes the ordinary path. The registered schema3 path requires its own readiness and actual consumer compatibility gates.
+> **Registered recovery exception:** [Retired proof schema3](retired-carrier-proof-v3.md) adds an explicit retired-history anchor and current-authority CAS for a pre-consume source whose stream is retired. Proof1/2 remain frozen; every statement below requiring a new schema2 reservation describes the ordinary path. The registered schema3 path and the [reservation-only proof4 companion](retired-carrier-proof-v4.md) require the Accepted complete-lifecycle gates before the FIRST v1 retired root. Actual implementation and profile readiness remain false until the full consumers and controls land.
 
 ## 1. Version selection is independent and exact
 
@@ -90,6 +90,18 @@ must mechanically refuse the acknowledged store.
   this document under the `/v2/` path before it is advertised.
 - The v1 host continues to be adoptable and usable under all v1 rules. It is
   simply ineligible for authenticated same-PTY-epoch carrier takeover.
+
+### 1.1 Complete retired lifecycle selection
+
+Before any first v1 retired root CAS, new grant, successor reservation or token,
+require authenticated current `retired_source_lifecycle_v2` selection: actual
+proof2/3/4 and Snapshot2/3 support, complete A/B disposal/retry and finite working
+reclaimers. Omitted/v1-only inventory refuses. Bind current selection evidence
+to the exact handoff/prepared digest without rehashing older correlations.
+Actual selected local shim version/capability and consumer-tuple conformance
+are mandatory; max version or a manual flag is insufficient. Existing frozen
+operations remain readable/exactly replayable, not new capability authority.
+See the [Accepted lifecycle ADR](../ADR-2026-09-11-retired-source-complete-lifecycle.md).
 
 ## 2. Strict host-only v2 credential
 
@@ -162,6 +174,16 @@ Decimal
 The signed tuple can authorize only the one retained proof-v2 reservation request,
 floor/predecessor, and proof revision/digest/boundary at the named initialized store. A valid signature
 with stale or changed proof evidence is still refused before room mutation.
+
+**Registered retired credentials (Accepted 2026-09-11).** Proof3 retains its
+frozen claim shape and exact root anchor. Proof4 additionally requires exact
+`proof_schema_version:"4"`, `retired_source_profile:"retired_source_recovery_v2"`
+and `snapshot_receipt_schema_version:"3"`, with the immediate retirement anchor
+specified by the proof4 companion. These are proof/profile selectors, not a new
+WSS protocol. No downgrade/relabel is permitted. Direct3 and ordinary2 descendants
+of either retired profile require complete canonical root/receipt/abandonment/
+predecessor/current-correlation validation before token signing or admission.
+Leaf scalar equality and a null immediate root link are not that authority.
 
 ### 2.0.1 Frozen retained proof-v1 claim profile
 
@@ -735,8 +757,13 @@ revision/digest. That digest commits admitted proof/reservation, prepared
 correlation, nullable Snapshot-receipt digest/revision, nullable Gap/staged
 Snapshot identity, active/pending epochs, epoch floor, and high-water. No or
 multiple matches conflict. Pending equals the reserved candidate. The
-admitted proof schema spelling is exactly string `"1"` or `"2"`; a JSON number is
-invalid. The expected floor is at least every expected active/pending/reserved
+admitted proof schema spelling is exactly string `"1"` or `"2"` on the ordinary
+path; registered actual retired-root abandonment additionally uses exact `"3"`
+or `"4"`. JSON numbers and other selectors are invalid. Selectors3/4 require
+the complete applied root/receipt/family and actual admitted pending candidate,
+not a reservation or inferred preparing state. An actual nonterminal result
+permits one fresh ordinary2 with a real single-use predecessor; it does not
+retarget the reconciliation root. `lineage_terminal` never grants a successor. The expected floor is at least every expected active/pending/reserved
 epoch and must equal the locked source state. Receipt digest/revision are both
 JSON null exactly for `preparing` and both non-null exactly for `receipt_stored`;
 partial or reversed nullability conflicts. `preparing_reprepare` requires
@@ -922,6 +949,19 @@ candidate. The shim ring remains the source of exact replay if the candidate
 never activates.
 
 ### 4.2 `receipt-stored`
+
+**Complete ancestry and Snapshot3 (Accepted 2026-09-11).** Schema2 Snapshot
+consumers for direct proof3 and fresh ordinary2 descendants of a retired root
+must validate the complete canonical root request/receipt/proof, actual
+abandonment and every consumed predecessor plus current correlation union.
+Matching the existing scalar fields is insufficient; a missing family link
+must not fall back to ordinary traffic. Token minting applies the same checks.
+For proof4 only, Snapshot receipt schema3 retains all schema2 fields and adds
+exact `proofSchemaVersion:"4"` and `retiredSourceProfile:"retired_source_recovery_v2"`.
+Its consumer loads and validates full request2/receipt2/proof4/origin/family plus
+all nonce/JTI/credential/cursor/frame predicates before persistence/consume.
+The raw Snapshot frame and ordinary schema2 bytes remain unchanged.
+
 
 The relay validates the new leg's next contiguous Snapshot, appends its exact raw
 encoded frame to the host-frame journal, hashes those same bytes before
@@ -1447,3 +1487,14 @@ Per Agent Operating Protocol V16, a green suite alone proves none of these.
 Each named production seam is removed/disabled independently, the intended
 fixture is observed RED for the intended reason, and the restored exact code is
 observed GREEN.
+
+## Accepted complete-lifecycle obligations
+
+The [complete lifecycle ADR](../ADR-2026-09-11-retired-source-complete-lifecycle.md)
+is Accepted architecture. Refused pre-admission attempts may not renew room
+clocks or recreate reaped rooms indefinitely; normal room/journal reclaimers
+must produce an actual new Retire witness before reservation-only CAS. A real
+admission may win and then blocks retirement. Room-reaped events are transport
+facts, never adoption or terminal-release evidence. Run the frozen first-root,
+unsafe-A scalar and room-liveness controls before profile advertisement. New
+source remains unimplemented and readiness false until complete gates pass.
