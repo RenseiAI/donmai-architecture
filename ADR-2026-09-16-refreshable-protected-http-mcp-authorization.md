@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-09-16
 boundary: shared
 split: sibling-extensions
@@ -7,8 +7,11 @@ split: sibling-extensions
 
 # ADR-2026-09-16 — Refreshable protected HTTP MCP authorization
 
-**Status:** Proposed. This records a contract for review. It authorizes no
-implementation, compatibility claim, release, activation, or live acceptance.
+**Status:** Accepted 2026-09-17 UTC by the root coordinator under delegated
+architecture authority after paired corpus and independent final review.
+Implementation may proceed through D8's staged gates. Compatibility claims,
+release, deployment, activation, and live acceptance remain separate and
+pending.
 
 ## Context
 
@@ -212,6 +215,11 @@ skips:
   credential context, loads no saved operator OAuth or ambient credential, and
   refuses an explicitly configured alternative authorization source before
   spawn rather than falling back to it;
+- the actual isolated credential store is populated with a syntactically valid
+  saved-OAuth sentinel before the production protected configuration is built;
+  the conflict is refused before native spawn, and the sentinel appears in no
+  helper output, request, receipt, or diagnostic. An empty temporary home is not
+  this proof;
 - `insufficient_scope` HTTP 403 does not refresh;
 - wrong-origin and non-authentication failures do not refresh; and
 - the helper runs through the real embedded command root in a minimal local
@@ -276,12 +284,12 @@ silently reverting to a fixed credential.
 ## Affected documents
 
 - `002-provider-base-contract.md` — harness adaptation now points to the
-  proposed closed v2 source/join and runtime-only helper boundary.
+  accepted closed v2 source/join and runtime-only helper boundary.
 - `011-local-daemon-fleet.md` — controller-registered preflight notes immutable
   launch acknowledgement across file rotation.
 - `013-orchestrator-and-governor.md` — AgentRuntime dispatch notes exact v2
   realization and pre-spawn join verification.
-- `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md` — dated proposed
+- `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md` — dated
   compatibility reference; no v1 vocabulary or outcome is changed.
 - `ADR-2026-08-08-harness-as-versioned-deliverable.md` and
   `ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`

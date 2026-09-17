@@ -625,15 +625,16 @@ independent channels:
   homes, endpoint binding, and cleanup; and
 - mode-specific input, event, replay, resume, approval, and child adapters.
 
-The proposed
+The accepted
 [`ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md`](ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md)
 defines a closed v2 protected-HTTP-MCP configuration inside those existing
 channels. It joins exactly one protected materialization to exactly one existing
 common session-bearer-file materialization, while a trusted private runtime slot
 delivers the helper command only to the selected protected server. The helper is
-not an authored MCP field or a new adaptation channel. Until that ADR is
-accepted and its exact adapter realization has passing evidence, v2 is not a
-supported runtime claim and v1 remains unchanged.
+not an authored MCP field or a new adaptation channel. Architecture acceptance
+permits staged implementation, but v2 remains inactive until its exact adapter
+realization and pinned native controls have passing evidence. V1 remains
+unchanged.
 
 ##### Capability realizations compile into these channels
 

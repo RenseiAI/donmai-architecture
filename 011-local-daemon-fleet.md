@@ -35,9 +35,9 @@ Already-started readback is not start permission. V1 remains unchanged; old
 hosts refuse unknown versions before materialization. The OSS implementation
 must ship a usable local registrar, not require a hosted controller.
 
-### Proposed refreshable protected HTTP MCP preflight
+### Refreshable protected HTTP MCP preflight (accepted architecture)
 
-The proposed
+The accepted
 [`ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md`](ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md)
 extends this pre-spawn discipline for one runner-owned protected HTTP MCP server.
 The daemon first produces the existing common private bearer-file
@@ -50,8 +50,9 @@ reference; it never rewrites the receipt or acknowledgement.
 The helper is a hidden in-box command registered through the existing command
 root and is usable in the standalone OSS composition. It is a bounded local file
 read with no auth, general-config, network, or ambient-credential dependency.
-This Proposed ADR grants no implementation or runtime-readiness claim; v1 and
-the current controller-registered preflight remain unchanged.
+Implementation may proceed through the ADR's staged gates, but release,
+activation, runtime readiness, and live acceptance remain pending. V1 and the
+current controller-registered preflight remain unchanged.
 
 ## The user model
 
