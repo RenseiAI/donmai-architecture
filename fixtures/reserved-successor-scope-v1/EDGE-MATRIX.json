@@ -1,0 +1,442 @@
+{
+  "profile": "reserved_successor_retirement_v1",
+  "scopeFields": [
+    "orgId",
+    "sessionId"
+  ],
+  "forbiddenBoundaryCodePoints": [
+    "U+0009",
+    "U+000A",
+    "U+000B",
+    "U+000C",
+    "U+000D",
+    "U+0020",
+    "U+0085",
+    "U+00A0",
+    "U+1680",
+    "U+2000",
+    "U+2001",
+    "U+2002",
+    "U+2003",
+    "U+2004",
+    "U+2005",
+    "U+2006",
+    "U+2007",
+    "U+2008",
+    "U+2009",
+    "U+200A",
+    "U+2028",
+    "U+2029",
+    "U+202F",
+    "U+205F",
+    "U+3000",
+    "U+FEFF"
+  ],
+  "cases": [
+    {
+      "case": "leading-U+0009",
+      "scope": "\torg",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+0009",
+      "scope": "org\t",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+0009",
+      "scope": "o\trg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+000A",
+      "scope": "\norg",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+000A",
+      "scope": "org\n",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+000A",
+      "scope": "o\nrg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+000B",
+      "scope": "\u000borg",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+000B",
+      "scope": "org\u000b",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+000B",
+      "scope": "o\u000brg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+000C",
+      "scope": "\forg",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+000C",
+      "scope": "org\f",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+000C",
+      "scope": "o\frg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+000D",
+      "scope": "\rorg",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+000D",
+      "scope": "org\r",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+000D",
+      "scope": "o\rrg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+0020",
+      "scope": " org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+0020",
+      "scope": "org ",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+0020",
+      "scope": "o rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+0085",
+      "scope": "\u0085org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+0085",
+      "scope": "org\u0085",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+0085",
+      "scope": "o\u0085rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+00A0",
+      "scope": "\u00a0org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+00A0",
+      "scope": "org\u00a0",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+00A0",
+      "scope": "o\u00a0rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+1680",
+      "scope": "\u1680org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+1680",
+      "scope": "org\u1680",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+1680",
+      "scope": "o\u1680rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2000",
+      "scope": "\u2000org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2000",
+      "scope": "org\u2000",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2000",
+      "scope": "o\u2000rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2001",
+      "scope": "\u2001org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2001",
+      "scope": "org\u2001",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2001",
+      "scope": "o\u2001rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2002",
+      "scope": "\u2002org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2002",
+      "scope": "org\u2002",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2002",
+      "scope": "o\u2002rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2003",
+      "scope": "\u2003org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2003",
+      "scope": "org\u2003",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2003",
+      "scope": "o\u2003rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2004",
+      "scope": "\u2004org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2004",
+      "scope": "org\u2004",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2004",
+      "scope": "o\u2004rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2005",
+      "scope": "\u2005org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2005",
+      "scope": "org\u2005",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2005",
+      "scope": "o\u2005rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2006",
+      "scope": "\u2006org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2006",
+      "scope": "org\u2006",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2006",
+      "scope": "o\u2006rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2007",
+      "scope": "\u2007org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2007",
+      "scope": "org\u2007",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2007",
+      "scope": "o\u2007rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2008",
+      "scope": "\u2008org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2008",
+      "scope": "org\u2008",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2008",
+      "scope": "o\u2008rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2009",
+      "scope": "\u2009org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2009",
+      "scope": "org\u2009",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2009",
+      "scope": "o\u2009rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+200A",
+      "scope": "\u200aorg",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+200A",
+      "scope": "org\u200a",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+200A",
+      "scope": "o\u200arg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2028",
+      "scope": "\u2028org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2028",
+      "scope": "org\u2028",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2028",
+      "scope": "o\u2028rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+2029",
+      "scope": "\u2029org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+2029",
+      "scope": "org\u2029",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+2029",
+      "scope": "o\u2029rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+202F",
+      "scope": "\u202forg",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+202F",
+      "scope": "org\u202f",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+202F",
+      "scope": "o\u202frg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+205F",
+      "scope": "\u205forg",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+205F",
+      "scope": "org\u205f",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+205F",
+      "scope": "o\u205frg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+3000",
+      "scope": "\u3000org",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+3000",
+      "scope": "org\u3000",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+3000",
+      "scope": "o\u3000rg",
+      "accepted": true
+    },
+    {
+      "case": "leading-U+FEFF",
+      "scope": "\ufefforg",
+      "accepted": false
+    },
+    {
+      "case": "trailing-U+FEFF",
+      "scope": "org\ufeff",
+      "accepted": false
+    },
+    {
+      "case": "interior-U+FEFF",
+      "scope": "o\ufeffrg",
+      "accepted": true
+    },
+    {
+      "case": "ascii",
+      "scope": "org",
+      "accepted": true
+    },
+    {
+      "case": "unicode-scalars",
+      "scope": "\u7d44\u7e54\ud83d\ude00",
+      "accepted": true
+    },
+    {
+      "case": "replacement-scalar",
+      "scope": "\ufffd",
+      "accepted": true
+    }
+  ]
+}

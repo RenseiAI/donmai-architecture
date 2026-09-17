@@ -1,0 +1,14 @@
+{
+  "profile": "reserved_successor_retirement_v1",
+  "fixture": "scope-edge-matrix",
+  "files": {
+    "EDGE-MATRIX.json": {
+      "bytes": 8344,
+      "sha256": "42da93a0d84ddaa7ee6f5a4b0b857ac6e9348fd912696c08788473bcedf6ab92"
+    },
+    "README.md": {
+      "bytes": 1390,
+      "sha256": "1f170d1ce070998407b865b61e6d5692dfb76bffd9529ae69f9ebdae7f365237"
+    }
+  }
+}
