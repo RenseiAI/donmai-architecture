@@ -1,0 +1,29 @@
+{
+  "files": {
+    "DIGEST-INPUTS.json": {
+      "bytes": 1764,
+      "sha256": "f0fa32474373a7a6afa75121592b95117e35cebdf7724462b1e36d35c1d54e52"
+    },
+    "PREDECESSOR.json": {
+      "bytes": 519,
+      "sha256": "9666ea0d374a445dae70ca9a98ae3f41c977c229591ce00353a77773add2a47e"
+    },
+    "README.md": {
+      "bytes": 2034,
+      "sha256": "30acfb65ce2c83843ef35ad153be6d8c0c725e2fb5a003a6d246dc56dcea14a4"
+    },
+    "REQUEST.json": {
+      "bytes": 1531,
+      "sha256": "e3d22c3ac97ac7b18256195b698800952f5b0c0174fa5e82c747f4d65601bdce"
+    },
+    "RESULT.json": {
+      "bytes": 1194,
+      "sha256": "ecd24dfb0c17927c16db88cebb25ab7e7d5ea4f8b700ec78d43b9bfa63064e39"
+    },
+    "SOURCE.json": {
+      "bytes": 4783,
+      "sha256": "f2979b9a6e20e3482b7ecef404ce43169e8afe184250a122c605c8054033ae79"
+    }
+  },
+  "profile": "reserved_successor_retirement_v1"
+}

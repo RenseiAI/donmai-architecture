@@ -107,18 +107,16 @@ both corpora. Summarized:
   comparison, never for disposition, high-water, or any other field a live
   stream's proof carries.
 
-**Clarification to the abandonment rule.** A reservation `Reserve` returns is
-not itself a candidate — admission is what installs one. A reservation that
-never reaches in-lock admission is therefore not an abandonment candidate and
-needs no relay operation: the composing authority closes its own row through
-the existing non-durable socket/generation fence, and a successor reservation
-for the lineage proceeds directly. This was already true for a live stream
-(the owning ADR's "Exact retained-candidate abandonment" section: "Only a
-socket that dies before proof reservation/admission uses the non-durable
-fence"); it holds identically whether the unadmitted reservation's stream is
-still live or has since been retired, because retiring an unadmitted
-reservation deletes nothing a release operation would otherwise have needed
-to clear.
+**Clarification to the abandonment rule (amended 2026-09-17).** A reservation
+`Reserve` returns is not itself a candidate; admission installs one. Ordinary
+never-admitted recovery against an active predecessor uses the existing local
+socket/generation fence. That does not cover a live stream retaining history
+when an exact predecessor has already been consumed by the unused reservation.
+The owning session-shim ADR's reserved-successor-retirement amendment permits
+only that exact unused successor to be durably retired to a new single-use
+continuation, preserving the ancestor's consumed binding, frames, high-water
+and floor. It does not invent admission or authorize stream retirement to erase
+history. All other source eligibility and floor rules remain unchanged.
 
 ## Consequences
 

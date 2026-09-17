@@ -50,6 +50,7 @@ That discipline — particularly point (4), "removing the platform leaves a usab
 
 - **`protocol/interactive-attach-v1.md`** — Frozen original interactive PTY attach framing, roles, control registry, snapshot/resume, sanitization, degraded carrier, and exact v1 credential.
 - **`protocol/interactive-attach-v2.md`** — Correctly versioned host-carrier successor for strict same-PTY takeover: independent negotiation/claim/control registry, carrier-owned durable proof/reservation, atomic admission recheck, non-authoritative candidate states, explicit post-publication activation, exact raw-frame durability, contiguous `host_ack`, persisted proof/high-water reload, and versioned gap disposition. V1 remains unchanged.
+- **[Reserved-successor retirement codec](protocol/reserved-successor-retirement-v1.md)** — Accepted closed request/result/predecessor contract, canonical fixtures, independent reader negotiation and writer-floor protection for exact unused successors; implementation and readiness remain gated.
 - **`protocol/session-shim-v3.md`** — Selected local daemon↔shim successor under the stable `session-shim-v1` family: one exact complete `HostFrame` observation per positive-sequence Output/Resize/Marker/Snapshot/Exit, fsync-backed ACK sidecar and proof-resolved resume floor, no legacy/result duplicate, gap-before-raw-Snapshot ordering, sequence-zero final-screen exclusion, and max-2 overlap in both directions.
 
 ### ADRs

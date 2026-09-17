@@ -1955,13 +1955,12 @@ floor, incumbent fence, and existing high-water are durable; it uses the same
 content-addressed abandonment with null receipt fields before reprepare. Only a
 socket that dies before proof reservation/admission uses the non-durable fence.
 A reservation `Reserve` returns is not itself a candidate: admission is what
-installs one. A reservation that never reaches in-lock admission is not an
-abandonment candidate and needs no relay operation — the composing authority
-closes its own row through that same non-durable fence, and a successor
-reservation for the lineage proceeds directly. See *Amendment 2026-09-03 —
-carrier-epoch floor survives stream retirement* above; this holds identically
-whether the unadmitted reservation's stream is still live or has since been
-retired.
+installs one. Ordinary never-admitted recovery against an active predecessor
+uses the local socket/generation fence. The reserved-successor-retirement
+amendment below defines the exact additional case where retained history and
+an already-consumed predecessor require a new durable continuation. It never
+promotes an unadmitted reservation into an admitted candidate. Stream retirement
+and the carrier-epoch floor rules otherwise remain unchanged.
 Terminal, unavailable, corrupt, timeout, stale
 store, revision rollback, or conflicting active/pending state refuses before
 `Welcome`.
@@ -3415,3 +3414,171 @@ member of its own reason, not because `reason` and `cause` are merged).
 Nothing here changes the synchronized core contract above; rule 10's
 *Amendment 2026-09-02 — terminal evidence prunes the quarantine projection* is
 cited, not amended, by this section.
+
+
+## Amendment 2026-09-17 — reserved-successor retirement
+
+**Decision:** Accepted architecture on 2026-09-17. Implementation, release and
+profile readiness remain separately gated by the acceptance controls below.
+
+This amendment distinguishes an unadmitted reservation from an admitted
+candidate. Ordinary never-admitted recovery against a live active predecessor
+continues to use the local socket/generation fence. One additional closed case
+requires durable continuation: a live stream retains history, an exact
+abandonment A has already been consumed by reserved successor R1, and R1 never
+reaches admission. The authority may retire R1 to a new single-use result T1,
+then reserve R2 from T1. A remains consumed by R1 forever. No receipt may claim
+that R1 was admitted or stored a Snapshot.
+
+### Closed control and predecessor profile
+
+The exact keys, types, digest exclusions, limits and replay/error semantics are
+normative in [the profile codec](protocol/reserved-successor-retirement-v1.md).
+
+The existing control-authenticated retirement endpoint admits a distinct
+version-2 request/receipt profile `reserved_successor_retirement_v1`.
+The request is closed and contains exactly:
+
+```text
+schemaVersion = 2
+profile = reserved_successor_retirement_v1
+cause = unadmitted_successor_reprepare
+expectedSourceState = reserved_successor
+abandonmentRequestId, abandonmentRequestDigest
+storeAuthorityId, orgId, sessionId, ptyEpoch
+sourceProofSchemaVersion = "2"
+sourceProofRevision, sourceProofDigest
+reservationRequestId, reservationRequestDigest, reservedCandidateCarrierEpoch
+predecessorAbandonment = the exact predecessor object retained in R1's proof
+sourceAuthorityDigest
+expectedProofRevision = R1.proofRevision
+expectedActiveCarrierEpoch = "0"
+expectedPendingCarrierEpoch = "0"
+expectedCarrierEpochFloor = R1.carrierEpochFloor
+expectedHighWater = R1.boundary
+```
+
+IDs, digests, canonical decimal integers, bounds and canonicalization follow the
+existing control contract. `schemaVersion` is the JSON integer; uint64 values
+remain decimal strings. Unknown or duplicate members refuse. Prepared
+correlation and Snapshot members are forbidden in this source variant because
+no admission authenticated them. The composing authority separately retains its
+exact local handoff/correlation binding.
+
+The canonical version-2 result echoes scope and source identity and carries
+`state:"reservation_retired"`, `sourceState:"reserved_successor"`,
+`sourceAuthorityDigest`, server-resolved `sourceStateRevision` and
+`sourceStateDigest`, new `abandonmentRevision`/`abandonmentDigest`, retired
+reservation epoch, unchanged carrier floor/high-water/boundary and zero
+active/pending epochs. Its predecessor projection uses the existing eight-member
+shape with `sourceCandidateState:"reserved_successor"`. Other members name R1
+and T1 exactly. A successor proof retains the existing `abandoned` disposition
+and names T1. Neither `empty` proof semantics nor admitted-source profiles are
+weakened.
+
+### Atomic source resolution and durability
+
+Retirement and admission use the same journal lock. Before any mutation,
+require the exact store/scope/request/proof and R1 at the current reservation
+frontier, `Admitted=false`, `Abandoned=false`, no active/pending candidate,
+Snapshot or terminal, exact expected revision/floor/high-water, and the retained
+canonical A with consumed mapping `A -> R1`. A newer reservation or admission
+refuses; expectations are never resampled during an ambiguous retry.
+
+After validating and quota-checking the projected transition, persist the
+profile's minimum writer floor before appending and fsyncing the typed
+retirement record. Mark R1 abandoned, record T1 and its per-epoch uniqueness,
+and increment proof revision once. Preserve A, its consumed mapping, all frames,
+high-water and carrier floor. Do not increment the carrier epoch, fabricate a
+pending candidate, or clear history. R2 must consume T1 once and choose above
+the preserved floor.
+
+Exact operation-id/body replay returns the retained result before live-frontier
+checks and performs no new fence. Changed bytes at an id, a second retirement
+id for R1, foreign or conflicting ancestry, and competing successor refuse.
+Late R1 socket admission fails against the durable abandoned reservation.
+If admission wins the lock first, this profile refuses and only the ordinary
+admitted-candidate contract can handle that state.
+
+### Acyclic digest and CAS contract
+
+`sourceAuthorityDigest` commits RFC-8785 canonical JSON containing domain
+`reserved-successor-source/v1`, exact store/org/session/PTY, R1 request
+id/digest, proof revision/digest and reserved epoch, the complete A predecessor,
+and consumed binding `A.abandonmentRequestId -> R1.reservationRequestId`.
+All members predate T1; Relay independently resolves them. It excludes T1's
+request/result identity and R2.
+
+The frozen request commits this immutable digest and the expected mutable CAS
+values. On success only, Relay computes `sourceStateDigest` from domain,
+sourceAuthorityDigest, actual pre-transition proof revision, active/pending,
+floor/high-water and source admission/retirement flags. No full-history or
+prefix commitment is introduced; existing journal integrity and no-history-
+mutation controls remain responsible for frame preservation. That receipt digest
+excludes the new retirement record. Result revision is pre-transition revision
+plus one, and the result digest omits itself. R2's request then commits the
+completed T1 predecessor. No request contains a digest of its own future result.
+
+### Compatibility and rollback
+
+The existing exact five-token hosted capability tuple remains the baseline.
+The extended reader profile is exactly that tuple plus
+`reserved_successor_retirement_v1`, lexically sorted and duplicate-free. It may
+be advertised only by a binary with the strict predecessor reader installed.
+The server accepts both closed profiles; unknown tokens remain invalid.
+Selected local shimwire version is unchanged and is not reader-support proof.
+
+Relay adds independent capability
+`reserved_successor_retirement_v1_ready:true` only when it can safely execute
+this profile, including the mandatory minimum-writer promotion. Absence/false
+cannot authorize new-profile writes and does not redefine baseline proof-v2
+readiness. The composing authority checks both the authenticated extended
+reader tuple and current Relay support before minting a new-profile credential.
+
+Minimum writer floor `"4"` is allocated to this profile. It is a separate
+namespace from outer marker schema 4 and proof schema 4. The first
+valid operation atomically promotes the existing marker, then appends its new
+record. Crash between these writes retains floor 4 without inventing a receipt.
+Every marker writer/rotation preserves this floor. Immutable prior cutover
+receipts and acknowledgements are not rewritten to claim new support.
+Outer marker schema 4 and retired-source storage profiles are independent of
+minimum writer floor 4. Existing retired-source envelope/profile v1 or v2 and
+its ledger floor must be preserved exactly when the new operation raises the
+minimum writer floor. It must not install its own profile in the retired-source
+selector or upgrade that profile. Conversely, existing retired-source upgrade,
+cutover acknowledgement and allowed rotation must retain the higher minimum
+writer floor and never replace retired-source v2 with v1. Preserve their exact
+cross-file marker/ledger upgrade and refusal rules. No retired-source writer or
+proof-schema-3/4 admission is enabled by this profile.
+Old writers/readers must refuse floor 4 before serving or mutating; new readers
+retain old-profile support. Rollback after first use retains a compatible
+reader rather than lowering the floor, deleting records or selecting an empty
+stream. A reader-only deployment need not promote the floor before first use.
+
+### Unadmitted room projection and late replay
+
+This source variant invokes no room-wide admitted-abandonment fence or callback:
+there is no admitted candidate to remove. Durable reservation retirement is the
+late-admission fence. Any transport cleanup must identify R1's exact leg/epoch
+and is not required to authorize R2. First delivery and exact replay delayed
+until after R2 activates must not change R2's leg, input/output authority,
+readiness or room fence. Contradictory admitted room state is not permission to
+clear the room. Ordinary admitted-abandonment behavior is unchanged.
+
+### Historical local closures and acceptance
+
+An earlier local never-admitted closure is eligible only if the current live
+lineage and exact retained proof/handoff/non-admission provenance still resolve
+R1, and Relay independently proves R1 remains the unadmitted current frontier
+with consumed A. Preserve the old local closure and frozen refused request;
+freeze a separate T1 operation rather than rewrite or resurrect them. Local
+`abandoned` alone is not Relay retirement evidence. Missing/corrupt bytes,
+terminal lifecycle, a retired/missing stream, a newer reservation or a changed
+incarnation refuses. Already-advanced historical chains are not backfilled.
+
+Acceptance requires real journal reopen/crash and admission-vs-retirement XOR
+controls, exact single-use successor replay, mixed canonical/unadmitted closure
+sequences with nonzero history, strict old/new reader tests, late callback/replay
+after successor activation, and a disposable shim/composer/carrier fixture that
+preserves the harness process while input/output resumes. No retained-history
+claim is established by a fake proof or a store-only test.
