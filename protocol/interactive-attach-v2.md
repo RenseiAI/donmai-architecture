@@ -598,7 +598,7 @@ successor to §2.2, where its exact value is:
 {
   "targetReservationRequestId": "UUID",
   "targetReservationRequestDigest": "64 lowercase hex SHA-256",
-  "sourceCandidateState": "preparing | receipt_stored",
+  "sourceCandidateState": "preparing | receipt_stored | reserved_successor (profile-gated)",
   "abandonmentRequestId": "UUID",
   "abandonmentRequestDigest": "64 lowercase hex SHA-256",
   "abandonmentRevision": "canonical positive uint64 decimal",
@@ -653,7 +653,9 @@ the predecessor object is the exact non-null value shown above. `abandoned` does
 not grant authority to either old carrier. Other dispositions require null
 predecessor. The proof contains no bearer, jti, nonce, raw frame, or frame digest.
 
-`durable_carrier_proof_v2` replaces v1 in the exact five-token eligibility set.
+`durable_carrier_proof_v2` replaces v1 in the exact baseline five-token eligibility set.
+The reserved-successor-retirement amendment defines a separate exact six-token
+reader profile; baseline hosts may not receive its new predecessor source state.
 Advertising v2 requires the frozen v1 decoder and exact replay/drain path but not
 a second v1 capability token; advertising both tokens or inferring v1 new
 admission is a protocol refusal.
@@ -1498,3 +1500,32 @@ admission may win and then blocks retirement. Room-reaped events are transport
 facts, never adoption or terminal-release evidence. Run the frozen first-root,
 unsafe-A scalar and room-liveness controls before profile advertisement. New
 source remains unimplemented and readiness false until complete gates pass.
+
+## Amendment 2026-09-17 — reserved-successor retirement control profile
+
+The owning session-shim ADR's reserved-successor-retirement amendment is
+normative for the closed version-2 `reserved_successor_retirement_v1` control
+request/receipt, immutable sourceAuthorityDigest and locked source-state CAS.
+It adds `reserved_successor` to the existing eight-member predecessor shape
+only for the explicitly negotiated profile. Existing version-1 admitted
+abandonment request/result shapes and baseline five-token eligibility retain
+exact bytes and meaning. This does not reinterpret `preparing` as unadmitted.
+
+The profile's canonical `reservation_retired` result retires an exact unused
+reservation whose predecessor is already consumed by it. Its new T1 predecessor
+can be consumed once by R2, while A remains consumed by R1. R2 uses the existing
+`abandoned` proof disposition with the retained nonzero boundary. `empty`
+still requires zero high-water. No Snapshot or admission receipt is invented.
+
+Host/client reader support is the sixth token
+`reserved_successor_retirement_v1`; Relay feature availability is the separate
+health capability `reserved_successor_retirement_v1_ready`. Missing/false or
+unknown profile support refuses new-profile writing, not baseline operations.
+The new profile uses its independently gated monotonic journal writer floor;
+proof version, selected shimwire version and journal writer floor are distinct
+namespaces. An old reader must refuse the new floor before service or mutation.
+
+Source digest dependency order is acyclic: A, then R1 proof/request, then
+sourceAuthorityDigest, then T1 request, then locked sourceStateDigest and T1
+result, then R2 request/proof. The T1 request cannot include a digest of its own
+future response. Exact late response/replay is read-only and cannot fence R2.
