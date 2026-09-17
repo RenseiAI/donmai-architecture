@@ -84,6 +84,12 @@ session-bearer-file binding inside it. It verifies the common requirement
 identity and full digest, source kind, target, private mode, initial bearer
 content digest, and file-reference digest.
 
+The helper's normalized launch bearer and effective authorization header must
+match both the existing common file materialization and the frozen launch
+source used to produce the protected header evidence. A valid file reference
+with different normalized bearer/header evidence is a disagreement and denies;
+no digest or reference match can substitute for this equality.
+
 The daemon applies common config before protected MCP. It therefore retains and
 passes the actual common materialization result into the protected
 materializer. It never synthesizes a matching common record to make validation
@@ -110,8 +116,12 @@ to the sole protected server selected by the exact acknowledged v2 realization,
 after repeating the materialization join and helper-command digest checks. A
 helper on an ordinary or caller-appended server, on a second server, on an
 unselected session, or with mismatched evidence denies before spawn. A
-conflicting literal or environment-derived `Authorization` value on this rail
-also denies; precedence must not silently freeze the credential.
+conflicting literal, environment-derived, bearer-token, OAuth, saved operator,
+or other ambient `Authorization` source on this rail also denies; native
+precedence must not silently freeze the credential or fall back to an operator
+credential. The protected server runs in the existing isolated native-client
+credential context with the acknowledged file/helper source as its only
+authorization source.
 
 The private slot is cleared before recipe, public-config, or operational-payload
 normalization. Ordinary authored MCP, other adapters, and public harness
@@ -123,20 +133,28 @@ surface.
 The helper is a hidden child of the existing MCP command group and enters every
 embedding binary through the existing root command registration. It accepts one
 explicit absolute managed token-file path because the selected native client
-clears custom helper environment variables.
+clears custom helper environment variables. The path must resolve to a regular,
+readable file; another file kind or a relative/unmanaged path refuses.
 
 The daemon and runner use one canonical executable-path and command builder.
 The exact command contains paths only, with operating-system-correct quoting;
-it contains no bearer or fallback bytes. The helper performs a bounded local
-file read and JSON-encodes only the required `Authorization` header. It does not
-initialize authentication, load general application configuration, contact a
-network service, or depend on ambient credentials.
+it contains no bearer or fallback bytes. The helper reads at most 64 KiB of file
+bytes, trims outer whitespace, and rejects an empty result. It rejects any
+interior whitespace, ASCII control byte, DEL, or non-ASCII byte. The remaining
+printable-ASCII token is opaque: the helper performs no JWT or other token
+parsing and passes it through the existing bearer-to-header normalization before
+JSON-encoding only the required `Authorization` header. Token content is never
+interpolated into a shell command. The helper does not initialize
+authentication, load general application configuration, contact a network
+service, or depend on ambient credentials.
 
-Missing, blank, unreadable, oversized, or malformed input exits nonzero without
-emitting a credential or disclosing it through diagnostics. The runner never
-overwrites a daemon-owned file. Standalone execution retains its existing
-runner-owned bootstrap-file fallback and must return the actual effective file
-path plus its cleanup obligation to the same trusted builder.
+Missing, non-regular, blank, unreadable, over-64-KiB, or grammar-invalid input
+exits nonzero without emitting a credential or disclosing it through
+diagnostics. There is no credential fallback. The runner never overwrites a
+daemon-owned file. Standalone execution retains its existing runner-owned
+bootstrap-file fallback and must return the actual effective file path plus its
+cleanup obligation to the same trusted builder; that bootstrap ownership rule
+does not permit a helper-read fallback.
 
 ### D5 — Adapter and realization versions move without relabelling history
 
@@ -160,7 +178,7 @@ adapter realization, exactly one matching common file materialization, exactly
 one matching protected v2 materialization, and the corresponding retained host
 receipt and acknowledgement. It recomputes the canonical executable path and
 helper command and compares every source/reference digest and initial authority
-binding.
+binding, including the normalized launch bearer/header equality from D2.
 
 A changed signing identity, target, session, handler inventory, realization,
 receipt, file reference, or helper command denies. A successfully rotated file
@@ -190,6 +208,10 @@ skips:
 - an unchanged stale file produces one rejected request and no retry request;
 - explicit static or bearer/OAuth-shaped authorization takes native precedence,
   explaining why the protected production rail rejects the conflict;
+- the production protected rail starts in its existing isolated client
+  credential context, loads no saved operator OAuth or ambient credential, and
+  refuses an explicitly configured alternative authorization source before
+  spawn rather than falling back to it;
 - `insufficient_scope` HTTP 403 does not refresh;
 - wrong-origin and non-authentication failures do not refresh; and
 - the helper runs through the real embedded command root in a minimal local
@@ -200,6 +222,11 @@ fail after the 401, then restores the helper projection and requires success.
 Removing the helper/file-reference binding must make the codec and
 acknowledgement controls fail; restoring it must make them pass. A skipped
 native control is not passing evidence.
+
+If the pinned fixture cannot prove that credential-context isolation and
+explicit-source refusal against the actual native consumer, the positive v2
+path remains inactive. Source inspection or a config readback is not equivalent
+proof.
 
 ### D8 — Rollout remains staged and coherent
 
@@ -266,10 +293,11 @@ silently reverting to a fixed credential.
 The synchronized boundary section in `001-layered-execution-model.md` is not
 changed.
 
-## Open acceptance clarifications
+## Protocol checkpoint and implementation mechanics
 
-Implementation must not guess exported field or accessor names before the
-signed protocol checkpoint. Review must also freeze the helper's exact bounded
-input limit and accepted token-file byte grammar so every implementation and
-negative vector uses one definition. These choices do not add wire fields or
-weaken the fail-closed cases above.
+The wire names and closed helper input grammar in this ADR are normative.
+Exported Go type, constructor and accessor names remain implementation mechanics
+rather than wire contract. The producer's early signed protocol checkpoint
+freezes the actual exported names and byte-identical golden vectors before sibling
+consumers start, so those consumers never implement against guesses. This adds
+no public serialized command field and does not change v1 semantics.
