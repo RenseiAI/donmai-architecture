@@ -24,13 +24,53 @@ Type aliases use the existing composing authority and Relay conventions:
 - `D`: exactly 64 lowercase hexadecimal characters.
 - `ID`: canonical lowercase UUID matching Relay's existing versions 1–5/RFC
   variant pattern; zero UUID is invalid.
-- `Scope`: valid UTF-8, nonempty/trimmed, ≤256 UTF-8 bytes (the existing composing
-  authority identifier and Relay byte bounds).
+- `Scope`: valid UTF-8 and Unicode scalar values, nonempty, ≤256 UTF-8 bytes,
+  with no leading or trailing member of the fixed boundary-whitespace set below.
+  Interior characters and exact identity bytes are preserved.
 - `Store`: existing Relay initialized store identity regex
   `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`.
 - `Ancestor`: existing closed eight-field predecessor object for the actual A;
   its source state is whatever that validated retained predecessor declares,
   never caller substitution. Existing profiles remain valid.
+
+### Scope boundary whitespace — clarification 2026-09-17
+
+For this profile only, both `orgId` and `sessionId` MUST refuse a leading or
+trailing member of this **fixed 26-codepoint set**:
+
+```text
+U+0009..U+000D, U+0020, U+0085, U+00A0, U+1680, U+2000..U+200A,
+U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF
+```
+
+This is the union of Unicode White_Space and U+FEFF, explicitly frozen above;
+implementation behavior MUST NOT drift with a runtime's whitespace database.
+A valid Scope satisfies both existing composing-identifier and Relay boundary
+conventions. Refuse an invalid edge; never trim, strip, normalize or replace it
+into another accepted identity. Preserve every interior character unchanged,
+including U+0085 and U+FEFF, subject to the existing scalar and UTF-8 byte bounds.
+This clarification adds no field, digest, version, capability or authority and
+does not alter baseline profiles or general identifier validation.
+
+A runtime's default trim function alone is insufficient. The matrix compares
+its boundary predicate (`trim(value) == value`) with the required new-profile
+predicate; it applies to both request and paired-result Scope fields:
+
+| Scope example | JavaScript trim alone | Go TrimSpace alone | Required new-profile reader |
+|---|---|---|---|
+| `org` | accept | accept | accept |
+| `\u0085org`, `org\u0085` (NEL at an edge) | accept | refuse | refuse |
+| `\uFEFForg`, `org\uFEFF` (BOM at an edge) | refuse | accept | refuse |
+| `o\u0085rg` (interior NEL) | accept | accept | accept unchanged |
+| `o\uFEFFrg` (interior BOM) | accept | accept | accept unchanged |
+| ` org`, `org ` | refuse | refuse | refuse |
+
+The separate [Scope edge matrix](../fixtures/reserved-successor-scope-v1/README.md)
+enumerates every fixed codepoint at both edges and internally. It supplements
+these codecs without changing any byte or manifest entry in the original seven
+reserved-successor-retirement fixtures. Conformance requires actual request and
+paired-result parser controls, including literal removal of the NEL/BOM edge
+refusals; a library-trim comparison alone is not implementation evidence.
 
 ### Exact request members
 
