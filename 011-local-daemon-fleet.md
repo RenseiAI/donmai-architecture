@@ -35,6 +35,25 @@ Already-started readback is not start permission. V1 remains unchanged; old
 hosts refuse unknown versions before materialization. The OSS implementation
 must ship a usable local registrar, not require a hosted controller.
 
+### Refreshable protected HTTP MCP preflight (accepted architecture)
+
+The accepted
+[`ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md`](ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md)
+extends this pre-spawn discipline for one runner-owned protected HTTP MCP server.
+The daemon first produces the existing common private bearer-file
+materialization, then the protected v2 materialization joins that exact result
+with one matching file binding and one trusted helper-command digest. The actual
+host receipt and acknowledgement retain the original bearer/header evidence.
+Atomic replacement changes only file content behind the acknowledged immutable
+reference; it never rewrites the receipt or acknowledgement.
+
+The helper is a hidden in-box command registered through the existing command
+root and is usable in the standalone OSS composition. It is a bounded local file
+read with no auth, general-config, network, or ambient-credential dependency.
+Implementation may proceed through the ADR's staged gates, but release,
+activation, runtime readiness, and live acceptance remain pending. V1 and the
+current controller-registered preflight remain unchanged.
+
 ## The user model
 
 > "I have a Mac. I want to install Donmai once, configure it once, and have any project's work execute on this Mac as long as the project is allowed and credentials are wired up. I never want to think about the worker fleet again."
