@@ -442,6 +442,18 @@ context. Missing/refused/ambiguous acknowledgement permits no materialization
 or spawn. V1 plan/receipt vocabulary and ordering remain unchanged. This
 accepted amendment is not evidence of v2 implementation or runtime readiness.
 
+**Proposed compatibility amendment 2026-09-16:**
+[`ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md`](ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md)
+would add `execution-preflight-protected-mcp-config/v2` as a closed
+materialization beneath the existing `mcp_server`, `credential_binding`,
+`config_file`, and `host_adapter` vocabulary. It adds no channel, delivery
+strategy, outcome, or denial code here. Its protected materialization joins one
+actual common bearer-file materialization and carries only digests and
+references; the executable helper remains private runtime state and never an
+authored plan field. If accepted, the initial receipt and host acknowledgement
+remain immutable when file content rotates. Until then, v1 remains the only
+governing protected-MCP contract.
+
 ### D6 — Interactive, replay, and approval adapters
 
 Headless and interactive execution are modes of the same admitted harness, but

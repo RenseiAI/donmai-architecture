@@ -290,6 +290,16 @@ cleanup. Runtime and cleanup outcomes append records to the initial receipt.
 Role intent cannot replace the harness operating protocol, and prompt guidance
 cannot stand in as evidence for a requested service.
 
+The proposed
+[`ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md`](ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md)
+adds one fail-closed pre-spawn specialization for a runner-owned protected HTTP
+MCP server. Dispatch must select the exact v2 adapter realization, retain the
+actual common bearer-file materialization, join it exactly once to the protected
+v2 materialization, and verify both against the immutable host acknowledgement
+before attaching the private runtime helper. Rotation after spawn changes only
+the managed file content. It cannot mutate admission, plan, receipt, or
+acknowledgement evidence. This proposal does not alter current v1 dispatch.
+
 Where the selected harness loads host-side extensions, the pre-spawn sequence
 additionally **materializes, verifies, and — on session end — removes** every
 injected extension artifact, per

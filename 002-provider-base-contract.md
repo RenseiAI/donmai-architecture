@@ -625,6 +625,16 @@ independent channels:
   homes, endpoint binding, and cleanup; and
 - mode-specific input, event, replay, resume, approval, and child adapters.
 
+The proposed
+[`ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md`](ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md)
+defines a closed v2 protected-HTTP-MCP configuration inside those existing
+channels. It joins exactly one protected materialization to exactly one existing
+common session-bearer-file materialization, while a trusted private runtime slot
+delivers the helper command only to the selected protected server. The helper is
+not an authored MCP field or a new adaptation channel. Until that ADR is
+accepted and its exact adapter realization has passing evidence, v2 is not a
+supported runtime claim and v1 remains unchanged.
+
 ##### Capability realizations compile into these channels
 
 A channel is *how bytes move*; a **capability** is what the user selected. The binding between the two is a **realization** — one capability on one harness adapter version — and per [`ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`](ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md) it is a **registry lookup**, never an assembly performed by whichever caller happened to build the spec. The registry is keyed on capability × adapter version; each recipe composes only from the channel and delivery vocabularies above, so a realization never adds a channel name; and each carries a content-addressed digest that enters the plan and is echoed in the receipt. An adapter-version bump re-registers each realization with its fixture re-run, or declares its inheritance explicitly — it never carries one forward silently. Where no realization is registered for a demanded capability, the candidate is not viable and is excluded before any plan is compiled.
