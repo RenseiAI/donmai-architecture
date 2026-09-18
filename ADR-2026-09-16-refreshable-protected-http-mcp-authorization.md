@@ -174,6 +174,12 @@ released provenance is fabricated for development source. Existing v1
 in-flight receipts remain readable under their old semantics; they cannot
 authorize a v2 spawn or receive an in-place upgrade.
 
+Per-session coexistence and historical absence handling are governed by
+[per-session capability realization selection](ADR-2026-09-18-per-session-capability-realization-selection.md).
+A dual process policy selects from immutable operational-payload authority;
+it must not globally reinterpret retained V1 work as V2. The existing
+file/helper/materialization and native refresh proofs below remain required.
+
 ### D6 — Spawn verifies the immutable acknowledgement and current file binding
 
 Before attaching the runtime-only helper, spawn requires the exact selected v2

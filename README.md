@@ -251,7 +251,7 @@ renaming an ADR.
 | [`ADR-2026-09-11-retired-source-complete-lifecycle.md`](ADR-2026-09-11-retired-source-complete-lifecycle.md) | Accepted | shared | Complete retired-source disposal and retry |
 | [`ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md`](ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md) | Accepted | shared | Refreshable protected HTTP MCP authorization |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
-| [`ADR-2026-09-18-per-session-capability-realization-selection.md`](ADR-2026-09-18-per-session-capability-realization-selection.md) | Proposed | shared | Per-session capability realization selection |
+| [`ADR-2026-09-18-per-session-capability-realization-selection.md`](ADR-2026-09-18-per-session-capability-realization-selection.md) | Accepted | shared | Per-session capability realization selection |
 <!-- ADR-INDEX:END -->
 
 - [Controller-registered host preflight](ADR-2026-09-09-controller-registered-host-preflight.md) — **Accepted architecture; implementation pending**: closed runtime-binding v2, trusted registrar and authenticated acknowledgement of the actual host receipt before credentials/spawn; v1 unchanged.

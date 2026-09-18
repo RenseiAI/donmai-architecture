@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-09-18
 boundary: shared
 split: sibling-extensions
@@ -15,10 +15,12 @@ selector must not reinterpret older work. The admission producer already knows
 the chosen realization, but the host compiler and child runner need the same
 independently bound choice before producing their adaptation evidence.
 
-This proposal extends the selection boundary of
+This decision extends the selection boundary of
 [refreshable protected HTTP MCP authorization](ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md).
 It does not replace the v2 file/helper/materialization checks in that decision.
-No implementation, release or activation is authorized by Proposed status.
+Accepted by coordinator architecture review on 2026-09-18 following an
+independent source-backed review. Implementation must follow the staged
+protocol checkpoint below; release and activation remain separately gated.
 
 ## Decision
 
@@ -164,7 +166,7 @@ invalidate retained authority and is not a migration mechanism.
 
 ## Affected documents
 
-On acceptance, amend the selection/rollout discussion in
-`ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md` and add the
-implementation protocol/vectors. No synchronized core region changes are
-proposed. The private companion owns hosted producer and rollout mechanics.
+This decision amends the selection/rollout discussion in
+`ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md` ; the implementation protocol/vectors
+remain a separately verified checkpoint. No synchronized core region changes are
+required. The private companion owns hosted producer and rollout mechanics.
