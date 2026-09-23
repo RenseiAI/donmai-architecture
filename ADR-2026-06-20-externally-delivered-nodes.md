@@ -102,6 +102,13 @@ in-host code change and a redeploy. An external source that is compromised can
 therefore mislabel and reshape nodes, but cannot execute anything the host has not
 already vetted.
 
+**Clarification (2026-09-23).** One exception is permitted: a host may run a
+*signed declarative execution contract*, bound to a single vetted in-host
+executor, that invokes only a binary the host operator has already installed and
+consented to, for a consented subcommand set, with read-only effect; a refresh
+may then add such a contract-shaped invocation without a code change, and every
+other path keeps the rule above.
+
 The `invoke(verbId, input, ctx)` contract is the **seam** for two deferred paths —
 sandboxed external execution, and a local daemon-proxy path. Both land as a new
 implementation of that interface rather than a re-architecture. Credentials resolve
