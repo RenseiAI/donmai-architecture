@@ -241,7 +241,7 @@ The platform ships against multiple cloud providers (Blaxel, Cloudflare, Daytona
 | `executionSecurityEnforcement.fileWrite` | host | host | host | host | host | host | host |
 | `executionSecurityEnforcement.network` | open | open | open | open | open | open | open |
 | `executionSecurityEnforcement.credentials` | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login |
-| `executionSecurityEnforcement.isolation` | host-user | microvm | microvm | container | container | container | container (microvm only with a VM-backed runtime class) |
+| `executionSecurityEnforcement.isolation` | host-user | microvm (unproven) | microvm (unproven) | container (unproven) | container (unproven) | container (unproven) | container (unproven; microvm only with a VM-backed runtime class) |
 | `isA2ARemote` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 The seventh row — A2A as transport flavor — is its own provider implementation in code (`A2ASandboxProvider`), declaring `isA2ARemote: true` and `transportModel: 'dial-in'` (the orchestrator dials into the remote A2A peer). Treating remote A2A agents as a substrate provider unifies "where does work execute" reasoning regardless of whether the work lives on our infra or someone else's. *(Substrate provider, not "sandbox provider": an A2A peer is a `remote_peer` placement, never the ephemeral kind — `ADR-2026-08-07` D1/D10.1. The code identifier `A2ASandboxProvider` and the `Sandbox` Provider Family name are unchanged, per D10.5.)*
@@ -267,9 +267,12 @@ The seventh row — A2A as transport flavor — is its own provider implementati
 > is index 0 almost everywhere: no executor or provisioning control plane yet
 > renders a level and records it. `toolApproval` is not a substrate property —
 > the harness layer renders it — so a provider declares nothing there. Isolation
-> is the one dimension a provider delivers by construction, so its row carries
-> the provider's real class; it becomes attested when the provisioning record
-> carries it. A freshly minted sandbox holds no operator home, which is why its
+> is the one dimension a provider delivers by construction, so its row names the
+> provider's class, marked **unproven**: a declared class is a ceiling and
+> counts toward viability only once the provider adapter's negative probe on its
+> exact version attests it; until then the attested value is index 0. Per
+> session, the provisioning record proves what that session got. A freshly
+> minted sandbox holds no operator home, which is why its
 > `host` is less dangerous than a local host's `host`, but that is circumstance,
 > not a level: the ladder records enforcement.
 >

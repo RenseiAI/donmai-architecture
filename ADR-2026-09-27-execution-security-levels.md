@@ -90,14 +90,17 @@ it permits.
 
 Level meanings (normative):
 
-- **`toolApproval`** — `bypass`: tools run without approval or policy checks.
-  `deny-list`: every call runs except those an enforced deny list matches.
-  `allow-list`: only calls an enforced allow list matches run. `human-approval-for-writes`:
-  the allow list applies, and every call that writes, executes or reaches the
-  network waits for a human approval; with no approver attached the call is
-  refused, never auto-approved. **List levels match parsed invocations** (tool
-  identity plus parsed arguments). A text-prefix match on a raw command string
-  satisfies neither list level, because chaining defeats it.
+- **`toolApproval`** — the ladder measures enforcement strength; the always-on
+  deny baseline (D6) is rendered at every level. `bypass`: no approval prompts;
+  the deny entries are rendered best-effort through whatever channel the harness
+  has, unattested, and the report says so. `deny-list`: the same deny entries,
+  plus any authored ones, enforced on parsed invocations and proven by a
+  negative fixture. `allow-list`: only calls the effective allow entries match
+  run, and the deny entries still apply. `human-approval-for-writes`: the allow
+  list applies, and every call that writes, executes or reaches the network
+  waits for a human approval; with no approver attached the call is refused,
+  never auto-approved. A text-prefix match on a raw command string satisfies
+  neither list level, because chaining defeats it.
 - **`fileRead`** — `host`: anything the executing OS user can read in the
   execution context. `home-minus-secrets`: as `host`, minus a declared secret set
   (credential stores, key material, harness logins, environment files outside the
@@ -107,14 +110,23 @@ Level meanings (normative):
   session's workarea plus executor-owned temporary and state paths.
 - **`network`** — `open`: unrestricted, unrecorded egress. `logged`: unrestricted
   egress, every destination recorded as session evidence. `allow-list`: egress
-  only to declared destinations, enforced below the harness. `none`: no egress
-  beyond the resolved model endpoint and the execution layer's own control
-  channel, both mediated by the executor.
-- **`credentials`** — `ambient-host-login`: the harness may use any login present
-  on the host. `injected-only`: the harness sees only credentials the execution
-  layer injected for this session; ambient logins are unreachable.
-  `short-lived-scoped`: injected only, and each credential is short-lived and
-  scoped to the session's declared resources.
+  only to the effective allowed destinations, enforced below the harness.
+  `none`: no egress beyond the resolved model endpoint and the execution layer's
+  own control channel, both mediated by the executor.
+- **`credentials`** — governs repository, tool and service credentials.
+  `ambient-host-login`: the harness may use any login present on the host.
+  `injected-only`: the harness sees only credentials the execution layer
+  injected for this session, and ambient stores are unreachable to it — which
+  needs `fileRead` at `home-minus-secrets` or stronger, or an isolation boundary
+  that excludes them. A separate config home alone does not meet it while
+  `fileRead` is `host`, and its negative probe attempts an ambient-login read.
+  `short-lived-scoped`: injected only, each credential short-lived and scoped to
+  the session's declared resources. **The model-endpoint credential is brokered
+  separately:** from `injected-only` up it arrives only by execution-layer
+  injection, and `short-lived-scoped` exempts it explicitly (as `network: none`
+  exempts the model endpoint) unless the endpoint is served through a
+  translating gateway (`ADR-2026-07-24-translating-gateway-model-endpoint-host.md`),
+  which holds the key and hands the harness a session-scoped token.
 - **`isolation`** — `host-user`: the host OS user, uncontained. `os-sandbox`: an
   OS sandbox the harness cannot widen. `container`: a container boundary.
   `microvm`: a hardware-virtualized boundary.
@@ -133,10 +145,12 @@ type ExecutionSecurityDimension = keyof ExecutionSecurityLevels
 // What one scope stores: an optional minimum per dimension. Absent = inherit.
 type ExecutionSecurityMinimums = Partial<ExecutionSecurityLevels>
 
-// What the control plane stamps on the intent and the session.
+// What the control plane stamps on the intent and the session at admission.
 interface EffectiveExecutionSecurity {
   levels: ExecutionSecurityLevels
   sources: Record<ExecutionSecurityDimension, string> // opaque ref of the scope that set each level
+  rulesetRevision: string
+  resolvedAt: string
   digest: string
 }
 ```
@@ -156,17 +170,18 @@ so a child is never weaker than its parent.
    dimension. Strongest-wins is `ADR-2026-08-12` D1.1's intersection read on an
    ordered ladder: each level permits a subset of the level below it, so
    intersecting what every scope allows is taking the strongest level any scope
-   requires.
+   requires. Rule 7 keeps that true for list contents.
 3. **Weakening is refused at write time.** Saving a level weaker than the
    inherited one is refused with `execution_security_weakening_refused`, naming
    the inherited level and its source scope. A later tightening at a wider scope
    needs no repair: the narrower value becomes redundant, never effective.
-4. **Fail closed.** An absent outermost value is
-   `execution_security_unconfigured`, and the error names the dimension and the
-   scope. An unreadable, malformed or erroring value at any scope is
-   `execution_security_unresolvable` and denies — the D1.1 law, including its
-   stale-but-bounded snapshot rather than fail-open against a missing one. The
-   execution layer carries **no compiled-in default level**.
+4. **Fail closed, and the control plane never defaults its own data.** An absent
+   outermost value is `execution_security_unconfigured`, naming the dimension
+   and the scope. An unreadable, malformed or erroring value at any scope, more
+   than one outermost value, or a session with no stamp at claim or secret
+   release is `execution_security_unresolvable` and denies — the D1.1 law,
+   including its stale-but-bounded snapshot rather than fail-open against a
+   missing one. The execution layer carries **no compiled-in default level**.
 5. **One answer for every session mode.** Autonomous, human-controlled and
    interactive sessions resolve the same effective levels from the same chain.
    A human at the keyboard is an approver for the approvals a level requests,
@@ -175,22 +190,40 @@ so a child is never weaker than its parent.
    operator action lowers the effective level for one session. Lowering is an
    edit at the scope that set the level, which applies to everything beneath it.
    Break-glass work happens outside the control plane.
+7. **List contents are configuration, composed monotonically.** The entries
+   behind the `toolApproval` and `network` list levels are authored at the
+   workflow or agent-card scope, never on the outermost value. Downward, allow
+   entries only shrink (intersection) and deny entries only grow (union), always
+   including the D6 deny baseline; a stronger level never drops a weaker scope's
+   entries. A list level with no authored allow entries admits nothing beyond
+   what the level above it admits.
+8. **The stamp is fixed at admission.** A tightening applies to new admissions;
+   a resume or restart re-resolves and may only tighten the stamp. Claim and
+   secret release check the session's own stamp, whose revision and resolution
+   time let a surface show that the current chain is stricter than a running
+   session's.
 
-In a single-machine deployment the daemon is its own control plane and its
-configuration is the outermost scope: the value is authored and readable data,
-written explicitly at install, never a constant in the binary.
+**Single-machine deployments.** The daemon is its own control plane and its
+configuration is the outermost scope. The installer seeds it visibly, as a
+hosted seed migration would; the resolver has no fallback. A daemon upgraded
+from a release without levels writes index 0 on every dimension to its
+configuration, visibly, and logs that it did. A daemon registered to a control
+plane never treats its local configuration as the outermost scope: its local
+values are placement-owned and tighten-only (the `ADR-2026-06-06` D5 rule that a
+machine may only subtract).
 
 ### D3 — Placement attestation and viability exclusion
 
-1. **Placements attest; they do not advertise.** Each execution host and
-   substrate provider declares, per dimension, the strongest level it can
-   enforce (`executionSecurityEnforcement` in `004`). A level counts only when
-   the executor, or the control plane that provisioned the context, proves it
-   with a negative probe on the exact version — an attempted read, write,
-   connection or credential use observed to be refused. Pool configuration,
-   prompt instructions and same-user permission changes prove nothing (the
-   `ADR-2026-08-22` D6 rule 7 reasoning, generalized). An absent declaration is
-   exactly index 0 on every dimension.
+1. **Two proofs, at two times.** Before placement, an executor or provider
+   adapter attests per dimension the strongest level it can enforce
+   (`executionSecurityEnforcement` in `004`), proven by a negative probe on its
+   exact version — an attempted read, write, connection or credential use
+   observed to be refused. Viability reads only that attestation. After
+   placement, the per-session records of D4 prove what this session got; secret
+   release reads only those. Pool configuration, prompt instructions and
+   same-user permission changes prove nothing (the `ADR-2026-08-22` D6 rule 7
+   reasoning, generalized). A declared but unproven value is a ceiling, not a
+   level, and an absent attestation is exactly index 0.
 2. **Achievable level = the strongest enforcing layer.** For a candidate
    (placement × harness adapter version), the achievable level per dimension is
    the strongest of the placement's attested level and the level the harness's
@@ -213,9 +246,13 @@ written explicitly at install, never a constant in the binary.
 native configuration as `ADR-2026-08-06` adaptation-plan entries, through the
 existing channel and delivery vocabularies (`tool_permission`, `config_file`,
 `config_home`, `environment_binding`, `injected_boundary`, `host_adapter`); no
-channel or delivery strategy is added. A harness's broad bypass flag is rendered
-only where the effective `toolApproval` level is `bypass`, and a full-filesystem
-or full-network grant only where that dimension's effective level is index 0.
+channel or delivery strategy is added. **The level is decided by proof, not by
+which flag is used.** A no-prompt mode whose deny rules hold, proven by the
+exact version's negative fixture, may render `deny-list`. A flag that disables
+policy enforcement itself, not just prompts, is rendered only at `bypass`, and
+at `bypass` the runner prefers a no-prompt mode that keeps deny rules. A grant
+of full filesystem or network access is rendered only where every dimension it
+opens is at index 0.
 
 **A control plane that provisions a sandbox** renders the levels into the
 provider's own configuration before the runner starts: egress policy from
@@ -227,12 +264,15 @@ a provisioning record of the same shape.
 Illustrative, non-exhaustive mapping by harness family (the exact
 harness/version adaptation manifest is authoritative):
 
-| Harness family | `toolApproval` | `fileRead` / `fileWrite` / `network` | `credentials` |
-|---|---|---|---|
-| Native permission grammar (a permission mode plus allow/deny rules) | skip-permissions mode only at `bypass`; deny/allow rules under a non-bypass mode for the list levels; ask rules routed to the approval adapter at the top level | the harness's own sandbox settings where the pinned version has them; otherwise the placement | isolated config home; injected environment only |
-| Native OS sandbox plus approval policy | "never ask" only at `bypass`; exec-policy rules for the list levels | full-access sandbox only at `host`; workspace-write sandbox for `fileWrite: workarea`; sandbox network off for `none` | isolated home directory |
-| Extension API, no native policy | the handshake-verified injected boundary (checklist rows 3–4) | executor OS sandbox or placement only | isolated state directory |
-| Declared harness on a shared driver | only what the driver renders | driver or placement | driver |
+| Harness family | `toolApproval` | `fileRead` / `fileWrite` / `network` |
+|---|---|---|
+| Native permission grammar (a permission mode plus allow/deny rules) | `bypass`: no-prompt mode plus the deny baseline as deny rules, best-effort; `deny-list`: the same rules proven by fixture, under the no-prompt mode only if the fixture proves they hold there; allow rules for `allow-list`; ask rules routed to the approval adapter at the top level | the harness's own sandbox settings where the pinned version has them; otherwise the placement |
+| Native OS sandbox plus approval policy | "never ask" at `bypass` with exec-policy deny rules best-effort; exec-policy rules for the list levels | full-access sandbox only when `fileRead` and `fileWrite` are `host` and `network` is `open`; workspace-write sandbox for `fileWrite: workarea`; sandbox network off for `none` |
+| Extension API, no native policy | the handshake-verified injected boundary (checklist rows 3–4), carrying the deny baseline at every level | executor OS sandbox or placement only |
+| Declared harness on a shared driver | only what the driver renders | driver or placement |
+
+For every family, `credentials` above index 0 needs the ambient stores
+unreadable (D1), not only a separate config home.
 
 Where no channel can meet a required level, the adaptation plan is denied with
 `execution_security_unrenderable`; the provisioning control plane refuses the
@@ -248,9 +288,10 @@ type EnforcingLayer =
   | 'credential_broker'   // execution-layer credential injection
 
 interface ExecutionSecurityDimensionReport {
-  required: string        // the effective level
+  required: string        // informational echo only; never compared
   achievedLevel: string
   enforcingLayers: EnforcingLayer[] // empty only when achievedLevel is index 0
+  denyBaseline?: 'enforced' | 'best_effort' | 'unavailable' // toolApproval only
   evidenceDigest?: string
 }
 type ExecutionSecurityReport = Record<ExecutionSecurityDimension, ExecutionSecurityDimensionReport>
@@ -267,40 +308,69 @@ interface ExecutionSecurityProvisioningRecord {
 }
 ```
 
-**Secrets wait for the records.** Each record must meet the levels assigned to
-the layers it controls, and together they must meet every effective level. The
-runner's receipt is the combined view: it references the provisioning record
-and counts its layers. A missing, malformed or short record is
-`execution_security_receipt_unmet`: zero secret delivery, zero spawn. A report
-is never repaired by inference from process state.
+A `toolApproval` report above `bypass` requires `denyBaseline: 'enforced'`;
+otherwise the achieved level is `bypass`.
 
-**Compatibility is additive.** On the wire, an absent levels section is exactly
-index 0 on every dimension, and an absent report achieves exactly index 0.
-Index 0 is met by construction, so a legacy peer stays viable only where every
-effective level is the weakest. A control plane whose effective levels are
-above index 0 never emits a work item without the section.
+**Secrets wait for the records.**
+
+- **"Meets" is computed against the control plane's own stamp.** Each reported
+  `achievedLevel` is compared with the session's stamped level; the `required`
+  a report echoes is never compared.
+- **Each record meets what its layers own, and together they meet every stamped
+  level.** The runner's receipt references the provisioning record and counts
+  its layers, but the verifier takes `provider_sandbox` and `credential_broker`
+  claims from the provisioning record the control plane wrote itself, never from
+  the runner's copy.
+- **Refusals, each with zero secret delivery and zero spawn:** a session with no
+  stamp is `execution_security_unresolvable`; a context the control plane
+  provisioned with no valid provisioning record is
+  `execution_security_receipt_unmet` at any level; a report below the stamp is
+  `execution_security_receipt_unmet`. A report is never repaired by inference
+  from process state.
+
+**Compatibility: only peer data defaults to index 0.** Only data a peer supplies
+is read as index 0 when absent: a runner receipt with no `executionSecurity`
+report, or no receipt at all, achieves exactly index 0 — which meets an index-0
+stamp and nothing above it. The control plane never reads its own data (the
+stamp, its provisioning records) as index 0. A runner that receives a work item
+with no levels section renders index 0 only while its control plane has not
+advertised that it always stamps; after that handshake a missing section is
+`execution_security_unresolvable` and the run is refused.
 
 ### D5 — Refusal codes
 
-| Code | Raised at | Meaning |
-|---|---|---|
-| `execution_security_unconfigured` | resolution | The outermost scope has no value for a dimension |
-| `execution_security_unresolvable` | resolution | A scope's value is unreadable, malformed or erroring |
-| `execution_security_weakening_refused` | scope write | A stored minimum below the inherited level; carries the inherited level and its source scope |
-| `execution_security_unmet` | stage 2 exclusion reason | The candidate cannot enforce the effective level; rule id `execution-security.<dimension>` |
-| `execution_security_unrenderable` | adaptation or provisioning | The exact harness/version or provider has no channel for a required level |
-| `execution_security_receipt_unmet` | secret release | A record is missing, malformed, or reports an achieved level below the effective level |
+The six codes form the closed `ExecutionSecurityRefusalCode` enum; each surface
+carries the subset shown.
 
-Codes are closed and typed on both sides of the wire. Human-readable detail is
+| Code | Carried by | Meaning |
+|---|---|---|
+| `execution_security_unconfigured` | resolution refusal | The outermost scope has no value for a dimension |
+| `execution_security_unresolvable` | resolution, claim or secret-release refusal | A value is unreadable, malformed or erroring; more than one outermost value; or a session has no stamp |
+| `execution_security_weakening_refused` | scope-write refusal | A stored minimum below the inherited level; carries the inherited level and its source scope |
+| `execution_security_unmet` | stage-2 exclusion reason (the closed reason enum of the `ADR-2026-08-13` addendum) | The candidate cannot enforce the effective level; rule id `execution-security.<dimension>` |
+| `execution_security_unrenderable` | `AdaptationDenialCode`; provisioning refusal | The exact harness/version or provider has no channel for a required level |
+| `execution_security_receipt_unmet` | secret-release refusal | A report below the stamp, or a required provisioning record missing or malformed |
+
+Codes are typed on both sides of the wire. Human-readable detail is
 display-only; no consumer branches on it (`ADR-2026-08-13` addendum rule).
 
 ### D6 — What stays always-on
 
-Existing always-on protections are not levels and no level disables them: the
-agent-environment credential blocklists, runner-only environment names, the
-cloud-metadata egress denials, and the trust-boundary rules of
-`ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`.
-They remain defense in depth beneath the ladder, including at index 0.
+Existing always-on protections are not levels, and no level disables them. They
+are the "nearly" in a nearly wide-open default:
+
+- **The control plane's tool deny baseline** — credential-surface denies (key and
+  cloud-credential directories, environment files outside the workarea,
+  environment dumps, metadata fetches), the role's tool-surface denies, and the
+  tool block lists the control plane stamps. Rendered in every session mode and
+  at every level: best-effort at `bypass`, enforced and proven from `deny-list`
+  up (D1).
+- **The agent-environment variable blocklists and runner-only environment
+  names.**
+- **The cloud-metadata egress denial, where the placement can enforce it.** Where
+  it cannot, the provisioning record says so and the gap stays visible.
+- **The trust-boundary rules** of
+  `ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`.
 
 ## Consequences
 
@@ -355,7 +425,7 @@ Every edit below lands in this ADR's accepting commit.
 
 - `004-sandbox-capability-matrix.md` — `executionSecurityEnforcement` added to
   the capability struct; six rows added to the per-provider table with honest
-  current values; routing step 1 gains the execution-security bullet; daemon-mode
+  current values (declared isolation classes marked unproven); routing step 1 gains the execution-security bullet; daemon-mode
   declarations gain the no-false-sandbox rule; the OSS/SaaS table gains two rows.
 - `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md` — amendment notes on
   D3 (the bypass rule applies to every session mode and is keyed to the

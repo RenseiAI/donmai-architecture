@@ -731,12 +731,14 @@ carry it:
 - **The levels are a stage-2 demand.** A candidate survives only if, on every
   dimension, its achievable level (the strongest of the placement's attested
   level and the level its harness adapter version can render there) meets the
-  effective level. The exclusion reason is `execution_security_unmet` with rule
+  effective level; a declared but unproven value counts as index 0. The
+  exclusion reason is `execution_security_unmet` with rule
   id `execution-security.<dimension>`. D1.2's loud, typed ∅ applies unchanged; a
   pin cannot bend the demand (D1.3), a ranker cannot trade it away (D1.4), and
   claim time re-runs the same predicate (D1.5).
 
 A placement's own configuration for a dimension may only be stricter than the
 effective level. Discharge happens after bind: secret release waits for the
-applied receipt, and for any provisioning record, to meet the levels
+applied receipt and, when the control plane provisioned the context, its
+provisioning record to meet the levels on the control plane's own stamp
 (`ADR-2026-08-06` D4, amended 2026-09-27).

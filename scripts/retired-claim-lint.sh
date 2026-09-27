@@ -60,7 +60,7 @@ RULES=(
   'STRICT_PIN_MODE%strictPinMode|strict pin mode%ADR-2026-08-12 D1.3%Pin strictness as a mode; a pin is hard within the law and there is no non-strict pin'
   'FALLBACK_POOL_LIST%fallback pool (list|ids)%ADR-2026-08-12 D2%A separately authored fallback list; the ordered surviving set IS the fallback set'
   'UNCONDITIONAL_NO_SCORE%[Tt]here is no cost/latency score%ADR-2026-08-12 D3%Unqualified "routing never scores"; the unscored authored order is the DEFAULT ordering policy, not the only one'
-  'BYPASS_ABSENT_DENY_MODE%bypass when a deny-preserving mode exists%ADR-2026-09-27 D4%Bypass licensed by a missing deny-preserving mode; bypass is legal only at effective toolApproval=bypass'
+  'BYPASS_ABSENT_DENY_MODE%bypass (when|where|if|unless) (a |no |there is no |there is a )?deny-preserving mode%ADR-2026-09-27 D4%Bypass licensed by a missing deny-preserving mode; bypass is legal only at effective toolApproval=bypass'
 )
 
 # ---- Parse args ----

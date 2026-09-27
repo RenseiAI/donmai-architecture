@@ -327,12 +327,15 @@ keyed to a level.**
 extends this decision's rule — broad bypass flags are not an adaptation
 strategy — from autonomous spawn to **every session mode**. Autonomous,
 human-controlled and interactive sessions resolve the same effective
-`executionSecurity` levels and receive the same rendering. A harness's broad
-bypass flag (skip every permission check, allow all, full access) may be
-rendered **only** where the effective `toolApproval` level is `bypass`, and a
-full-filesystem or full-network grant only where that dimension's effective
-level is index 0 — never because a mode, a harness default or a missing grammar
-makes it convenient. Where the effective level is above `bypass` and the exact
+`executionSecurity` levels and receive the same rendering, including the
+always-on tool deny baseline. **The level is decided by proof, not by the
+flag:** a no-prompt mode whose deny rules hold, proven by the exact version's
+negative fixture, may render `deny-list`; a flag that disables policy
+enforcement itself, not just prompts, may be rendered **only** where the
+effective `toolApproval` level is `bypass`; and a full-filesystem or
+full-network grant only where every dimension it opens is at index 0 — never
+because a mode, a harness default or a missing grammar makes it convenient.
+Where the effective level is above `bypass` and the exact
 harness/version has neither a native grammar nor a handshake-verified injected
 boundary for it, the plan is denied with `execution_security_unrenderable`; it
 is never rendered weaker. Rendering uses the channel and delivery vocabularies
@@ -437,11 +440,15 @@ per-dimension `required`, `achievedLevel` and `enforcingLayers` report, and an
 optional `provisioningRecordId` referencing the record written by a control
 plane that provisioned the execution context. `AdaptationDenialCode` gains
 `execution_security_unrenderable`. The D5 condition "if ready: deliver secrets"
-now also requires the report — and the provisioning record, where one exists —
-to meet every effective level; otherwise the outcome is
-`execution_security_receipt_unmet` with zero credential-delivery and zero spawn
-side effects. An absent report achieves exactly index 0, so a legacy producer
-remains valid only where every effective level is the weakest.
+now also requires the report and, **when the control plane provisioned the
+context**, its provisioning record to meet every level on the control plane's
+own stamp — never the `required` value the report echoes. Otherwise the secret
+release is refused with `execution_security_receipt_unmet` (a code of that
+ADR's closed `ExecutionSecurityRefusalCode`, not of `AdaptationDenialCode`),
+with zero credential-delivery and zero spawn side effects. A missing
+provisioning record for a provisioned context and a session with no stamp are
+refused at any level. Only a legacy runner's absent report is read as a level,
+and it achieves exactly index 0.
 
 ### D5 — Orchestration order
 
