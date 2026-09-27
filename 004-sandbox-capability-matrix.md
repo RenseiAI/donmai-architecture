@@ -1,8 +1,8 @@
 # 004 — Sandbox Capability Matrix
 
 **Status:** Reference
-**Last updated:** 2026-08-07
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `014-tui-operator-surfaces.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`, `ADR-2026-08-22-session-owned-multi-repository-workarea.md`.
+**Last updated:** 2026-09-27
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `014-tui-operator-surfaces.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`, `ADR-2026-08-22-session-owned-multi-repository-workarea.md`, `ADR-2026-09-27-execution-security-levels.md`.
 
 > **Vocabulary note (2026-08-07).** This doc predates
 > `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`, which
@@ -199,6 +199,13 @@ interface SandboxProviderCapabilities {
   repositoryAuthorityEnforcement?: 'none' | 'isolated-read-only-v1'
                                     // absent is exactly 'none' for legacy peers
 
+  // Execution security enforcement (ADR-2026-09-27). Per dimension, the
+  // strongest level this executor or provider ATTESTS it enforces, proven by a
+  // negative probe on the exact version (or recorded by the control plane that
+  // provisioned the context). Pool configuration and prompt policy do not
+  // qualify. Absent, or an absent dimension, is exactly index 0.
+  executionSecurityEnforcement?: Partial<ExecutionSecurityLevels>
+
   // A2A / federated work
   // A2A is "execute work in someone else's workarea+sandbox"
   // — modeled here as a transport flavor, not a separate plugin family
@@ -229,6 +236,12 @@ The platform ships against multiple cloud providers (Blaxel, Cloudflare, Daytona
 | `supportsGpu` | ❌ (typically) | ❌ | ❌ | ✅ | ❌ | host-dep | cluster |
 | `egressDefault` | allow-all | allow-all (configurable) | allow-all | allow-all | allow-all | allow-all | cluster-policy |
 | `repositoryAuthorityEnforcement` | none | none | none | none | none | none | none |
+| `executionSecurityEnforcement.toolApproval` | — | — | — | — | — | — | — |
+| `executionSecurityEnforcement.fileRead` | host | host | host | host | host | host | host |
+| `executionSecurityEnforcement.fileWrite` | host | host | host | host | host | host | host |
+| `executionSecurityEnforcement.network` | open | open | open | open | open | open | open |
+| `executionSecurityEnforcement.credentials` | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login |
+| `executionSecurityEnforcement.isolation` | host-user | microvm | microvm | container | container | container | container (microvm only with a VM-backed runtime class) |
 | `isA2ARemote` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 The seventh row — A2A as transport flavor — is its own provider implementation in code (`A2ASandboxProvider`), declaring `isA2ARemote: true` and `transportModel: 'dial-in'` (the orchestrator dials into the remote A2A peer). Treating remote A2A agents as a substrate provider unifies "where does work execute" reasoning regardless of whether the work lives on our infra or someone else's. *(Substrate provider, not "sandbox provider": an A2A peer is a `remote_peer` placement, never the ephemeral kind — `ADR-2026-08-07` D1/D10.1. The code identifier `A2ASandboxProvider` and the `Sandbox` Provider Family name are unchanged, per D10.5.)*
@@ -247,6 +260,25 @@ The seventh row — A2A as transport flavor — is its own provider implementati
 > `repositoryAuthorityEnforcement` field is exactly `none`; it keeps a legacy
 > executor registrable for singular default-primary intent but can never satisfy
 > a read-only-repository demand.
+
+> **Amended 2026-09-27 by `ADR-2026-09-27-execution-security-levels.md`.** The
+> six `executionSecurityEnforcement` rows declare, per provider, the strongest
+> execution-security level the provider enforces **today**, and the honest value
+> is index 0 almost everywhere: no executor or provisioning control plane yet
+> renders a level and records it. `toolApproval` is not a substrate property —
+> the harness layer renders it — so a provider declares nothing there. Isolation
+> is the one dimension a provider delivers by construction, so its row carries
+> the provider's real class; it becomes attested when the provisioning record
+> carries it. A freshly minted sandbox holds no operator home, which is why its
+> `host` is less dangerous than a local host's `host`, but that is circumstance,
+> not a level: the ladder records enforcement.
+>
+> **A native control is a ceiling, not a level.** Per each provider's public API
+> at the time of writing, some providers expose a per-instance egress control
+> (per-sandbox deny/allow lists, a network-policy mode, a cluster network policy)
+> and one has none at all (the Docker Engine API carries no per-container egress
+> ACL). None of these counts toward viability until the control plane that
+> provisions the context renders it and records the achieved level.
 
 The capability flags above are the *declared* shape — what a provider/host advertises at registration time. The corresponding *runtime view* is `LiveCapacityInstance.capabilities` in the live execution capacity contract (`014-tui-operator-surfaces.md` § "Live capacity contract" and `ADR-2026-05-06-tui-noun-consolidation.md` Addendum 2026-05-06). Each live row carries the capability tags currently in force on that specific instance — the operator-facing reflection of what this doc specifies as the provider's capability schema.
 
@@ -355,6 +387,15 @@ re-ranked by a hidden score.
      executor. Absence is a typed viability exclusion with a stable rule id,
      never permission to materialise that leaf writable.
    - Session mode: an interactive or otherwise persistent-lane session is eligible only for pools whose provider can host persistently-enrolled hosts (see § "Persistent and on-demand are lanes").
+   - Execution security: on every dimension, the candidate's achievable level —
+     the strongest of its attested `executionSecurityEnforcement` level and the
+     level the resolved harness adapter version can render on it — is at least
+     the effective `executionSecurity` level. Otherwise the candidate is
+     excluded with `execution_security_unmet` and rule id
+     `execution-security.<dimension>`; it is never provisioned with weaker
+     settings. A pool's own configuration for a dimension (its egress policy,
+     for example) may be stricter than the effective level, never weaker
+     (`ADR-2026-09-27` D3).
 
 2. **Filter by policy.** Layer 6 policy hooks may reject a candidate (e.g., "this
    project may only run on `EnterpriseK8s`"). Note that a per-pool project grant
@@ -670,8 +711,17 @@ Local daemon mode shifts a few declared capabilities relative to foreground mode
 
   // Toolchain provisioning happens in the workarea provider, not sandbox
   // (daemon doesn't bake toolchains into worker images — it's the host machine)
+
+  // Execution security: attested per dimension, index 0 until proven
+  executionSecurityEnforcement: <attested by negative probe>,
 }
 ```
+
+**A daemon never advertises a sandbox it does not have** (`ADR-2026-09-27`
+D3). A generic sandbox capability tag at registration is not an
+execution-security level and is never read as one; a daemon claims
+`isolation: os-sandbox` or stronger only when it applies that boundary around
+the harness and its probe proves it.
 
 ### Why this matters for OSS
 
@@ -698,6 +748,8 @@ This pattern is currently absent from the platform's icebox parse — there's no
 | Capacity profiles (named policy over pools) | ❌ (single-tenant; no grant edge) | ✅ owns |
 | Ordering policies beyond the authored order | ❌ (ships `declared` only) | ✅ owns |
 | Placement decision record (shape) | ✅ owns contract + local emission | aggregates + extends |
+| Execution-security ladders, composition law, attestation, receipt fields | ✅ owns contract + runner rendering | ✅ ships scope storage, operator surfaces, provisioning rendering |
+| Rendering levels into a provisioned sandbox's provider configuration | ❌ (ships `Local` only) | ✅ owns |
 | Per-tenant regime config | ❌ (single-tenant) | ✅ owns |
 | Fleet observability dashboard | ❌ (basic logs) | ✅ owns |
 

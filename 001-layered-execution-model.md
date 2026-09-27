@@ -1,7 +1,7 @@
 # 001 — Layered Execution Model
 
 **Status:** Canonical
-**Last updated:** 2026-08-07
+**Last updated:** 2026-09-27
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/001-layered-execution-model-platform-extensions.md`)
 
 This is the canonical mental model for the Donmai OSS execution layer. Every other doc in this corpus elaborates one slice of what's described here. If a contributor reads only one doc, it should be this one.
@@ -352,6 +352,8 @@ Per-layer responsibilities at a glance:
 | **Composition** | Kit signature verification before detect runs, untrusted-code execution policy (declarative kits run in-orchestrator, executable kits run in the workarea sandbox), MCP server permission scoping per kit, prompt-injection sanitization on ingested external content (kit docs, fetched URLs, memory queries). |
 | **Intelligence Services** | Memory row-level security per tenant/project/scope (Cedar policies), code-index access controls, audit trail for every read/write, encryption of sensitive observations at rest. |
 | **Policy/Security/Observability hooks** | Composable enforcement chains, audit log emission, breach detection, attestation aggregation (proving the full chain of custody for a change). |
+
+**Execution-layer containment is stated as levels.** The Execution row's properties — process isolation, egress control, secret injection — are expressed as six ordered execution-security dimensions (`toolApproval`, `fileRead`, `fileWrite`, `network`, `credentials`, `isolation`) composed tighten-only down the control plane's scope chain, attested by the placement or the provisioning control plane rather than advertised, rendered per harness by the runner, reported per dimension in the adaptation receipt, and refused rather than weakened when unmet. The same effective levels apply to autonomous, human-controlled and interactive sessions. See [`ADR-2026-09-27-execution-security-levels.md`](ADR-2026-09-27-execution-security-levels.md).
 
 Two non-obvious points worth flagging because they shape the design before doc 010 lands:
 

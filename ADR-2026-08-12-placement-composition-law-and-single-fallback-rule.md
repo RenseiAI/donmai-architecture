@@ -716,3 +716,27 @@ typed on both sides of the wire, with any human-readable detail **display-only
 and no consumer permitted to branch on it**. A consumer that parses prose has
 re-derived the exclusion, and a re-derived exclusion is where a silent downgrade
 re-enters after being evicted from the resolver.
+
+## Addendum 2026-09-27 — executionSecurity levels join the viability tuple
+
+[`ADR-2026-09-27-execution-security-levels.md`](ADR-2026-09-27-execution-security-levels.md)
+adds six execution-security dimensions to D1.2's tuple, on the same footing as
+the repository-authority demand of `ADR-2026-08-22` D6. Two parts of this law
+carry it:
+
+- **The effective levels are composed under D1.1.** An absent outermost value,
+  or an unreadable or erroring value at any scope, denies. The strongest level
+  across the scope chain wins, which is D1.1's intersection read on an ordered
+  ladder: each level permits a subset of the level below it.
+- **The levels are a stage-2 demand.** A candidate survives only if, on every
+  dimension, its achievable level (the strongest of the placement's attested
+  level and the level its harness adapter version can render there) meets the
+  effective level. The exclusion reason is `execution_security_unmet` with rule
+  id `execution-security.<dimension>`. D1.2's loud, typed ∅ applies unchanged; a
+  pin cannot bend the demand (D1.3), a ranker cannot trade it away (D1.4), and
+  claim time re-runs the same predicate (D1.5).
+
+A placement's own configuration for a dimension may only be stricter than the
+effective level. Discharge happens after bind: secret release waits for the
+applied receipt, and for any provisioning record, to meet the levels
+(`ADR-2026-08-06` D4, amended 2026-09-27).
