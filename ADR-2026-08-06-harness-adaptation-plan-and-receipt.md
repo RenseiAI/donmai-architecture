@@ -321,6 +321,27 @@ exactly the meaning D4 gives it, a pre-authorized named alternative present in t
 plan. No channel, delivery strategy, phase, outcome, or denial code is added; the
 attestation is additional evidence on existing entries.
 
+**Amendment 2026-09-27 — the bypass rule applies to every session mode and is
+keyed to a level.**
+[`ADR-2026-09-27-execution-security-levels.md`](ADR-2026-09-27-execution-security-levels.md)
+extends this decision's rule — broad bypass flags are not an adaptation
+strategy — from autonomous spawn to **every session mode**. Autonomous,
+human-controlled and interactive sessions resolve the same effective
+`executionSecurity` levels and receive the same rendering, including the
+always-on tool deny baseline. **The level is decided by proof, not by the
+flag:** a no-prompt mode whose deny rules hold, proven by the exact version's
+negative fixture, may render `deny-list`; a flag that disables policy
+enforcement itself, not just prompts, may be rendered **only** where the
+effective `toolApproval` level is `bypass`; and a full-filesystem or
+full-network grant only where every dimension it opens is at index 0 — never
+because a mode, a harness default or a missing grammar makes it convenient.
+Where the effective level is above `bypass` and the exact
+harness/version has neither a native grammar nor a handshake-verified injected
+boundary for it, the plan is denied with `execution_security_unrenderable`; it
+is never rendered weaker. Rendering uses the channel and delivery vocabularies
+of D2 (`tool_permission`, `config_file`, `config_home`, `environment_binding`,
+`injected_boundary`, `host_adapter`); no channel or delivery strategy is added.
+
 ### D4 — Applied receipt and truthful denial
 
 ```ts
@@ -410,6 +431,25 @@ records a typed terminal failure. If required cleanup cannot be evidenced, the
 affected process/config-home/workarea resource is quarantined from reuse and
 the cleanup retry remains bounded and idempotent. Optional runtime/cleanup
 failures remain visible but follow the caller's admitted continuation policy.
+
+**Amendment 2026-09-27 — the receipt reports execution-security levels, and
+secrets wait for them.**
+[`ADR-2026-09-27-execution-security-levels.md`](ADR-2026-09-27-execution-security-levels.md)
+D4 adds two fields to `AppliedAdaptationReceipt`: `executionSecurity`, the
+per-dimension `required`, `achievedLevel` and `enforcingLayers` report, with a
+required `denyBaseline` on `toolApproval` and `network`, and an
+optional `provisioningRecordId` referencing the record written by a control
+plane that provisioned the execution context. `AdaptationDenialCode` gains
+`execution_security_unrenderable`. The D5 condition "if ready: deliver secrets"
+now also requires the report and, **when the control plane provisioned the
+context**, its provisioning record to meet every level on the control plane's
+own stamp — never the `required` value the report echoes. Otherwise the secret
+release is refused with `execution_security_receipt_unmet` (a code of that
+ADR's closed `ExecutionSecurityRefusalCode`, not of `AdaptationDenialCode`),
+with zero credential-delivery and zero spawn side effects. A missing
+provisioning record for a provisioned context and a session with no stamp are
+refused at any level. Only a legacy runner's absent report is read as a level,
+and it achieves exactly index 0.
 
 ### D5 — Orchestration order
 

@@ -34,7 +34,7 @@ adaptation-plan amendment.
 |---|---|---|
 | 1 | **Binary pin.** The harness binary version is pinned in matrix metadata (`binaryPins`: min/pinned/verified-against). Construction fails below min; above verified-against runs but labels the session. | matrix parity gate + provider probe test |
 | 2 | **Pin-bump protocol.** Bumping a pin re-runs the full harness smoke lane against the new pin in CI before merge. A red lane blocks the bump. | smokes CI |
-| 3 | **Policy injection.** The adapter enforces the resolved policy (allowed/disallowed tool patterns, permission default, MCP whitelist) via the harness's native config where one exists, and via an injected, handshake-verified boundary where none exists. Autonomous sessions never use a blanket permission bypass when a deny-preserving mode exists. | permission-denial smoke (mandatory) |
+| 3 | **Policy injection.** The adapter renders the effective `executionSecurity` levels, including the resolved tool policy (allowed/disallowed tool patterns, permission default, MCP whitelist), via the harness's native config where one exists, and via an injected, handshake-verified boundary where none exists. The always-on deny baseline is rendered at every level; a flag that disables policy enforcement is rendered only where the effective `toolApproval` level is `bypass`, in every session mode; where no channel meets a required level, spawn is refused. *(Amended 2026-09-27; the row's last sentence previously read `Autonomous sessions never use a blanket permission bypass when a deny-preserving mode exists.`)* | permission-denial smoke (mandatory); per-level negative fixtures |
 | 4 | **Fail-closed trust boundary.** Where the boundary is injected, the session must fail to start if the boundary is not verifiably active, and must abort if boundary integrity is lost mid-session. | fail-closed + bypass-monitor smokes |
 | 5 | **Endpoint pin.** The adapter reads `Spec.Endpoint`, honors `Endpoint.Model` over `Spec.Model`, hard-blocks provider fallback outside the resolved cell, and fails loudly on a company/host it cannot route. | provider-lockout smoke |
 | 6 | **Event-contract conformance.** Exactly one Init event, complete (never per-token) assistant texts, exactly one terminal event, then channel close — asserted by a reusable conformance test every adapter runs. | shared conformance test in the agent package |
@@ -106,6 +106,32 @@ runner-owned provenance, digest verified after materialization with all other
 extension discovery disabled, and re-verification on resume — which are what
 keep the trust *bypass* that seam relies on from becoming a way to reach rows 3
 and 4 from inside the workspace.
+
+### Amendment 2026-09-27 — row 3 is keyed to the effective `toolApproval` level
+
+Recorded by
+[`ADR-2026-09-27-execution-security-levels.md`](ADR-2026-09-27-execution-security-levels.md).
+Row 3's retired qualifier banned a blanket bypass only if the harness had a
+deny-preserving mode, which licensed bypass for exactly the harnesses least able to
+contain a session. `ADR-2026-08-06` D3 said the opposite — broad bypass flags
+are not an adaptation strategy — but only for autonomous spawn. The
+contradiction resolves in D3's favour and extends it: **bypass legality is a
+function of the effective `toolApproval` level, never of a harness's missing
+grammar or a session's mode.** A harness with no deny-preserving mode reaches a
+level above `bypass` through the injected boundary of rows 3–4, or it is refused
+for that level with `execution_security_unrenderable`.
+
+Two rows grow with it:
+
+- **Row 9 (adaptation manifest)** also declares, per execution-security
+  dimension, the levels the exact pinned harness/version can render and the
+  enforcing layer that renders each.
+- **Row 10 (applied receipt fixtures)** also proves each declared level with a
+  negative fixture: the attempt the level forbids is observed to be refused. A
+  list level matched by a text prefix of a raw command string does not pass.
+
+For a declared harness the new obligations fall on the driver, as rows 3–4
+already do (Amendment 2026-08-08).
 
 ## Consequences
 
