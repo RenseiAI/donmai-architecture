@@ -731,7 +731,9 @@ carry it:
 - **The levels are a stage-2 demand.** A candidate survives only if, on every
   dimension, its achievable level (the strongest of the placement's attested
   level and the level its harness adapter version can render there) meets the
-  effective level; a declared but unproven value counts as index 0. The
+  effective level; a declared but unproven value counts as index 0, and so
+  does an attestation whose per-session record the control plane cannot yet
+  verify at secret release. The
   exclusion reason is `execution_security_unmet` with rule
   id `execution-security.<dimension>`. D1.2's loud, typed ∅ applies unchanged; a
   pin cannot bend the demand (D1.3), a ranker cannot trade it away (D1.4), and

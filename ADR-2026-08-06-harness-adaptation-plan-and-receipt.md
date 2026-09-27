@@ -436,7 +436,8 @@ failures remain visible but follow the caller's admitted continuation policy.
 secrets wait for them.**
 [`ADR-2026-09-27-execution-security-levels.md`](ADR-2026-09-27-execution-security-levels.md)
 D4 adds two fields to `AppliedAdaptationReceipt`: `executionSecurity`, the
-per-dimension `required`, `achievedLevel` and `enforcingLayers` report, and an
+per-dimension `required`, `achievedLevel` and `enforcingLayers` report, with a
+required `denyBaseline` on `toolApproval` and `network`, and an
 optional `provisioningRecordId` referencing the record written by a control
 plane that provisioned the execution context. `AdaptationDenialCode` gains
 `execution_security_unrenderable`. The D5 condition "if ready: deliver secrets"

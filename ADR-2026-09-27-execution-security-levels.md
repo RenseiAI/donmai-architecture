@@ -188,15 +188,20 @@ so a child is never weaker than its parent.
    never a reason to lower a level.
 6. **No in-band override.** No request field, session mode, role, flag or
    operator action lowers the effective level for one session. Lowering is an
-   edit at the scope that set the level, which applies to everything beneath it.
+   edit at the scope that set the level, which applies to new admissions beneath
+   it; a running session's stamp can only tighten (rule 8).
    Break-glass work happens outside the control plane.
 7. **List contents are configuration, composed monotonically.** The entries
-   behind the `toolApproval` and `network` list levels are authored at the
-   workflow or agent-card scope, never on the outermost value. Downward, allow
-   entries only shrink (intersection) and deny entries only grow (union), always
-   including the D6 deny baseline; a stronger level never drops a weaker scope's
-   entries. A list level with no authored allow entries admits nothing beyond
-   what the level above it admits.
+   behind the `toolApproval` and `network` list levels are authored only at the
+   workflow scope — on the dispatching step, or on the agent card that step
+   dispatches, which composes at the same workflow scope — never on the
+   outermost value, an organization or a project. An organization-wide allow list
+   is therefore not expressible, by choice. Within the workflow scope and down to
+   the session, allow entries only shrink (intersection) and deny entries only
+   grow (union), always including the D6 deny baseline; a stronger level never
+   drops a weaker scope's entries. With no authored allow entries, a
+   `toolApproval` list level admits no tool call, and `network: allow-list`
+   admits only the model endpoint and control channel that `none` admits.
 8. **The stamp is fixed at admission.** A tightening applies to new admissions;
    a resume or restart re-resolves and may only tighten the stamp. Claim and
    secret release check the session's own stamp, whose revision and resolution
@@ -206,8 +211,10 @@ so a child is never weaker than its parent.
 **Single-machine deployments.** The daemon is its own control plane and its
 configuration is the outermost scope. The installer seeds it visibly, as a
 hosted seed migration would; the resolver has no fallback. A daemon upgraded
-from a release without levels writes index 0 on every dimension to its
-configuration, visibly, and logs that it did. A daemon registered to a control
+from a release without levels detects the upgrade by its configuration schema
+version — never by a missing key — writes index 0 on every dimension to its
+configuration, visibly, and logs that it did. A key deleted after that upgrade
+fails closed. A daemon registered to a control
 plane never treats its local configuration as the outermost scope: its local
 values are placement-owned and tighten-only (the `ADR-2026-06-06` D5 rule that a
 machine may only subtract).
@@ -223,7 +230,10 @@ machine may only subtract).
    release reads only those. Pool configuration, prompt instructions and
    same-user permission changes prove nothing (the `ADR-2026-08-22` D6 rule 7
    reasoning, generalized). A declared but unproven value is a ceiling, not a
-   level, and an absent attestation is exactly index 0.
+   level, and an absent attestation is exactly index 0. **A control plane counts
+   an attestation toward viability only once it can verify that attestation's
+   per-session record at secret release**; until then the placement counts as
+   index 0 on that dimension, so tightening it is refused rather than trusted.
 2. **Achievable level = the strongest enforcing layer.** For a candidate
    (placement × harness adapter version), the achievable level per dimension is
    the strongest of the placement's attested level and the level the harness's
@@ -291,10 +301,20 @@ interface ExecutionSecurityDimensionReport {
   required: string        // informational echo only; never compared
   achievedLevel: string
   enforcingLayers: EnforcingLayer[] // empty only when achievedLevel is index 0
-  denyBaseline?: 'enforced' | 'best_effort' | 'unavailable' // toolApproval only
   evidenceDigest?: string
 }
-type ExecutionSecurityReport = Record<ExecutionSecurityDimension, ExecutionSecurityDimensionReport>
+// The dimensions that carry an always-on deny set (D6) report how it held.
+interface DenyBaselineDimensionReport extends ExecutionSecurityDimensionReport {
+  denyBaseline: 'enforced' | 'best_effort' | 'unavailable'
+}
+interface ExecutionSecurityReport {
+  toolApproval: DenyBaselineDimensionReport // the tool deny baseline
+  network: DenyBaselineDimensionReport      // the always-on egress denies (cloud metadata)
+  fileRead: ExecutionSecurityDimensionReport
+  fileWrite: ExecutionSecurityDimensionReport
+  credentials: ExecutionSecurityDimensionReport
+  isolation: ExecutionSecurityDimensionReport
+}
 
 // Added to AppliedAdaptationReceipt (ADR-2026-08-06 D4):
 //   executionSecurity: ExecutionSecurityReport
@@ -303,13 +323,19 @@ interface ExecutionSecurityProvisioningRecord {
   recordId: string
   admissionReceiptId: string
   providerRef: string
-  report: ExecutionSecurityReport  // provider_sandbox and credential_broker layers only
+  // The dimensions provisioning renders; network (with denyBaseline) is required.
+  report: Pick<ExecutionSecurityReport, 'network' | 'credentials' | 'fileRead' | 'fileWrite' | 'isolation'>
   recordedAt: string
 }
 ```
 
 A `toolApproval` report above `bypass` requires `denyBaseline: 'enforced'`;
-otherwise the achieved level is `bypass`.
+otherwise the achieved level is `bypass`. A `network` report at `allow-list` or
+above requires `denyBaseline: 'enforced'`. The verifier reads each
+`denyBaseline` from **the record that owns that layer**: `network` from the
+provisioning record when the control plane provisioned the context, and from
+the runner's receipt otherwise; `toolApproval` always from the runner's
+receipt.
 
 **Secrets wait for the records.**
 
@@ -368,7 +394,8 @@ are the "nearly" in a nearly wide-open default:
 - **The agent-environment variable blocklists and runner-only environment
   names.**
 - **The cloud-metadata egress denial, where the placement can enforce it.** Where
-  it cannot, the provisioning record says so and the gap stays visible.
+  it cannot, the record that owns the network layer says so in
+  `network.denyBaseline`, and the gap stays visible.
 - **The trust-boundary rules** of
   `ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`.
 

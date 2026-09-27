@@ -270,7 +270,9 @@ The seventh row — A2A as transport flavor — is its own provider implementati
 > is the one dimension a provider delivers by construction, so its row names the
 > provider's class, marked **unproven**: a declared class is a ceiling and
 > counts toward viability only once the provider adapter's negative probe on its
-> exact version attests it; until then the attested value is index 0. Per
+> exact version attests it **and** the provisioning control plane verifies the
+> per-session provisioning record at secret release; until then the value that
+> counts is index 0. Per
 > session, the provisioning record proves what that session got. A freshly
 > minted sandbox holds no operator home, which is why its
 > `host` is less dangerous than a local host's `host`, but that is circumstance,
