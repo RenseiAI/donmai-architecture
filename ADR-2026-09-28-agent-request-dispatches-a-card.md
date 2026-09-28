@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-09-28
 boundary: shared
 split: sibling-extensions
@@ -7,7 +7,7 @@ split: sibling-extensions
 
 # ADR-2026-09-28 — An agent request dispatches a card: one card-parameterised workflow, tighten-only parameters, a chosen default
 
-**Status:** Proposed
+**Status:** Accepted (product-owner acceptance, 2026-09-28)
 **Date:** 2026-09-28
 **Boundary:** shared (OSS-canonical here: the `agent.request` input contract, card
 resolution and binding, the split between what a card owns and what a workflow
@@ -327,10 +327,8 @@ and no consumer branches on it (`ADR-2026-08-13` D4.1).
 
 ## Affected documents
 
-Status stays **Proposed** in this change; the index entries in `README.md` and
-`AGENTS.md` land now so the index matches disk. The edits below land in the
-commit that flips this ADR to **Accepted**, OSS side first, with the paired edits
-to the mirrored stub and its platform-extensions sibling:
+Every edit below landed in this ADR's accepting commit, OSS side first, with the
+paired edits to the mirrored stub and its platform-extensions sibling:
 
 - `016-workflow-engine.md` — § "Node taxonomy" → `trigger`: the `request:` line
   becomes the version-2 contract, and the section gains the card binding (D2),

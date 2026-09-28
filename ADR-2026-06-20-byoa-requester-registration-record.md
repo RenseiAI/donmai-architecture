@@ -12,6 +12,17 @@ date: 2026-06-20
 **Boundary:** shared (canonical here; mirrored stub in the platform corpus)
 **Authors:** agent:claude (design session)
 
+> **Amended 2026-09-28 by
+> [`ADR-2026-09-28-agent-request-dispatches-a-card.md`](ADR-2026-09-28-agent-request-dispatches-a-card.md)
+> D6.** Decision 2's **allowed workflows** field (by template slug) is replaced by
+> **allowed cards**, by scoped agent-card reference; unset means any card visible to
+> an allowed project. A registration may additionally narrow which dispatch workflows
+> it may select, by a republish-stable workflow identity; unset means any. Both are
+> permission narrowings evaluated before workflow selection. A card outside the
+> allowed cards is reported as not found, with the real reason kept in the audit
+> record. Read "allowed workflows" below as "allowed cards (and the optional workflow
+> narrowing)".
+
 ## Context
 
 `ADR-2026-06-19-requester-provider-inbound-agent-family.md` defines the inbound

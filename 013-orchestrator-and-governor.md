@@ -438,6 +438,8 @@ Per the existing `packages/core/src/orchestrator/completion-contracts.ts`, each 
 
 (With `-coordination` work types deprecated per `001` Principle 2, the table collapses to development/qa/acceptance/refinement/research/merge.)
 
+**Card dispatch (`ADR-2026-09-28-agent-request-dispatches-a-card.md`).** For a session started by an `agent.request`, the completion contract is the dispatched card's, not a row of the table above: one member of the dispatch workflow's bounded union, declared at publication, naming an artifact kind, its required fields, its verdict vocabulary and a stage move (`advance`, `reject` or `none`) per verdict. The IssueTracker provider resolves each move through the project's stage mapping, never a literal tracker status, and an outcome outside the admitted contract routes to the workflow's outcome-unknown path.
+
 The orchestrator's session-end backstop (`packages/core/src/orchestrator/session-backstop.ts`) auto-recovers missing outputs:
 
 - Pushes unpushed branches
