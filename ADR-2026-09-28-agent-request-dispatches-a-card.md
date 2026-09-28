@@ -77,11 +77,16 @@ runs outside an installed workflow.
    there is no default card. `workType` is removed.
 2. `card` accepts a card slug, a display name (case-insensitive) or a full scoped
    card reference with an optional version. The control plane resolves it, never
-   the caller. Only published, non-deprecated cards visible to the project
-   resolve. The narrowest scope in the deployment's scope chain wins (workflow,
-   then project, then each wider scope). A tie at the winning scope is refused
-   with `agent_request_card_ambiguous`, listing the candidates; no match is
-   `agent_request_card_not_found`, with the nearest names. A narrower card
+   the caller. Resolution runs over the cards the caller may dispatch into the
+   project: published, non-deprecated, visible to the project and inside the
+   caller's allowed cards (D6). The narrowest scope in the deployment's scope
+   chain wins (workflow, then project, then each wider scope). A tie at the
+   winning scope is refused with `agent_request_card_ambiguous`, listing the
+   tied candidates; no match is `agent_request_card_not_found`, with the nearest
+   names. Candidates and nearest names come only from the caller's dispatchable
+   set, so a refusal never reveals a card the caller cannot dispatch, and a card
+   outside that set is simply not found (a caller "cannot see, much less call"
+   it, per `ADR-2026-06-21-mcp-adapter-archetype.md`). A narrower card
    shadowing a wider card of the same name is the intended override path.
 3. A card's work type must be a stage the deployment defines. Card names and work
    types are opaque strings (`016` corollary 4); nothing on the dispatch path
@@ -90,8 +95,10 @@ runs outside an installed workflow.
    tracking stays an optional output, and a request without an issue is
    complete.
 5. A version-1 body (one that carries `workType` or lacks `card`) is refused with
-   `agent_request_contract_version`. There is no translation from a work type to
-   a card, because that translation would be a compiled-in default card.
+   `agent_request_contract_version`, from the moment version 2 ships, naming the
+   version-2 contract. There is no translation from a work type to a card,
+   because that translation would be a compiled-in default card; a caller still
+   sending version 1 at the cut gets that refusal, never a guessed card.
 6. The trigger kind stays `agent.request`. Every entry surface carries the same
    version-2 contract and calls the same resolver: native HTTP, the MCP facade of
    `ADR-2026-06-21-mcp-adapter-archetype.md`, A2A (the card is the requested
@@ -133,9 +140,10 @@ runs outside an installed workflow.
 to a published workflow. A dispatch workflow therefore declares, at publication,
 the set of completion contracts it handles. Each member names an artifact kind,
 its required fields, its verdict vocabulary and the stage move for each verdict
-(D4). A card whose completion contract is not a member does not match that
-workflow (D7). An outcome outside the admitted contract routes to the workflow's
-outcome-unknown path, never to a success branch.
+(D4). A workflow statically bound to one card has a one-member union: that
+card's completion contract. A card whose completion contract is not a member
+does not match that workflow (D7). An outcome outside the admitted contract
+routes to the workflow's outcome-unknown path, never to a success branch.
 
 ### D4 — Stage moves, not status names
 
@@ -165,11 +173,16 @@ which names the work type. Nothing on the dispatch path names a tracker status.
 3. **Resolution.** For each parameter: the call value, when settable and valid;
    then the install value; then the workflow's visible node-configuration
    default; then an inherited project or wider-scope default. No default lives in
-   code. The receipt records every resolved value and the scope that set it.
-4. **Tighten-only.** A numeric limit may only be lowered from the install value.
-   A set-valued parameter may only narrow to a subset. A posture parameter may
-   only add denies. A caller value that would loosen is refused, never silently
-   clamped.
+   code. The value this chain yields **without** the call value is the
+   parameter's *base*. The receipt records every resolved value and the scope
+   that set it.
+4. **Tighten-only, against the base.** A caller compares with the base, not with
+   the install value alone, which is often unset (for example after automatic
+   provisioning). A numeric limit may only be lowered from the base. A
+   set-valued parameter may only narrow to a subset of the base. A posture
+   parameter may only add denies to the base. A caller value that would loosen
+   is refused, never silently clamped. Where no scope yields a base, the
+   parameter is unbounded and any valid caller value tightens it.
 5. **Floors are out of reach.** No parameter names or selects an
    `executionSecurity` dimension; the effective levels stay the strongest any
    scope sets (`ADR-2026-09-27` D2 rules 2 and 6). Credentials are never
@@ -188,9 +201,8 @@ list, which cannot tell one unit of work from another once a single workflow
 carries every card. A registration may also narrow which dispatch workflows it
 may select, by a republish-stable workflow identity; unset means any. Both are
 permission (stage 1) narrowings, evaluated before D7's selection. An
-out-of-set card or workflow is refused before execution, as an out-of-set
-project is today. The hosted policy engine's resource for a dispatch becomes the
-card together with the selected workflow.
+out-of-set card is not found (D1.2), and an out-of-set workflow is refused
+before execution, as an out-of-set project is today.
 
 ### D7 — Several dispatch workflows, one default, no implicit path
 
@@ -202,9 +214,10 @@ card together with the selected workflow.
 2. **Several are allowed.** A project may carry more than one dispatch workflow,
    for example a stricter review variant beside a general one. A workflow
    **matches** a request when it is active in the project; it is
-   card-parameterised, or statically bound to the resolved card; the caller may
-   select it (D6); the card's completion contract is in its union (D3); and the
-   card's inputs do not collide with its parameters (D5).
+   card-parameterised, or statically bound to the resolved card (a fixed-card
+   workflow serves only its own card); the caller may select it (D6); the card's
+   completion contract is in its union (D3; for a fixed-card workflow, that card's
+   contract); and the card's inputs do not collide with its parameters (D5).
 3. **Exactly one default.** A project with at least one dispatch workflow has
    exactly one default, held in the project's defaults. Removing or deactivating
    the default requires naming its successor in the same operation, unless it is
@@ -224,19 +237,18 @@ card together with the selected workflow.
 ### D8 — Refusal codes
 
 The closed `AgentRequestRefusalCode` enum. Human-readable detail is display-only
-and no consumer branches on it (the `ADR-2026-08-13` addendum rule).
+and no consumer branches on it (`ADR-2026-08-13` D4.1).
 
 | Code | Meaning |
 |---|---|
 | `agent_request_contract_version` | A version-1 body, or a body without `card` |
-| `agent_request_card_not_found` | No visible, published card matches; carries the nearest names |
-| `agent_request_card_ambiguous` | More than one card ties at the winning scope; carries the references |
-| `agent_request_card_not_allowed` | The card is outside the caller's allowed cards |
+| `agent_request_card_not_found` | No card in the caller's dispatchable set matches; carries the nearest names from that set |
+| `agent_request_card_ambiguous` | More than one dispatchable card ties at the winning scope; carries those references |
 | `agent_request_input_invalid` | A card input is missing or fails the card's schema; per key |
 | `agent_request_param_unknown` | A key that neither the workflow nor the card declares |
 | `agent_request_param_invalid` | A value fails its declared type or validation; per key |
 | `agent_request_param_not_caller_settable` | A caller supplied an install-only parameter |
-| `agent_request_param_weakens_limit` | A caller value is looser than the install value; carries that value and its scope |
+| `agent_request_param_weakens_limit` | A caller value is looser than the base (D5.3); carries the base and the scope that set it |
 | `agent_request_stage_unmapped` | An issue-bound request needs a stage move the project's stage mapping does not cover |
 | `agent_request_workflow_none` | No dispatch workflow in the project matches |
 | `agent_request_workflow_ambiguous` | Several match, the default is not among them and none was selected; carries the matches |
@@ -330,9 +342,13 @@ to the mirrored stub:
   Decision 2: allowed cards and the optional workflow narrowing (D6).
 - `ADR-2026-06-21-mcp-adapter-archetype.md` — amendment note: `dispatch` takes the
   version-2 contract, and the discovery tool is renamed `list_cards` and returns
-  the cards the caller may dispatch, each with its inputs, its parameters and the
-  dispatch workflows that admit it. The surface stays at three tools.
-- `README.md`, `AGENTS.md` — summaries refreshed to the accepted text.
+  the cards the caller may dispatch, each with its inputs and the dispatch
+  workflows that admit it. Parameters belong to each workflow, so every listed
+  workflow carries its own caller-settable parameters and their bases. The
+  surface stays at three tools.
+- `README.md` — this ADR's entry refreshed to the accepted text, and the
+  `ADR-2026-06-21-mcp-adapter-archetype.md` entry, which names `list_workflows`,
+  updated to `list_cards`. `AGENTS.md` — this ADR's entry refreshed.
 
 ## Affected work items
 
