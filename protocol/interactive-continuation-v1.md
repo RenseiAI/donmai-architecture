@@ -35,6 +35,13 @@ room and organization, in the established header or browser bearer-subprotocol
 slot. Host-role credentials cannot join this viewer route. Version selection
 and bearer carriage are separate. The connection admits no legacy driver leg.
 
+Viewer credentials share the existing viewer admission identity and JTI ledger
+across legacy and continuation routes. A credential already owning a live
+viewer connection cannot open another route concurrently. Failed admission
+releases only its own reservation; once-only connection cleanup cannot release
+a successor's ownership. This shared admission does not create a legacy viewer
+leg, filtered fanout subscription, or input authority for continuation readers.
+
 The first viewer message is a bounded **text** WebSocket message containing
 exactly `{"schema":"donmai-vt/continuation-v1"}` (JSON object field order is
 irrelevant). The server rejects a missing, unknown, duplicate or `null` field,
@@ -52,8 +59,8 @@ v1 host SSE-down leg may use the exact
 `continuation_schema=donmai-vt%2Fcontinuation-v1` query value on its
 authenticated `/v1/rooms/{roomId}/host/sse` request. An absent/unknown
 advertisement is unsupported; a relay does not probe an old host with new
-request metadata. Selected local shim v5 plus a valid `Hello.continuation`
-capability is required to back a shim-owned host advertisement. Mere maximum
+request metadata. Selected local shim v5 plus a valid optional
+`Hello.extensions.values["continuation_checkpoint"]` capability is required to back a shim-owned host advertisement. Mere maximum
 version 5 or a screen-only producer is insufficient. No host inbound listener
 is introduced.
 
@@ -223,6 +230,12 @@ Go's effective module selection, not declarations alone, is the release
 evidence. A different complete-state representation requires a new selected
 schema. Unknown, incomplete or noncanonical owned state is refused, never
 filled from a picture.
+
+Reachable terminal-originated bytes are lossless even when they are not valid
+UTF-8. Link fields, OSC metadata and cell content use byte-valued fields in the
+owned state representation (base64 in its JSON encoding), not JSON strings
+that replace malformed bytes. This preserves parser behavior rather than
+changing OSC interpretation or normalizing the producer's state.
 
 The first implementation profile's effective dependency check includes
 `github.com/charmbracelet/x/ansi` `v0.11.7`,

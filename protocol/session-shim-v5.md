@@ -30,20 +30,31 @@ connection **actually selected at 5** may send `CheckpointRequest` or
 `CheckpointResult`. A peer selected at v1–v4 keeps that version's exact bytes
 and refuses either v5 type. A maximum of 5 is not proof of checkpoint support.
 
-An actual producer may add this optional `Hello` member:
+An actual producer may advertise the optional `continuation_checkpoint` key
+inside the existing `Hello.extensions.values` map. Its value is a JSON string,
+not a new top-level Hello member:
 
 ```json
-"continuation": {"schema":"donmai-vt/continuation-v1","hostEpoch":0}
+{"extensions":{"values":{"continuation_checkpoint":"{\"schema\":\"donmai-vt/continuation-v1\",\"hostEpoch\":0}"}}}
 ```
 
-Both members are required when `continuation` is present. `hostEpoch` is an
-explicit unsigned PTY-stream epoch, including when zero; omission or `null`
-is invalid. It is distinct from `Hello.processEpoch`, controller generation,
-and any external carrier epoch. The controller reports support only when v5 is
-selected **and** this member names the supported schema. It checks every
-completed checkpoint against the advertised host epoch. A shim without an
-owned complete-state engine omits the member and remains fully functional on
-the legacy stream.
+The value is bounded to 256 bytes and contains exactly `schema` and `hostEpoch`.
+Both are required. `hostEpoch` is an explicit unsigned PTY-stream epoch,
+including when zero; omission or `null` is invalid. It is distinct from
+`Hello.processEpoch`, controller generation, and any external carrier epoch.
+Unknown members, malformed JSON and trailing data are refused. The controller
+reports support only when v5 is selected **and** this optional value names the
+supported schema. It checks every completed checkpoint against the advertised
+host epoch. A shim without an owned complete-state engine omits the key and
+remains fully functional on the legacy stream.
+
+The key must not appear in the required-extension list. The required-extension
+registry remains unchanged: a required `continuation_checkpoint` is refused.
+Older controllers ignore the optional map entry and can select v1–v4; a new
+top-level member would instead break their strict Hello decoder before version
+selection. The Go `Hello.Continuation` convenience field is derived from this
+extension and is not a top-level wire field. Encoding must preserve unrelated
+extension values and refuse conflicting representations.
 
 The daemon may carry a composing controller's positive support as immutable
 prepublication capability evidence so an outbound host connection can
