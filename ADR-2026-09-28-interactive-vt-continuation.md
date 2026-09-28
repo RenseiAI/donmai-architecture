@@ -139,8 +139,12 @@ acceptance remain separate proof obligations.
 ## Affected documents
 
 - [Interactive PTY session host](ADR-2026-07-12-interactive-pty-session-host.md).
-- The selected local shim and separate continuation wire specifications must
-  be finalized alongside the implementation before this ADR becomes Accepted.
+- [Selected local shim v5](protocol/session-shim-v5.md) specifies correlated
+  complete-state inspection while retaining selected-v1–v4 behavior.
+- [Interactive continuation v1](protocol/interactive-continuation-v1.md)
+  specifies checkpoint bytes, grant authority and the separate raw-tail rail.
+  Both specifications remain Proposed with this decision until the coordinated
+  compatibility and implementation review is complete.
 - A companion discoverability stub and hosted extension carry deployment and
   admission details outside this public decision.
 
