@@ -328,7 +328,7 @@ Bringing the layers together, here are the ten typed Provider Family contracts. 
 | **AgentRegistry** | Integration | Local YAML + git-ref | LangChain · OpenAI Assistant · A2A · third-party |
 | **KitProvider** | Composition | TS/Next.js Kit (default codebase shape) | Rust · Go · Ruby · iOS · Spring Java · marketing/non-code |
 | **ModelEndpoint** | Execution | Anthropic (Claude) | OpenAI · Google · Local (Ollama) — thin family per ADR-2026-06-06, sole verb `Resolve` |
-| **RequesterProvider** | Integration (inbound) | HTTP/MCP/A2A listener (request → workflow dispatch) | Platform-governed receipt generation · scoped-principal onboarding |
+| **RequesterProvider** | Integration (inbound) | HTTP/MCP/A2A listener (request → card dispatch through a project's dispatch workflow, per ADR-2026-09-28) | Platform-governed receipt generation · scoped-principal onboarding |
 
 The OSS layer ships a working implementation of every column-2 entry. The SaaS platform extends column 3. Tenants pick which providers they want; the orchestrator's scheduler reasons about capabilities, not provider identity.
 

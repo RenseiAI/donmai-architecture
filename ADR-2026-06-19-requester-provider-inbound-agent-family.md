@@ -12,6 +12,12 @@ date: 2026-06-19
 **Boundary:** shared (canonical here; mirrored stub in `rensei-architecture`)
 **Authors:** agent:claude (design session)
 
+> **Amended 2026-09-28 by
+> [`ADR-2026-09-28-agent-request-dispatches-a-card.md`](ADR-2026-09-28-agent-request-dispatches-a-card.md).**
+> Decision 3's input contract `{ project, goal, workType? }` is superseded by the
+> version-2 contract `{ project, card, goal, issue?, workflow?, params? }`: the
+> request names an agent card, not a work type. See § "Amendment 2026-09-28" below.
+
 ## Context
 
 The provider taxonomy (`002-provider-base-contract.md`, extended by
@@ -175,3 +181,21 @@ reads both spellings and treats them as the same kind.
 
 Implementation shipped ahead of this amendment (trigger node moved to
 `trigger/agent.request/`; `requester` kept as a deprecated read alias).
+
+## Amendment 2026-09-28 — the request names a card
+
+`ADR-2026-09-28-agent-request-dispatches-a-card.md` (Accepted) amends Decision 3:
+
+- The input contract is version 2, `{ project, card, goal, issue?, workflow?, params? }`.
+  `card` is required, resolved by the control plane over the cards the caller may
+  dispatch; there is no default card. `workType` is removed, and a version-1 body is
+  refused with `agent_request_contract_version`, never translated.
+- An optional `issue` binding to an existing tracker item is admitted. Issue tracking
+  stays an optional output and is never a required input; the sentence above that the
+  request carries no tracker context is superseded to that extent.
+- One card-parameterised workflow runs any card; a project may carry several dispatch
+  workflows with exactly one default, selected by `workflow` or by the default, never by a
+  compiled-in path. Typed `params` may only tighten.
+- Unchanged: the trigger kind `agent.request` (alias `requester`), the `RequesterProvider`
+  family, the `external_agent` principal, the `dispatch:invoke` scope and the
+  `requester.respond` node.

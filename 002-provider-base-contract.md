@@ -78,7 +78,7 @@ The TypeScript shape above is the canonical contract; it is now **landed Go-nati
 
 `RequesterProvider` (added per ADR-2026-06-19) is the one **inbound** family: every other family is outbound (the engine calls out) or engine-initiated. It accepts an authenticated, structured request from a *registered external requester*, maps it onto a workflow dispatch (an `agent.request` trigger — `requester` is a deprecated read alias, see `016-workflow-engine.md`), and returns a structured response. It is the inbound dual of A2A and reuses the AgentRegistry `remote` protocol vocabulary (`'a2a' | 'mcp' | 'http'`) and the base contract's identity model (`authorIdentity` + signature).
 
-**Registration as attribution and authorization anchor (ADR-2026-06-20).** Every inbound requester registers once per org as a durable scoped principal — a *registration record* carrying: an actor handle (the `<agent>` segment of the stable identity `external:<org>:<handle>`), an allowed-projects whitelist, an allowed-workflow-template-slugs whitelist, a governance posture, and an optional public key for the signed-request handshake. The `rsk_*` bearer credential is **bound to** that registration at mint time; it is a rotatable bearer, while the registration is the durable principal. On every `agent.request` dispatch the family resolves the registration from the credential's binding and checks the dispatch target against the registration's whitelist — not the credential's coarser scopes. A credential bound to no active registration carries no inbound authorization (fail-closed). The resolved identity `external:<org>:<handle>` is what stamps the audit record, independent of which credential carried the request. Storage, resolution query, mint internals, and posture-to-policy mapping are platform-only; see the mirrored stub in `rensei-architecture`.
+**Registration as attribution and authorization anchor (ADR-2026-06-20).** Every inbound requester registers once per org as a durable scoped principal — a *registration record* carrying: an actor handle (the `<agent>` segment of the stable identity `external:<org>:<handle>`), an allowed-projects whitelist, an allowed-cards whitelist (scoped agent-card references, which replaced the allowed-workflow-template-slugs whitelist per ADR-2026-09-28), an optional narrowing to named dispatch workflows, a governance posture, and an optional public key for the signed-request handshake. The `rsk_*` bearer credential is **bound to** that registration at mint time; it is a rotatable bearer, while the registration is the durable principal. On every `agent.request` dispatch the family resolves the registration from the credential's binding and checks the target project, the requested card and the selected dispatch workflow against the registration's whitelists — not the credential's coarser scopes. A card outside the allowed cards is reported as not found, so a refusal never reveals a card the caller cannot dispatch; the audit record keeps the real reason. A credential bound to no active registration carries no inbound authorization (fail-closed). The resolved identity `external:<org>:<handle>` is what stamps the audit record, independent of which credential carried the request. Storage, resolution query, mint internals, and posture-to-policy mapping are platform-only; see the mirrored stub in `rensei-architecture`.
 
 Its capability struct and response envelope:
 
@@ -97,6 +97,23 @@ interface RequesterResponse {
 ```
 
 The `receipt` is defined here as an optional opaque field; its generation (signing, evaluation grading, cost/provenance binding) is **platform-only** and out of scope for the OSS contract — see the mirrored stub in `rensei-architecture`.
+
+**Input contract and refusals (ADR-2026-09-28).** The request is the version-2 `agent.request` contract `{ project, card, goal, issue?, workflow?, params? }` (see `016-workflow-engine.md` § "Node taxonomy" → `trigger`). Every entry surface (native HTTP, the MCP facade, A2A with the card as the requested skill, the command line) carries it and calls the same resolver. Refusals are the closed `AgentRequestRefusalCode` enum; human-readable detail is display-only and no consumer branches on it (`ADR-2026-08-13` D4.1):
+
+| Code | Meaning |
+|---|---|
+| `agent_request_contract_version` | A version-1 body, or a body without `card` |
+| `agent_request_card_not_found` | No card in the caller's dispatchable set matches; carries the nearest names from that set |
+| `agent_request_card_ambiguous` | More than one dispatchable card ties at the winning scope; carries those references |
+| `agent_request_input_invalid` | A card input is missing or fails the card's schema; per key |
+| `agent_request_param_unknown` | A key that neither the workflow nor the card declares |
+| `agent_request_param_invalid` | A value fails its declared type or validation; per key |
+| `agent_request_param_not_caller_settable` | A caller supplied an install-only parameter |
+| `agent_request_param_weakens_limit` | A caller value is looser than the base, or outside what a selection base permits; carries the base and the scope that set it |
+| `agent_request_stage_unmapped` | An issue-bound request needs a stage move the project's stage mapping does not cover |
+| `agent_request_workflow_none` | No dispatch workflow in the project matches |
+| `agent_request_workflow_ambiguous` | Several match, the default is not among them and none was selected; carries the matches |
+| `agent_request_workflow_not_selectable` | The selected workflow does not match, or is outside the caller's allowed workflows |
 
 ## Manifest
 

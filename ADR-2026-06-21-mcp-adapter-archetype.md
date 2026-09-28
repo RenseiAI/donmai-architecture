@@ -25,6 +25,18 @@ date: 2026-06-21
 > this OSS corpus per `guard-b-lint`) is recorded in the mirrored stub,
 > `rensei-architecture/ADR-2026-06-21-mcp-adapter-archetype.md`.
 
+> **Amended 2026-09-28 by
+> [`ADR-2026-09-28-agent-request-dispatches-a-card.md`](ADR-2026-09-28-agent-request-dispatches-a-card.md).**
+> The surface stays at three tools. **`dispatch`** takes the version-2 contract
+> `{ project, card, goal, issue?, workflow?, params? }` in place of
+> `{ project, goal, workType? }`. The discovery tool **`list_workflows` is renamed
+> `list_cards`**: it returns the cards the calling principal may dispatch, each with
+> its inputs and the dispatch workflows that admit it, and every listed workflow
+> carries its own caller-settable parameters and their bases. The listing is the
+> resolved registration's allowed cards, so discovery still matches the dispatchable
+> surface. Read `list_workflows` and "allowed-workflow slug" below as `list_cards`
+> and "allowed cards". The gate order and fail-closed rule are unchanged.
+
 ## Context
 
 `ADR-2026-06-19-requester-provider-inbound-agent-family.md` defines the inbound
