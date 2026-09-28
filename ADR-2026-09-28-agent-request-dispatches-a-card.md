@@ -14,8 +14,8 @@ resolution and binding, the split between what a card owns and what a workflow
 owns, stage moves, the parameter schema and its tighten-only law, card-keyed
 allowlists, dispatch-workflow selection and the refusal codes. The command-line
 verb, the reference workflow's name, storage, the hosted policy engine's
-resource, provisioning and the migration live in the mirrored stub in
-`rensei-architecture`.)
+resource, provisioning and the migration live in `rensei-architecture`: a
+short mirrored stub plus a platform-extensions sibling.)
 **Authors:** architecture lane, filed by the coordinator session
 
 ## Context
@@ -320,7 +320,7 @@ and no consumer branches on it (`ADR-2026-08-13` D4.1).
 Status stays **Proposed** in this change; the index entries in `README.md` and
 `AGENTS.md` land now so the index matches disk. The edits below land in the
 commit that flips this ADR to **Accepted**, OSS side first, with the paired edits
-to the mirrored stub:
+to the mirrored stub and its platform-extensions sibling:
 
 - `016-workflow-engine.md` — § "Node taxonomy" → `trigger`: the `request:` line
   becomes the version-2 contract, and the section gains the card binding (D2),
@@ -352,8 +352,8 @@ to the mirrored stub:
 
 ## Affected work items
 
-This corpus carries no tracker identifiers; the mirrored stub in the platform
-corpus enumerates the delivery program. By shape:
+This corpus carries no tracker identifiers; the platform-extensions sibling in
+the platform corpus enumerates the delivery program. By shape:
 
 - **Control plane:** the card resolver and discovery listing; the card binding
   and admission stamp; stage-move resolution; the reference dispatch workflow and
