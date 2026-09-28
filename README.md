@@ -254,6 +254,7 @@ renaming an ADR.
 | [`ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md`](ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md) | Accepted | shared | Refreshable protected HTTP MCP authorization |
 | [`ADR-2026-09-18-per-session-capability-realization-selection.md`](ADR-2026-09-18-per-session-capability-realization-selection.md) | Accepted | shared | Per-session capability realization selection |
 | [`ADR-2026-09-27-execution-security-levels.md`](ADR-2026-09-27-execution-security-levels.md) | Accepted | shared | Execution security levels: six ordered dimensions, tighten-only composition, attested enforcement |
+| [`ADR-2026-09-28-interactive-vt-continuation.md`](ADR-2026-09-28-interactive-vt-continuation.md) | Proposed | shared | Complete terminal continuation |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
 
