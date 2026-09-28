@@ -50,6 +50,12 @@ Daemon access uses the existing exact session/process/controller reference,
 and refuses stale references before inspection and before exposing the result.
 PTY epoch, process epoch and carrier epoch remain separate values.
 
+An authenticated composing controller may attest checkpoint capability before
+the daemon publishes adoption, so the initial outbound connection can advertise
+the feature. This immutable evidence grants no inspection authority. Requests
+still require the exact currently adopted controller; recovery capability
+evidence must not grant a new legacy snapshot privilege.
+
 ### Handoff and transport
 
 The separate `interactive-continuation-v1` subprotocol selects the
@@ -66,6 +72,22 @@ gaps, changed producer binding, unsupported selection and malformed input refuse
 the handoff without advancing the consumer cursor. Memory ownership includes
 payloads retained by active readers after a newer checkpoint replaces the
 room's current checkpoint.
+
+An established host connection may outlive the JWT used for its admission.
+Checkpoint upload therefore uses a separate short-lived grant issued only over
+that active authenticated host connection. Each grant binds one checkpoint
+request to the exact host connection, carrier, PTY epoch and session. It expires
+with the bounded request lifetime and is invalidated by cancellation or producer
+replacement. Possession of an expired admission JWT alone authorizes no upload;
+JWT signature and expiry rules remain unchanged.
+
+The grant travels in a dedicated request header, never a URL, viewer message,
+log or diagnostic. Mixed admission-bearer and upload-grant authorization is
+refused. The receiver retains only a digest of the random grant secret and
+compares it in constant time. Chunk retries are permitted only within the same
+live grant, request, immutable digest, total and byte sequence; they cannot
+extend the grant lifetime or authorize a different checkpoint. A lost connection
+or expired grant requires a fresh authorized handoff, not relaxed validation.
 
 Original accepted frame bytes are preserved, including through durable reload.
 Decoding and re-encoding cannot substitute for the original receipt bytes.
