@@ -1,6 +1,6 @@
 ---
 title: interactive-continuation-v1 — complete terminal checkpoint and raw-tail rail
-status: Proposed
+status: Accepted
 date: 2026-09-28
 revision: v1.0-draft1
 protocol-version: interactive-continuation-v1
@@ -10,8 +10,8 @@ normative-for: donmai checkpoint producer and mirror, compatible self-hosted rel
 
 # interactive-continuation-v1 — complete terminal checkpoint and raw-tail rail
 
-**Status:** Proposed; implementation, release and downstream acceptance remain
-separate gates. **Owning decision:** [complete terminal continuation](../ADR-2026-09-28-interactive-vt-continuation.md).
+**Status:** Accepted contract; implementation, release and downstream live
+acceptance remain separate gates. **Owning decision:** [complete terminal continuation](../ADR-2026-09-28-interactive-vt-continuation.md).
 **Local prerequisite:** [session-shim selected v5](session-shim-v5.md) for a
 shim-backed producer. **Predecessors:** [interactive attach v1](interactive-attach-v1.md)
 and [v2](interactive-attach-v2.md) remain independent and unchanged.

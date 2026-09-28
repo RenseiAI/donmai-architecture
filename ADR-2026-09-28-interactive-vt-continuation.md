@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-09-28
 boundary: shared
 split: sibling-extensions
@@ -7,8 +7,9 @@ split: sibling-extensions
 
 # ADR-2026-09-28 — Complete terminal continuation
 
-**Status:** Proposed — the separate read-only continuation approach is approved;
-wire specification, implementation verification, release and activation remain pending.
+**Status:** Accepted architecture — the separate read-only continuation design and
+wire contracts are approved. Source publication, release, deployment and live
+consumer acceptance remain separate gates.
 **Date:** 2026-09-28
 **Boundary:** shared; terminal state, local inspection and generic transport are
 OSS-canonical. Hosted admission and deployment composition extend this contract.
@@ -143,8 +144,8 @@ acceptance remain separate proof obligations.
   complete-state inspection while retaining selected-v1–v4 behavior.
 - [Interactive continuation v1](protocol/interactive-continuation-v1.md)
   specifies checkpoint bytes, grant authority and the separate raw-tail rail.
-  Both specifications remain Proposed with this decision until the coordinated
-  compatibility and implementation review is complete.
+  Both specifications are Accepted contracts; their implementation, release and
+  live consumer acceptance remain separate gates.
 - A companion discoverability stub and hosted extension carry deployment and
   admission details outside this public decision.
 

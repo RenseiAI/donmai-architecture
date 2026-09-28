@@ -1,6 +1,6 @@
 ---
 title: session-shim selected v5 — correlated complete terminal inspection
-status: Proposed
+status: Accepted
 date: 2026-09-28
 revision: v5.0-draft1
 protocol-family: session-shim-v1
@@ -11,8 +11,8 @@ normative-for: donmai session shim and daemon controller
 
 # session-shim selected v5 — correlated complete terminal inspection
 
-**Status:** Proposed; implementation, release and consumer acceptance are separate
-gates. **Owning decision:** [complete terminal continuation](../ADR-2026-09-28-interactive-vt-continuation.md).
+**Status:** Accepted contract; implementation, release and consumer live acceptance
+are separate gates. **Owning decision:** [complete terminal continuation](../ADR-2026-09-28-interactive-vt-continuation.md).
 **Transport predecessor:** [selected v3 full host frames](session-shim-v3.md).
 
 This is an additive selected-version delta inside the existing `session-shim-v1`
