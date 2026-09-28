@@ -86,7 +86,9 @@ runs outside an installed workflow.
    names. Candidates and nearest names come only from the caller's dispatchable
    set, so a refusal never reveals a card the caller cannot dispatch, and a card
    outside that set is simply not found (a caller "cannot see, much less call"
-   it, per `ADR-2026-06-21-mcp-adapter-archetype.md`). A narrower card
+   it, per `ADR-2026-06-21-mcp-adapter-archetype.md`). Only the response is
+   uniform: the audit record keeps the real reason, outside the allowed cards
+   versus absent. A narrower card
    shadowing a wider card of the same name is the intended override path.
 3. A card's work type must be a stage the deployment defines. Card names and work
    types are opaque strings (`016` corollary 4); nothing on the dispatch path
@@ -180,9 +182,17 @@ which names the work type. Nothing on the dispatch path names a tracker status.
    the install value alone, which is often unset (for example after automatic
    provisioning). A numeric limit may only be lowered from the base. A
    set-valued parameter may only narrow to a subset of the base. A posture
-   parameter may only add denies to the base. A caller value that would loosen
-   is refused, never silently clamped. Where no scope yields a base, the
-   parameter is unbounded and any valid caller value tightens it.
+   parameter may only add denies to the base. A **selection** parameter (one that
+   picks a single value, such as a model profile, a reasoning effort or a
+   repository) may only choose within what its base permits: a base that lists
+   choices permits those choices, a base that defers to an inherited default
+   permits the candidates admission would accept for it, and a **pinned** base
+   permits only itself. A caller can therefore choose among the models a
+   workflow allows and can never override a model pinned in node configuration
+   or by the installer. A caller value that would loosen, or that falls outside
+   what a selection base permits, is refused, never silently clamped. Where no
+   scope yields a base for a limit, the limit is unbounded and any valid caller
+   value tightens it.
 5. **Floors are out of reach.** No parameter names or selects an
    `executionSecurity` dimension; the effective levels stay the strongest any
    scope sets (`ADR-2026-09-27` D2 rules 2 and 6). Credentials are never
@@ -248,7 +258,7 @@ and no consumer branches on it (`ADR-2026-08-13` D4.1).
 | `agent_request_param_unknown` | A key that neither the workflow nor the card declares |
 | `agent_request_param_invalid` | A value fails its declared type or validation; per key |
 | `agent_request_param_not_caller_settable` | A caller supplied an install-only parameter |
-| `agent_request_param_weakens_limit` | A caller value is looser than the base (D5.3); carries the base and the scope that set it |
+| `agent_request_param_weakens_limit` | A caller value is looser than the base, or outside what a selection base permits (D5.4); carries the base and the scope that set it |
 | `agent_request_stage_unmapped` | An issue-bound request needs a stage move the project's stage mapping does not cover |
 | `agent_request_workflow_none` | No dispatch workflow in the project matches |
 | `agent_request_workflow_ambiguous` | Several match, the default is not among them and none was selected; carries the matches |
