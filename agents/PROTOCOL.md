@@ -94,6 +94,26 @@ protocol scopes.
   lease). A confirmed P2 is recorded as a follow-up (program folder or
   tracked issue), not a blocker. A P3 needs no record beyond the review
   output.
+  - V9.1 **The blocking bar** (adopted 2026-09-29). A finding is P0 or P1 only
+    when it shows the change would leave the default branch worse than it is:
+    the change does not deliver its stated outcome or breaks existing behavior;
+    a security, privacy or open-source-boundary exposure; data loss or an
+    irreversible action; a performance regression on a hot path; a red build or
+    a blocked lane; or untruthful evidence (a test that proves nothing for the
+    change it guards, or a false claim or receipt). Each blocking finding names
+    its category and a concrete failure scenario.
+  - V9.2 **Follow-ups stay in scope and stay few.** A P2 follow-up must sit
+    within the change's stated outcome and name a concrete failure it prevents.
+    It is small (sized 1 or 2), linked to the change, and filed before the
+    merge. A review files at most three. Ideas beyond the change's scope are not
+    follow-ups: they stay in the review output as P3, and nothing is filed.
+    Nits are never filed.
+  - V9.3 **"No findings" is a valid, expected outcome.** A reviewer is judged
+    by the accuracy of its blocks, not by how many findings it produces. Some
+    reviewer models tend to always find something worth doing; left unchecked,
+    that turns every change into new scope. Track each reviewer's block rate,
+    overturned blocks, and follow-up closure. A reviewer whose follow-ups
+    mostly go unworked is producing scope, not quality.
 - V10. After a repair, review the repaired area plus its direct blast radius
   only. Full multi-lens exact-head review is reserved for a candidate's
   first review and for re-review after a confirmed P0 — never repeat it on
@@ -116,7 +136,9 @@ protocol scopes.
   continuing to spin.
 - V15. Founder-owned gates (production migrations, release tags, public
   package publishes, and any other gate a program doc names founder-owned)
-  are unchanged by this policy — it governs everything below them.
+  are unchanged by this policy — it governs everything below them. For
+  release tags the founder-owned gate is the central tagging identity (R5),
+  not a per-release signature from a founder-held key.
 
 ### Coverage claims — the unfalsifiable-test gate (adopted 2026-08-07)
 
@@ -225,6 +247,21 @@ watching for a red that never came. Running the test catches none of them.
 - R4. Publishing anything public (npm package, README, docs page, release
   notes): run the repo's Boundary greps first; a leaked private reference is
   irreversible once indexed.
+- R5. (adopted 2026-09-29) Release tags are created only by the central
+  tagging identity. That identity is a dedicated machine account whose SSH
+  signing key exists in exactly one place: a protected secret that only the
+  central tagging workflow can read, on an ephemeral hosted runner. The
+  repositories' tag rulesets let only that identity create `v*` tags, and
+  each publisher's release authority pins its tagger email and signing keys.
+  - To release, an agent or operator asks the central tagging workflow to tag
+    an explicit, already-landed commit SHA with the version chosen under R1.
+    Nobody signs a release tag with a key held on a host.
+  - Until the identity's pins are configured, the repository's documented
+    transitional signer applies. Once the pins are set, a tag signed by any
+    other key is refused before anything builds.
+  - The founder holds the identity: its key, its token, the monthly
+    rotation, and the rulesets. Tags stay immutable in every mode. A bad
+    release is fixed by the next version, never by moving a tag.
 
 ## Escalation
 
