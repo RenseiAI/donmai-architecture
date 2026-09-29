@@ -12,7 +12,7 @@ authority; D1-D6 ratified as authored, with three questions settled at
 acceptance — the registry key stays capability x adapter version and gains an
 explicit bump rule (D1.6), the exclusion reason's closed-type shape is fixed in
 D4.1, and D4.3's advisory carve-out was **dropped entirely**; amended 2026-09-29:
-demand has a strength, see D4.6)
+capabilities versus controls, see D4.6)
 **Date:** 2026-08-13
 **Boundary:** shared (the realization object, the registry shape and its declaration
 rule, the delivered-surface attestation, the viability rule, the authoring
@@ -344,37 +344,47 @@ Not the harness name and not the family, per D1.1. A candidate running an adapte
 version that predates a realization is excluded by the same rule that excludes one
 which never had it, and the exclusion record says which.
 
-**D4.6 — demand has a strength: required or optional** (amendment, 2026-09-29).
-D4 through D4.5 govern **required** demand. A demand is required when the agent
-definition (card) declares the capability, when the caller requests it, or when a
-workflow capability node wires it with `required: true`. A capability node that
-wires a capability with `required: false` makes an **optional** demand. Workflow
-templates wire the foundational capabilities (memory, architecture, code
-intelligence, agent-to-agent) as optional by default; `required` is ordinary,
-editable node configuration.
+**D4.6 — a missing capability makes a session less capable; a missing control means it does not start** (amendment, 2026-09-29).
+This corpus's capabilities (memory, code intelligence, architectural intelligence,
+agent-to-agent) are additive faculties. A session that starts without one is less
+capable, not less safe. That is a different class from a **control**: a guarantee
+the session must run under, such as the execution-security level, the sandbox,
+tool restrictions, credential scope or network policy. D4 through D4.5 now read
+as follows.
 
-- **Required demand with no realization:** unchanged. The candidate is excluded
-  at stage 2 with the typed record of D4.1.
-- **Optional demand with no realization:** the candidate stays viable and the
-  capability is **not delivered**. The adaptation plan and the receipt record a
-  typed `not_delivered` outcome carrying a closed reason, a stable rule id, the
+- **The demand is the workflow's wiring, and nothing else.** A dispatch demands a
+  capability when the workflow connects that capability's node to the agent step.
+  Agent definitions and callers do not add to the demand or change its strength.
+  Wiring is the one place an author decides what a session is given.
+- **Each wired capability carries `essential`,** ordinary node configuration that
+  defaults to `false`.
+- **Essential capability with no realization:** D4 applies unchanged. The
+  candidate is excluded at stage 2 with the typed record of D4.1.
+- **Non-essential capability with no realization:** the candidate stays viable
+  and the capability is **not delivered**. The adaptation plan and the receipt
+  record a typed `not_delivered` outcome: a closed reason, a stable rule id, the
   capability and the adapter version it was evaluated against. D3 attests it like
-  any other outcome. It is not `downgraded`: D4.4 still admits no substitute, and
-  nothing is delivered in its place.
-- **The D4.3 guard extends to optional demand:** the companion prompt partial of
-  a capability that is not delivered is withheld. An agent is never told about a
-  faculty it does not have.
-- **Strength never widens delivery:** when a registered realization exists, an
-  optional demand is delivered exactly as a required one. Strength only decides
-  what absence means.
+  any other outcome. It is not `downgraded`, because D4.4 still admits no
+  substitute: nothing is delivered in its place.
+- **D4.3's guard extends to every undelivered capability:** its companion prompt
+  partial is withheld. An agent is never told about a faculty it does not have.
+  That was the original bug class, and withholding the text closes it without
+  excluding the candidate.
+- **Controls always fail closed.** A candidate that cannot meet a control is
+  never viable. No control has a non-essential form, and none is recorded as
+  `not_delivered`.
+- **Coverage is informational.** Which capabilities a session received is recorded
+  and displayed, and it is not a ranking input at stage 3 or 4. A later routing
+  decision may use it; this amendment does not.
 
-Why: templates wire the foundational capabilities into every dispatch. Under D4
-alone, a harness profile that cannot deliver one of them (for example, a headless
-profile that cannot take MCP server configuration) became non-viable for every
-templated dispatch, even when the task never needed that capability. The only
-workaround was to remove the capability from each workflow, which hides the demand
-instead of typing it. A dispatch that genuinely needs a capability marks it
-required, in the card or on the node, and keeps D4's hard filter.
+Why: workflow templates wire the foundational capabilities into every dispatch.
+Under D4 alone, a harness profile that cannot deliver one of them (for example, a
+headless profile that cannot take MCP server configuration) was excluded from
+every templated dispatch, even when the task never needed that faculty. The only
+workaround was to delete the capability from each workflow, which hides the demand
+instead of recording the gap. Truthful records, withheld guidance and an explicit
+`essential` flag on the wiring keep D4's intent: no session is ever misled about
+what it has.
 
 ### D5 — The authoring contract: the user selects a capability, and the realization appears nowhere
 
