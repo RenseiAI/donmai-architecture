@@ -94,6 +94,26 @@ protocol scopes.
   lease). A confirmed P2 is recorded as a follow-up (program folder or
   tracked issue), not a blocker. A P3 needs no record beyond the review
   output.
+  - V9.1 **The blocking bar** (adopted 2026-09-29). A finding is P0 or P1 only
+    when it shows the change would leave the default branch worse than it is:
+    the change does not deliver its stated outcome or breaks existing behavior;
+    a security, privacy or open-source-boundary exposure; data loss or an
+    irreversible action; a performance regression on a hot path; a red build or
+    a blocked lane; or untruthful evidence (a test that proves nothing for the
+    change it guards, or a false claim or receipt). Each blocking finding names
+    its category and a concrete failure scenario.
+  - V9.2 **Follow-ups stay in scope and stay few.** A P2 follow-up must sit
+    within the change's stated outcome and name a concrete failure it prevents.
+    It is small (sized 1 or 2), linked to the change, and filed before the
+    merge. A review files at most three. Ideas beyond the change's scope are not
+    follow-ups: they stay in the review output as P3, and nothing is filed.
+    Nits are never filed.
+  - V9.3 **"No findings" is a valid, expected outcome.** A reviewer is judged
+    by the accuracy of its blocks, not by how many findings it produces. Some
+    reviewer models tend to always find something worth doing; left unchecked,
+    that turns every change into new scope. Track each reviewer's block rate,
+    overturned blocks, and follow-up closure. A reviewer whose follow-ups
+    mostly go unworked is producing scope, not quality.
 - V10. After a repair, review the repaired area plus its direct blast radius
   only. Full multi-lens exact-head review is reserved for a candidate's
   first review and for re-review after a confirmed P0 — never repeat it on
