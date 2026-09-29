@@ -362,3 +362,10 @@ the platform corpus, not here.
   reconnect template and the `ATTACH_URL` + bearer convention.
 - The `sessionClass` stamp is the one cross-repo item that must land on both sides
   in the same wave (W4) — treat it as a contract, not a follow-up.
+
+## Proposed complete continuation extension
+
+[Complete terminal continuation](ADR-2026-09-28-interactive-vt-continuation.md)
+defines a separate, explicitly selected complete-state checkpoint and raw-tail
+facility. It preserves this ADR's legacy picture and sanitized viewer behavior.
+The proposal is not a claim of released support or production activation.
