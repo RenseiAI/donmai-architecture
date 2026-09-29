@@ -117,8 +117,8 @@ protocol scopes.
 - V15. Founder-owned gates (production migrations, release tags, public
   package publishes, and any other gate a program doc names founder-owned)
   are unchanged by this policy — it governs everything below them. For
-  release tags the founder-owned gate is the central tagging identity (R5,
-  proposed), not a per-release signature from a founder-held key.
+  release tags the founder-owned gate is the central tagging identity (R5),
+  not a per-release signature from a founder-held key.
 
 ### Coverage claims — the unfalsifiable-test gate (adopted 2026-08-07)
 
@@ -227,13 +227,12 @@ watching for a red that never came. Running the test catches none of them.
 - R4. Publishing anything public (npm package, README, docs page, release
   notes): run the repo's Boundary greps first; a leaked private reference is
   irreversible once indexed.
-- R5. **(PROPOSED 2026-09-28; binds only once the founder approves it.)**
-  Release tags are created only by the central tagging identity. That
-  identity is a dedicated machine account whose SSH signing key exists in
-  exactly one place: a protected secret that only the central tagging
-  workflow can read, on an ephemeral hosted runner. The repositories' tag
-  rulesets let only that identity create `v*` tags, and each publisher's
-  release authority pins its tagger email and signing keys.
+- R5. (adopted 2026-09-29) Release tags are created only by the central
+  tagging identity. That identity is a dedicated machine account whose SSH
+  signing key exists in exactly one place: a protected secret that only the
+  central tagging workflow can read, on an ephemeral hosted runner. The
+  repositories' tag rulesets let only that identity create `v*` tags, and
+  each publisher's release authority pins its tagger email and signing keys.
   - To release, an agent or operator asks the central tagging workflow to tag
     an explicit, already-landed commit SHA with the version chosen under R1.
     Nobody signs a release tag with a key held on a host.
