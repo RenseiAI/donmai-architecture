@@ -11,7 +11,8 @@ split: inline-addenda
 authority; D1-D6 ratified as authored, with three questions settled at
 acceptance — the registry key stays capability x adapter version and gains an
 explicit bump rule (D1.6), the exclusion reason's closed-type shape is fixed in
-D4.1, and D4.3's advisory carve-out was **dropped entirely**)
+D4.1, and D4.3's advisory carve-out was **dropped entirely**; amended 2026-09-29:
+demand has a strength, see D4.6)
 **Date:** 2026-08-13
 **Boundary:** shared (the realization object, the registry shape and its declaration
 rule, the delivered-surface attestation, the viability rule, the authoring
@@ -342,6 +343,38 @@ realization.** Registered in advance, admitted in advance, and recorded as a
 Not the harness name and not the family, per D1.1. A candidate running an adapter
 version that predates a realization is excluded by the same rule that excludes one
 which never had it, and the exclusion record says which.
+
+**D4.6 — demand has a strength: required or optional** (amendment, 2026-09-29).
+D4 through D4.5 govern **required** demand. A demand is required when the agent
+definition (card) declares the capability, when the caller requests it, or when a
+workflow capability node wires it with `required: true`. A capability node that
+wires a capability with `required: false` makes an **optional** demand. Workflow
+templates wire the foundational capabilities (memory, architecture, code
+intelligence, agent-to-agent) as optional by default; `required` is ordinary,
+editable node configuration.
+
+- **Required demand with no realization:** unchanged. The candidate is excluded
+  at stage 2 with the typed record of D4.1.
+- **Optional demand with no realization:** the candidate stays viable and the
+  capability is **not delivered**. The adaptation plan and the receipt record a
+  typed `not_delivered` outcome carrying a closed reason, a stable rule id, the
+  capability and the adapter version it was evaluated against. D3 attests it like
+  any other outcome. It is not `downgraded`: D4.4 still admits no substitute, and
+  nothing is delivered in its place.
+- **The D4.3 guard extends to optional demand:** the companion prompt partial of
+  a capability that is not delivered is withheld. An agent is never told about a
+  faculty it does not have.
+- **Strength never widens delivery:** when a registered realization exists, an
+  optional demand is delivered exactly as a required one. Strength only decides
+  what absence means.
+
+Why: templates wire the foundational capabilities into every dispatch. Under D4
+alone, a harness profile that cannot deliver one of them (for example, a headless
+profile that cannot take MCP server configuration) became non-viable for every
+templated dispatch, even when the task never needed that capability. The only
+workaround was to remove the capability from each workflow, which hides the demand
+instead of typing it. A dispatch that genuinely needs a capability marks it
+required, in the card or on the node, and keeps D4's hard filter.
 
 ### D5 — The authoring contract: the user selects a capability, and the realization appears nowhere
 
