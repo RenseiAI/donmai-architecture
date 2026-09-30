@@ -444,7 +444,7 @@ type Handle interface {
 Lifecycle expectations (per `agent/provider.go` doc comment):
 
 - Construction (`provider.New`) does fail-fast probing — `which claude`, `GET /api/tags`, `codex app-server` initialize handshake, etc. Probe failures wrap `agent.ErrProviderUnavailable`. Daemon startup logs WARN per failed probe and ERRORs only when zero providers register.
-- `Spawn` returns a `Handle` whose `Events()` channel emits exactly one `InitEvent`, then 0..N assistant/tool/system events, then exactly one terminal `ResultEvent` (or `ErrorEvent` followed by close), then closes.
+- `Spawn` returns a `Handle` whose `Events()` channel emits exactly one `InitEvent`, then 0..N assistant/tool/system events, then exactly one terminal `ResultEvent` (or `ErrorEvent` followed by close), then closes. An `ErrorEvent` with `SessionContinues` set is not terminal: it records a recoverable problem, such as a tool call the provider rejected during argument validation. The session keeps emitting events after it, and consumers must not treat it as the session's end or as its failure.
 - `Resume` continues a previously interrupted session. Capability-gated by `SupportsSessionResume`; providers that do not support resume return `ErrUnsupported`.
 - `Shutdown` releases provider-level resources (long-lived child processes such as the codex app-server). Per-session-process providers (Claude CLI) may no-op.
 
