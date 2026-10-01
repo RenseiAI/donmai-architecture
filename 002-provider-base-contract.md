@@ -729,6 +729,10 @@ The five proposals captured by the prior draft are now accepted as v2 enrichment
 
 The full `ModelEndpoint` capability shape (the company-named `Resolve(EndpointRequest) → EndpointBinding` verb, `HostDesc` cells, the 5-mode AuthMode vocabulary, cost model) and the HARNESS **Drive surface** (`Drives`/`DrivesHosts` and the `(harness × endpoint)` validity rule) are specified in **ADR-2026-06-06-two-axis-provider-model**. Go-manifest hosting for both new axes (the `harness` and `model-endpoint` provider-manifest registrations) is defined in `015-plugin-spec.md` § "Provider Family registrations".
 
+### Explicit endpoint protocol selection (accepted architecture; implementation pending)
+
+[ADR-2026-10-01](ADR-2026-10-01-explicit-endpoint-protocol-and-responses-surface.md) adds the optional `ProtocolEndpointResolver` capability (`ProtocolManifest` and `ResolveProtocol`) and `ResolveEndpointProtocol` helper without changing existing endpoint structs or the legacy `Resolve` interface. Explicit selection requires exactly one host/protocol tuple and verifies the returned binding; ambiguity, absence and mismatch refuse. The actual legacy `Manifest()`/`Resolve` expose only their original single host defaults; full tuple rows are opt-in. Those defaults and the v1 harness/endpoint/matrix projection remain derived from the same authoritative declarations. The qualified view uses typed protocol identity, not a new textual ID or permission flag. Implementations ship in the public runtime before consumers enable it.
+
 ### Versioned execution-cell admission contract (2026-08-05)
 
 The two-axis matrix is the **declared compatibility ceiling**, not a complete

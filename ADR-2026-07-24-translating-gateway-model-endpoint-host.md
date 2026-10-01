@@ -51,11 +51,13 @@ reserved extension point, with the following contract:
    the gateway is where they are served from, never a model identity.
 2. **Surfaces and translation.** The gateway presents the existing wire
    protocols (OpenAI-chat, Anthropic-messages, Gemini-generate; OpenAI-
-   responses to follow) on a loopback listener with per-session bearer
+   responses as accepted by ADR-2026-10-01, implementation pending) on a loopback listener with per-session bearer
    binding, and translates via one canonical intermediate representation
    (typed messages, tool calls, streaming deltas, canonical finish reasons,
    and normalized reasoning/thinking configuration). No pairwise ad-hoc
    translation.
+   **Accepted Responses amendment (2026-10-01):** [Explicit endpoint protocol and Responses surface](ADR-2026-10-01-explicit-endpoint-protocol-and-responses-surface.md) requires actual HTTP/SSE codecs through the existing canonical IR, exact protocol binding, preserved per-session tokens/policy/cost, and fail-closed handling of unsupported semantics. A real Chat upstream may serve Responses inbound through that IR; no implicit relabeling or second gateway is allowed. Source, conformance, release and adoption remain pending.
+
 3. **Backends.** Direct provider APIs (Class 0), enterprise federated hosts
    (Class E), OpenAI-compatible aggregators and self-hosted endpoints, and —
    policy-gated only — Class S subscription passthrough for providers whose
