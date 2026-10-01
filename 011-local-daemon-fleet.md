@@ -928,3 +928,7 @@ These are intentional gaps for ADRs after operational experience.
 ## Retired carrier recovery profile
 
 The [retired-source reconciliation ADR](ADR-2026-09-11-retired-carrier-source-reconciliation.md) permits one independently fenced current-authority reconciliation and higher successor while retaining a retired prefix anchor. It never treats a missing stream as non-admission, lowers a live shim resume floor or manufactures terminal proof. Hosted retry grants belong to the companion extension; actual old/current daemon and shim compatibility must precede use.
+
+## Responses gateway protocol prerequisite
+
+[ADR-2026-10-01](ADR-2026-10-01-explicit-endpoint-protocol-and-responses-surface.md) accepts a real Responses HTTP/SSE surface through the existing loopback gateway and canonical IR. It preserves per-session bearer routing, policy, credential pooling, cancellation, cleanup and cost attribution. The explicit opt-in binding returns the actual selected protocol; legacy gateway `Bind` remains Chat-only, and client configuration cannot relabel a Chat endpoint. Endpoint and generated-view consumers must adopt exact protocol selection before using new variants. **Implementation, conformance promotion, release and consumer adoption are pending**; this reference does not advertise a currently available command, endpoint or live capability.

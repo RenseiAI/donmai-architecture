@@ -360,6 +360,8 @@ credential fallback, silent capability stripping, receipt mutation after host
 claim, and treating transport-specific child telemetry as a second session
 identity.
 
+**Accepted protocol-selection amendment (2026-10-01):** [ADR-2026-10-01](ADR-2026-10-01-explicit-endpoint-protocol-and-responses-surface.md) makes the selected endpoint protocol explicit and validates the exact host/protocol tuple. Qualified consumers adopt the new view; legacy consumers retain their original default projection. Existing receipts already carry protocol. Neither a new matrix row nor an old allow widens admission to another protocol. Implementation and consumer adoption are pending.
+
 ## Seam 14 — Admission → harness adaptation → credential delivery → spawn
 
 **Problem:** An admitted execution cell proves that the requested harness,
@@ -423,3 +425,7 @@ When implementation experience reveals a cross-layer cooperation that isn't capt
 4. Declare the ADR's `boundary:` field — most seams are OSS (cooperation contracts apply at the OSS execution layer); seams whose primary aggregation lives in the SaaS control plane (like Seam 6) split, with the OSS half declaring the per-change primitive and the platform extensions doc declaring the aggregated form.
 
 Seams are discovered, not designed. Expect this doc to grow.
+
+## Explicit protocol adaptation reference
+
+The [explicit-protocol and Responses ADR](ADR-2026-10-01-explicit-endpoint-protocol-and-responses-surface.md) extends seams 13/14: the actual harness/version receives the same compatible endpoint protocol selected before credential delivery. The Responses gateway codec uses the existing canonical IR and token/policy/cost lifecycle, and refuses unrepresentable semantics. Interactive provider configuration must not silently rewrite Chat to Responses. Accepted architecture is not an implemented adapter, executed conformance evidence, release or live admission.

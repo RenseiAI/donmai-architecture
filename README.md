@@ -258,6 +258,7 @@ renaming an ADR.
 | [`ADR-2026-09-27-execution-security-levels.md`](ADR-2026-09-27-execution-security-levels.md) | Accepted | shared | Execution security levels: six ordered dimensions, tighten-only composition, attested enforcement |
 | [`ADR-2026-09-28-agent-request-dispatches-a-card.md`](ADR-2026-09-28-agent-request-dispatches-a-card.md) | Accepted | shared | An agent request dispatches a card: one card-parameterised workflow, tighten-only parameters, a chosen default |
 | [`ADR-2026-09-28-interactive-vt-continuation.md`](ADR-2026-09-28-interactive-vt-continuation.md) | Accepted | shared | Complete terminal continuation |
+| [`ADR-2026-10-01-explicit-endpoint-protocol-and-responses-surface.md`](ADR-2026-10-01-explicit-endpoint-protocol-and-responses-surface.md) | Accepted | shared | Explicit endpoint protocol and real Responses surface; implementation/adoption pending |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
 
