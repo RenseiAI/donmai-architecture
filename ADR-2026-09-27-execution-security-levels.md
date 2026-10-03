@@ -281,6 +281,15 @@ harness/version adaptation manifest is authoritative):
 | Extension API, no native policy | the handshake-verified injected boundary (checklist rows 3–4), carrying the deny baseline at every level | executor OS sandbox or placement only |
 | Declared harness on a shared driver | only what the driver renders | driver or placement |
 
+> **Forward note, 2026-10-03.** The executor OS sandbox that the "Extension
+> API, no native policy" row defers to is specified by
+> `ADR-2026-10-03-executor-os-confinement.md`. The executor confines the
+> harness process at its own spawn in both session modes, attests
+> `fileWrite: workarea` and `isolation: os-sandbox` per harness (never
+> host-wide), reports `executor_os_sandbox` in the receipt, and refuses a
+> requested confinement it cannot apply with `execution_security_unrenderable`
+> plus a closed reason. No refusal code is added to D5.
+
 For every family, `credentials` above index 0 needs the ambient stores
 unreadable (D1), not only a separate config home.
 

@@ -414,8 +414,12 @@ Read-only authority is a second viability input on the same exact cell. Any
 declared `read-only` leaf requires executor attestation of
 `repositoryAuthorityEnforcement: 'isolated-read-only-v1'`; without it the cell
 is excluded rather than given a writable clone. This filesystem boundary is
-executor-owned and non-widenable by the harness. Repository filters and the
-completion backstop remain defense in depth, not substitutes for enforcement.
+executor-owned and non-widenable by the harness: a harness's own sandbox where
+it has one, or, for a harness without one, the executor OS confinement of
+`ADR-2026-10-03-executor-os-confinement.md`, attested per harness from its
+manifest declaration and a passing startup self-test. Repository filters and
+the completion backstop remain defense in depth, not substitutes for
+enforcement.
 
 `DONMAI_SIBLING_REPOS` entries become `context`-role repositories materialised as
 per-session leaves under `workareaRoot` rather than clones in a shared parent.

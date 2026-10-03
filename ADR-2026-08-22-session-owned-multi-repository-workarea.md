@@ -321,6 +321,17 @@ Each declared repository carries an explicit `authority` of `read-only` or
    repository writable. This is a stage-2 viability exclusion under
    `ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md`.
 
+> **Forward note, 2026-10-03.** `ADR-2026-10-03-executor-os-confinement.md`
+> specifies one qualifying boundary for rule 6: executor OS confinement of the
+> harness process (a macOS profile, or a Linux mount namespace; Landlock alone
+> does not qualify because it cannot refuse permission changes). The executor
+> attests `isolated-read-only-v1` per harness, from that harness's manifest
+> declaration and a passing startup self-test, and the read-only leaves and the
+> root's reserved metadata stay outside the confined harness's writable set. In
+> containers without namespaces the boundary comes from provisioning's
+> read-only mounts or from user separation; never from same-identity `chmod`
+> (rule 7).
+
 ### D7 — Cleanup, leases, archives, disk accounting, and restart adoption all bind the session root
 
 This is the clause the rest of the ADR exists to support. Every lifecycle
@@ -479,6 +490,13 @@ shared parent.
    `workareaRoot == repositoryWorktreePath` becomes unrepresentable. Recording
    the exit condition is what keeps the degenerate case from becoming permanent
    by default.
+
+> **Forward note, 2026-10-03.** A retained legacy flat workarea created by
+> `git worktree add` carries a `.git` file pointing into a shared base clone's
+> git common directory. That directory is never in a confined harness's
+> writable set (`ADR-2026-10-03-executor-os-confinement.md` D2.4), so such a
+> session is not confinable: confinement requested for it is refused with
+> `writable_set_unrepresentable`, and it ages out under rule 2.
 
 ### D10 — What this ADR does not decide
 

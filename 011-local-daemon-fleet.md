@@ -3,7 +3,7 @@
 **Status:** Reference (initial draft)
 **Last updated:** 2026-07-22
 **Boundary:** shared (OSS-canonical; platform extensions live at `rensei-architecture/011-local-daemon-fleet-platform-extensions.md`)
-**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md` (superseded in part), `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`), `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md`, `ADR-2026-08-22-session-owned-multi-repository-workarea.md`.
+**Related:** `004-sandbox-capability-matrix.md` (architectural shape lives there), `ADR-2026-05-06-tui-noun-consolidation.md` (superseded in part), `ADR-2026-05-07-daemon-http-control-api.md`, `ADR-2026-06-03-injectable-state-dir.md` (on-disk daemon state dir + log dir are now embedder-injected; OSS default `donmai`), `ADR-2026-07-18-bounded-terminal-workarea-leases.md`, `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md`, `ADR-2026-08-22-session-owned-multi-repository-workarea.md`, `ADR-2026-10-03-executor-os-confinement.md`.
 
 > **Command surface note (2026-08-03):** `ADR-2026-05-06-tui-noun-consolidation.md` called for the daemon CLI lifecycle commands (install, status, doctor, drain, update) to be invoked as `<binary> host *` on both binaries via a shared `afcli.RegisterCommands` tree. That never shipped in the OSS binary: as verified against the code on 2026-08-03, `donmai` still exposes these under `daemon *` (`donmai daemon install`, `donmai daemon status`, …), with no exported `host` command. The example fences below use this shipped OSS form. `ADR-2026-08-03-cli-noun-tree-fleet-retirement.md` D2 commits `afcli` to exporting a real `host` parent with `daemon` demoted to a hidden deprecated alias — once that OSS release ships, `donmai host install` etc. become correct and `daemon *` becomes the alias. Until then, treat `host *` forms as the target, not the current command. (The platform binary already exposes its own hand-assembled `host` tree today; see that ADR's Finding 3.)
 
@@ -924,6 +924,37 @@ donmai session restore-workarea <session-id> --to ~/debug/sess-XYZ
 4. **Daemon-to-daemon delegation.** Two daemons on the same LAN: should one delegate work to the other when overloaded? Or always go through the orchestrator? Default: through the orchestrator (preserves audit chain, scope resolution, cost attribution). Direct delegation is a P3 optimization.
 
 These are intentional gaps for ADRs after operational experience.
+
+## Executor OS confinement (Accepted architecture; implementation pending)
+
+`ADR-2026-10-03-executor-os-confinement.md` lets the daemon confine a harness
+that has no sandbox of its own, `pi` first. None of it ships yet; this section
+records what the daemon will do and what an operator will see.
+
+- **Startup self-test.** Before publishing any confinement attestation, the
+  daemon runs a fixed probe set through the production spawn path, once per
+  session mode: writes inside the writable set succeed, writes outside it and on
+  a read-only repository fail, attempts to widen the boundary fail, and
+  replacing the backend with nothing turns the test red. It re-runs when the
+  daemon binary, the OS build or the backend version changes. The backend is a
+  macOS profile or, on Linux, a mount namespace; inside a container that refuses
+  namespaces the test fails and nothing is attested.
+- **Per-harness publication.** A passing self-test is published only in the
+  entries of harnesses whose adaptation manifest declares the
+  `executor_os_sandbox` layer, in the per-harness executor attestation list sent
+  at registration and refresh. The host-wide `executionSecurityEnforcement` and
+  the generic sandbox tag do not change.
+- **Confinement wraps the harness, not the worker.** The headless child and the
+  interactive child under the session shim are each spawned inside the
+  boundary; the worker, the shim and the daemon keep writing their own state
+  outside it. A confined session's temporary directory and toolchain caches are
+  per session.
+- **Requiring it on one host.** Daemon configuration can require confinement
+  for a harness; that only tightens. If the backend is unavailable, the daemon
+  still starts, refuses each affected session with a typed
+  `ConfinementUnavailableReason` before spawn and before any secret is
+  delivered, and raises the condition on the host-status signal rather than
+  only in `daemon.log`.
 
 ## Retired carrier recovery profile
 

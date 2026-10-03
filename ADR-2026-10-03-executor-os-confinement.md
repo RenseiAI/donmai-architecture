@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-10-03
 boundary: shared
 split: inline-addenda
@@ -7,9 +7,10 @@ split: inline-addenda
 
 # ADR-2026-10-03 — Executor OS confinement for harnesses without a sandbox of their own
 
-**Status:** Proposed — not Accepted, implemented, shipped, released or
-activated. The reference-document edits listed under "Affected documents" land
-in the accepting commit, not before.
+**Status:** Accepted 2026-10-03 (product-owner acceptance, as drafted).
+Architecture only: implementation, release and activation are pending. The
+corpus edits listed under "Affected documents" landed in the accepting commit;
+the source-side text updates of D6 land with the implementing change.
 **Date:** 2026-10-03
 **Boundary:** shared (OSS-canonical here: attestation granularity, the writable
 set, the qualifying primitives, composition, the self-test and the refusal
@@ -480,12 +481,13 @@ Human-readable detail is display-only.
 
 ### D6 — Text updates
 
-Landed in the accepting commit (corpus) and with the implementing change
-(source):
+The corpus edit landed in the accepting commit. The source edits are not
+corpus changes and land with the implementing change, not before it:
 
-- **pi package documentation** (`provider/harness/pi/doc.go`). The sentence
+- **pi package documentation** (`provider/harness/pi/doc.go`; source, lands
+  with the implementing change). The sentence
   `OS/sandbox-family enforcement stays the sandbox provider family's job
-  (E2B/container cells), unchanged.` is replaced with: "OS-level confinement is
+  (E2B/container cells), unchanged.` is to be replaced with: "OS-level confinement is
   the executor's job, not this extension's: when a session's effective levels,
   its read-only repositories or the host's own configuration require it, the
   runner spawns pi inside the executor confinement of
@@ -497,7 +499,8 @@ Landed in the accepting commit (corpus) and with the implementing change
   adapter's execution-security rendering
   (`provider/harness/pi/execution_security.go`, today "index 0 only") gains
   the D1.1 declaration once its fixtures pass.
-- **`004-sandbox-capability-matrix.md`, the Local column.** The host-wide cells
+- **`004-sandbox-capability-matrix.md`, the Local column** (corpus; landed in
+  the accepting commit). The host-wide cells
   stay as they are (`fileWrite: host`, `isolation: host-user`,
   `repositoryAuthorityEnforcement: none`), because they are the values every
   harness on a local host gets. The `fileWrite`, `isolation` and
@@ -605,26 +608,26 @@ Landed in the accepting commit (corpus) and with the implementing change
 
 ## Affected documents
 
-Land in the accepting commit:
+Landed in the accepting commit:
 
 - `004-sandbox-capability-matrix.md` — the Local column's per-harness
   annotations, the struct documentation and the daemon-mode paragraph (D6).
 - `ADR-2026-09-27-execution-security-levels.md` — a forward annotation on the
   rendering table's "Extension API, no native policy" row naming this ADR as
   the executor OS sandbox it defers to.
-- `ADR-2026-08-22-session-owned-multi-repository-workarea.md` — a forward
-  annotation on D6.6 (executor confinement is one qualifying boundary) and on
-  D9 (a legacy worktree-add session is not confinable).
+- `ADR-2026-08-22-session-owned-multi-repository-workarea.md` — forward notes
+  after D6, on rule 6 (executor confinement is one qualifying boundary), and
+  after D9 (a legacy worktree-add session is not confinable).
 - `011-local-daemon-fleet.md` — a short section: the startup self-test, the
   per-harness publication, the host-status condition when a required backend is
   unavailable.
 - `013-orchestrator-and-governor.md` — the read-only authority paragraph names
   executor confinement as a source of the attestation.
-- `ADR-2026-08-30-workspace-root-and-lazy-repository-materialization.md`
-  (Proposed) — if it is Accepted, its D5 names `session_tmp` and
-  `session_cache` as executor-owned directories inside `ephemeral/`.
-- `README.md`, `AGENTS.md` — index and read-order entries (carried by this
-  proposal).
+- `README.md`, `AGENTS.md` — index and read-order entries.
+
+Not edited, deliberately: `ADR-2026-08-30-workspace-root-and-lazy-repository-materialization.md`
+is Proposed. If it is Accepted, its D5 names `session_tmp` and
+`session_cache` as executor-owned directories inside `ephemeral/`.
 
 No `BOUNDARY-SYNC` region is touched.
 
