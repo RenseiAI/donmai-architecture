@@ -1,8 +1,8 @@
 # 004 — Sandbox Capability Matrix
 
 **Status:** Reference
-**Last updated:** 2026-09-27
-**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `014-tui-operator-surfaces.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`, `ADR-2026-08-22-session-owned-multi-repository-workarea.md`, `ADR-2026-09-27-execution-security-levels.md`.
+**Last updated:** 2026-10-03
+**Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `014-tui-operator-surfaces.md`, `ADR-2026-05-06-tui-noun-consolidation.md`, `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`, `ADR-2026-08-22-session-owned-multi-repository-workarea.md`, `ADR-2026-09-27-execution-security-levels.md`, `ADR-2026-10-03-executor-os-confinement.md`.
 
 > **Vocabulary note (2026-08-07).** This doc predates
 > `ADR-2026-08-07-execution-context-pool-and-placement-vocabulary.md`, which
@@ -204,6 +204,9 @@ interface SandboxProviderCapabilities {
   // negative probe on the exact version (or recorded by the control plane that
   // provisioned the context). Pool configuration and prompt policy do not
   // qualify. Absent, or an absent dimension, is exactly index 0.
+  // HOST-WIDE: the value every harness on this executor gets. A boundary the
+  // executor applies around one harness only is attested per harness, in the
+  // per-harness executor attestation list, never here (ADR-2026-10-03 D1.3).
   executionSecurityEnforcement?: Partial<ExecutionSecurityLevels>
 
   // A2A / federated work
@@ -235,13 +238,13 @@ The platform ships against multiple cloud providers (Blaxel, Cloudflare, Daytona
 | `maxMemoryMb` | host | 16384 / 65536 | tier | tier | tier | host | cluster |
 | `supportsGpu` | ❌ (typically) | ❌ | ❌ | ✅ | ❌ | host-dep | cluster |
 | `egressDefault` | allow-all | allow-all (configurable) | allow-all | allow-all | allow-all | allow-all | cluster-policy |
-| `repositoryAuthorityEnforcement` | none | none | none | none | none | none | none |
+| `repositoryAuthorityEnforcement` | none (per harness: `isolated-read-only-v1` where the executor confines that harness ‡) | none | none | none | none | none | none |
 | `executionSecurityEnforcement.toolApproval` | — | — | — | — | — | — | — |
 | `executionSecurityEnforcement.fileRead` | host | host | host | host | host | host | host |
-| `executionSecurityEnforcement.fileWrite` | host | host | host | host | host | host | host |
+| `executionSecurityEnforcement.fileWrite` | host (per harness: `workarea` where the executor confines that harness ‡) | host | host | host | host | host | host |
 | `executionSecurityEnforcement.network` | open | open | open | open | open | open | open |
 | `executionSecurityEnforcement.credentials` | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login | ambient-host-login |
-| `executionSecurityEnforcement.isolation` | host-user | microvm (unproven) | microvm (unproven) | container (unproven) | container (unproven) | container (unproven) | container (unproven; microvm only with a VM-backed runtime class) |
+| `executionSecurityEnforcement.isolation` | host-user (per harness: `os-sandbox` where the executor confines that harness ‡) | microvm (unproven) | microvm (unproven) | container (unproven) | container (unproven) | container (unproven) | container (unproven; microvm only with a VM-backed runtime class) |
 | `isA2ARemote` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 The seventh row — A2A as transport flavor — is its own provider implementation in code (`A2ASandboxProvider`), declaring `isA2ARemote: true` and `transportModel: 'dial-in'` (the orchestrator dials into the remote A2A peer). Treating remote A2A agents as a substrate provider unifies "where does work execute" reasoning regardless of whether the work lives on our infra or someone else's. *(Substrate provider, not "sandbox provider": an A2A peer is a `remote_peer` placement, never the ephemeral kind — `ADR-2026-08-07` D1/D10.1. The code identifier `A2ASandboxProvider` and the `Sandbox` Provider Family name are unchanged, per D10.5.)*
@@ -284,6 +287,20 @@ The seventh row — A2A as transport flavor — is its own provider implementati
 > and one has none at all (the Docker Engine API carries no per-container egress
 > ACL). None of these counts toward viability until the control plane that
 > provisions the context renders it and records the achieved level.
+
+> **Amended 2026-10-03 by `ADR-2026-10-03-executor-os-confinement.md`.** ‡ The
+> Local column's host-wide cells are unchanged: `host`, `host-user` and `none`
+> are what every harness on a local host gets. A local executor that confines a
+> harness with no sandbox of its own attests the stronger values **for that
+> harness only**, in the per-harness executor attestation list, and only when
+> the harness's adaptation manifest declares the `executor_os_sandbox` layer
+> for the session mode **and** the backend passed a current startup self-test
+> on that host. Viability reads, per dimension, the strongest of the host-wide
+> value and the candidate harness's own entry. A per-harness entry never raises
+> the host-wide value or the generic sandbox tag, so confining one harness
+> never lifts another. On Linux the qualifying backend is a mount namespace;
+> Landlock alone does not qualify. The per-session confinement record, not the
+> host attestation, proves what a given session got.
 
 The capability flags above are the *declared* shape — what a provider/host advertises at registration time. The corresponding *runtime view* is `LiveCapacityInstance.capabilities` in the live execution capacity contract (`014-tui-operator-surfaces.md` § "Live capacity contract" and `ADR-2026-05-06-tui-noun-consolidation.md` Addendum 2026-05-06). Each live row carries the capability tags currently in force on that specific instance — the operator-facing reflection of what this doc specifies as the provider's capability schema.
 
@@ -727,6 +744,14 @@ D3). A generic sandbox capability tag at registration is not an
 execution-security level and is never read as one; a daemon claims
 `isolation: os-sandbox` or stronger only when it applies that boundary around
 the harness and its probe proves it.
+
+**Executor confinement is attested per harness** (`ADR-2026-10-03`). When the
+daemon confines a harness that has no sandbox of its own, it proves the backend
+with a startup self-test through the production spawn path and publishes the
+resulting levels in that harness's entry of the per-harness executor
+attestation list. The host-wide `executionSecurityEnforcement` and the generic
+sandbox tag stay derived from what every harness gets, so they are never raised
+by confinement that covers only some harnesses.
 
 ### Why this matters for OSS
 
