@@ -628,3 +628,23 @@ What that ADR adds is the case this one had no occasion to answer: what happens
 on a harness where the capability has **no** realization at all. The answer is a
 typed stage-2 viability exclusion — never a silent downgrade, and never satisfied
 by prompt guidance.
+
+## Addendum 2026-10-04 — a delivery may declare its delegation tools
+
+[`ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md`](ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md)
+(Accepted 2026-10-04) adds one typed, generic field to an extension delivery
+(D1): the names of the tools in that delivery that start a child. The field is
+part of the delivery, and so of its required source digest. The harness
+adapter reads it to map those tool calls to the `subagent.*` events and the
+`subagent` span, and the runner's stage cap counts the resulting
+`subagent.started` events, never tool names.
+
+D5.3 holds. The delivery declares the field, the seam reads it without knowing
+which pack sent it, and the runner keeps no list of pack names or tool names.
+D6 extends. `EmitsSubagentEvents` becomes true for this harness only as a
+computed consequence: a loaded delivery that declares a delegation tool, plus a
+passing fixture. It is never a manifest edit shipped alongside the pack. A
+delivery that starts a child through a tool it did not declare fails
+conformance for that adapter version, and a fixture asserts it. A sub-agent
+tool that calls a hosted control plane is a downstream pack under D5.2 and is
+not named here.

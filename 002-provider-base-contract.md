@@ -480,6 +480,10 @@ Reference declarations:
 
 Capability declarations are stable for the lifetime of the Provider instance. Implementations MUST NOT advertise capabilities they cannot deliver — the runner gates Spec field selection on the matrix before calling Spawn, and the matrix is the contract.
 
+**`EmitsSubagentEvents` is computed, not declared ([`ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md`](ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md), Accepted 2026-10-04).** The bit is true for an adapter version only when its fixtures pass (`ADR-2026-08-08` D4.2, `ADR-2026-08-13` D6). The fixtures show that a delegation call emits `subagent.started`, then `subagent.completed` or `subagent.failed`, and a `subagent` span. A delegation call is either the harness's own native delegation tool, which the adapter names (today `Task` or `Agent`), or a tool that an extension delivery declares as one. When the tool's structured result carries a child `SessionRef`, the events carry it; it is read from a typed field, never parsed from prose. The bit is never a manifest edit. For `pi` it needs a loaded delivery that declares a delegation tool and a passing fixture; without both it stays false. The runner's stage cap counts these typed events, so a harness whose bit is false contributes no counted children.
+
+**Parent tool-use id on normalized events.** A normalized event carries the id of the delegation tool call it belongs to, when the adapter knows it, so a sub-agent's own tool calls can be tied to the call that started it. An adapter that cannot know it leaves the field empty and says so in its manifest. The field is never guessed.
+
 ### Reference implementations
 
 Each implementation is a peer-package under `donmai/provider/`:
