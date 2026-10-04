@@ -400,7 +400,7 @@ Workflows reference verbs as `<plugin>@<major>:<verb>`. See `015` versioning sec
 
 ## Topology view (cross-link)
 
-The platform's Topology view (live, React Flow-based) renders **workflow runs in flight**, not workflow *definitions*. It shows: Issue Cluster → Sessions → Sub-agents → Satellites. Sub-agents appear when an `AgentRuntimeProvider` emits Task-tool events (Claude does today; Codex/Spring AI may not — `emitsSubagentEvents` capability flag).
+The platform's Topology view (live, React Flow-based) renders **workflow runs in flight**, not workflow *definitions*. It shows: Issue Cluster → Sessions → Sub-agents → Satellites. Sub-agents appear from the typed `subagent.started`, `subagent.completed` and `subagent.failed` events (`ADR-2026-08-16`), never from one harness's delegation-tool events. A harness adapter emits them for its own native delegation tool and for any delegation tool an extension delivery declares, and an admitted child also appears through its delegation edge. A harness whose computed `EmitsSubagentEvents` bit is false contributes no sub-agent nodes, and the view never infers them from a tool name ([`ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md`](ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md)).
 
 Detail in `013-orchestrator-and-governor.md`. Worth knowing here: the engine emits structured run events that the Topology view subscribes to via SSE; gates show as "waiting for `<eventType>`" with timeout countdown.
 

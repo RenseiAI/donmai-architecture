@@ -361,6 +361,35 @@ default resource inheritance by process accident. A production headless harness
 proves at least one non-native child path even when it has a native child
 adapter.
 
+**Sub-agents for dispatched sessions ([`ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md`](ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md), Accepted 2026-10-04).**
+Four rules apply on every transport:
+
+- **Children are counted by typed event, never by tool name.** The stage cap
+  (`maxSubAgents`) counts `subagent.started` events, so every harness is
+  counted the same way whatever its delegation tool is called. An explicit
+  `0` means no children. A harness adapter names its own native delegation
+  tool; any other delegation tool is counted only when the extension delivery
+  that registers it declares it as one, in a typed field that is part of the
+  delivery's digest. The runner keeps no list of tool names.
+- **No child tool without spawn authority.** A session is offered a
+  child-dispatch tool only when it holds spawn authority. A dispatched session
+  receives that authority at admission, and only when the workflow that
+  launched it enables child dispatch, under a max-children cap that narrows
+  from the operator's default ceiling. A session without it is not offered the
+  tool, rather than offered one that always refuses (`ADR-2026-08-13` D4.6).
+  A refused call returns a typed reason that names the missing grant or the
+  cap that stopped it, and never waits on a UI.
+- **One budget for a parent and its children.** A child's token and cost
+  usage is charged to the budget its parent spends from; the child gets no
+  allowance of its own, and the sharing is recorded on the edge. The side that
+  admits a child enforces it, so a child requested after the shared budget is
+  spent is refused with a typed reason.
+- **Cost rolls up over the edges.** Each admitted child's usage is recorded
+  once, on the child, and never in the parent's own usage events. The parent
+  session's total and its work item's total include every descendant, derived
+  over the delegation edges. A native sub-agent's usage is already the
+  parent's; its `subagent` span groups that usage and adds nothing.
+
 ### The Linear sub-issue anti-pattern
 
 Per `001` Principle 1, the system **must not create Linear sub-issues for cost-efficiency decomposition**. Linear sub-issues are reserved for human intent. Today's `backlog-writer` agent's "1-point gets 3 sub-issues" pattern is deprecated. The orchestrator surfaces this rule as a refusal: any agent attempting to create Linear sub-issues during a non-refinement session gets a hard error from the IssueTrackerProvider.

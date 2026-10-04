@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-10-03
 boundary: shared
 split: sibling-extensions
@@ -7,10 +7,10 @@ split: sibling-extensions
 
 # ADR-2026-10-03 — Sub-agents for dispatched sessions and for harnesses without native sub-agents
 
-**Status:** Proposed. Architecture only; nothing is built. This ADR sets out
-three options, recommends one combination, and leaves the choice to the
-founder. Acceptance records the chosen option and lands the corpus edits under
-"Affected documents" in the same commit.
+**Status:** Accepted 2026-10-04 (product-owner acceptance of the
+recommendation, Option B plus Option C; the four decisions are recorded under
+"Decision"). Architecture only: implementation is pending. The corpus edits
+listed under "Affected documents" landed in the accepting commit.
 **Date:** 2026-10-03
 **Boundary:** shared. OSS-canonical here: the problem stated against the
 accepted child-delegation contract, the three options, the harness-adapter
@@ -200,7 +200,7 @@ no sub-agents on its own.
 
 ## Recommendation
 
-Option B plus Option C. The founder decides.
+Option B plus Option C. Accepted 2026-10-04 as recommended; see "Decision".
 
 - B is the only option that gives a dispatched session children that the
   contract recognizes, the budgets bound and the cost record sees. It also
@@ -212,40 +212,68 @@ Option B plus Option C. The founder decides.
   runner-provided child launcher, which is a different option (see "What this
   ADR does not decide").
 
-## Decision points for the founder
+## Decision
 
-**DP1. Which options.** A, B, C, or a combination. Recommended: B plus C.
+Accepted 2026-10-04 by the product owner. The proposal left four points
+open: which options, spawn authority for dispatched sessions, the budget, and
+child cost roll-up. Each is recorded here with its outcome.
 
-**DP2. Spawn authority for dispatched sessions.** Whether a control plane
-grants it at admission, as B1 describes. Recommended: yes. The grant comes
-from the workflow that launched the session, narrows from an operator-set
-default ceiling, and is never asserted by the session. The control plane's
-corpus records the concrete shape.
+**D1. Option B plus Option C.** Option A is not adopted, alone or with
+C. Each child of a dispatched session is an admitted `platform_dispatch`
+session (B), and the harness adapter makes every child start visible and
+countable through the typed `subagent.*` events (C).
 
-**DP3. One budget or two.** Recommended: two layers, one count.
+**D2. A dispatched session may spawn only when its workflow enables it,
+under a max-children cap.**
 
-- The stage cap (`maxSubAgents`) stays the workflow's configuration of how
-  many children a stage may start. Under C4 it counts every child start, on
-  every transport, from typed events.
-- The control plane's ceilings stay the authority on what a child may be:
-  depth, direct children, subtree size, duration.
-- A `platform_dispatch` child must pass both. The runner checks the stage cap
-  and the control plane checks the ceiling at admission, so the lower one
-  stops the next child. The refusal is typed and names the cap that stopped
-  it.
-- Merging them into one field was considered and rejected; see "Alternatives
-  considered".
+- Spawn authority is granted at admission (B1), and only when the workflow
+  that launched the session enables child dispatch. A workflow that does not
+  enable it grants nothing: the session may not spawn, and it is not offered
+  the sub-agent tool (B2).
+- The grant carries a max-children cap. The workflow sets it, and it narrows
+  from the operator's default ceiling; it never widens it. No session asserts
+  its own parent, authority or cap.
+- The session's lineage (its parent, its root and its depth) is recorded when
+  it is admitted, not when it first tries to spawn.
+- A call the authority does not cover is refused with a typed reason that
+  names the missing grant or the cap that stopped it (B3).
+- The control plane's corpus records the concrete shape of the grant.
 
-**DP4. Child cost roll-up.** Recommended:
+**D3. One budget, shared by parent and children.**
 
-- An admitted child's usage and cost stay on the child session. The parent's
-  own usage events never include them, so nothing is counted twice.
-- Parent and subtree totals are derived views over the delegation edges.
+- A parent and the children it starts draw on one budget. A child is not
+  given an allowance of its own: what it spends, in tokens and cost, is
+  charged to the budget its parent spends from. The sharing is recorded on the
+  delegation edge, as every shared resource is (`013` § Child-agent dispatch).
+- The side that admits a child enforces the shared budget: a control plane
+  for a `platform_dispatch` child. A child is admitted only against what
+  remains of the shared budget, and once it is spent the next child is refused
+  with a typed reason.
+- A native sub-agent already meets this rule, because its usage is the
+  parent's usage. With no control plane, the only children are native ones, so
+  the stage budget's token limit already covers them.
+- The number of children is a separate bound, and it is D2's max-children
+  cap. In the OSS layer the stage cap (`maxSubAgents`) is the workflow's
+  statement of that count, counted from typed events on every transport (C4).
+  A control plane's ceilings (depth, direct children, subtree size, duration)
+  may narrow it and never widen it. A `platform_dispatch` child must pass
+  both checks, so the lower one stops the next child, and the refusal names
+  the cap that stopped it.
+
+**D4. Child cost rolls up to the parent session and to the work item it
+serves.**
+
+- An admitted child's usage and cost are recorded once, on the child session.
+  The parent's own usage events never include them, so nothing is counted
+  twice.
+- The parent session's total and its work item's total include the cost of
+  every descendant, derived over the delegation edges. D3's shared budget is
+  measured against that subtree total.
 - A native sub-agent that runs inside the parent's process is already in the
   parent's usage. Its `subagent` span groups that usage; it does not add to
   it.
-- A spend cap over a whole subtree, if wanted, is the control plane's to
-  enforce. This corpus does not define one.
+- The control plane meters the shared budget for the children it admits. This
+  corpus defines the rule, not the meter.
 
 ## What this ADR does not decide
 
@@ -261,12 +289,12 @@ corpus records the concrete shape.
 - **Multiplexed pi hosting.** Still deferred by ADR-2026-08-12 D7.
 - **Children across a parent restart or recovery.**
 
-**OSS defaults under the recommendation.** With no control plane, a pi
+**OSS defaults under the decision.** With no control plane, a pi
 session has no sub-agent tool, and its stage cap counts nothing because
 nothing emits `subagent.started`. That is the same behaviour as today, now
 stated. Nothing here needs a control plane, as `001` requires.
 
-## Consequences (if B plus C is chosen)
+## Consequences
 
 ### Positive
 
@@ -290,16 +318,18 @@ stated. Nothing here needs a control plane, as `001` requires.
 ### Risks
 
 - **Fan-out cost.** A dispatched session that can spawn can multiply spend.
-  Mitigation: ceilings at admission, the stage cap counted on typed events,
-  and a default of "may not spawn" when no authority is granted.
+  Mitigation: one budget shared by the parent and its children (D3), ceilings
+  at admission, the stage cap counted on typed events, and a default of "may
+  not spawn" when the workflow grants no authority (D2).
 - **A delegation tool that is not declared.** Its children go uncounted.
   Mitigation: C1 makes the declaration part of the delivery's digest, and a
   fixture asserts that an undeclared tool that starts a child fails
   conformance for that adapter version.
 - **A parent that waits forever.** Mitigation: B3's bound, and the child's
   own duration ceiling.
-- **Double-counted cost.** Mitigation: DP4's rule that child usage never
-  enters the parent's own usage events.
+- **Double-counted cost.** Mitigation: D4's rule that child usage never
+  enters the parent's own usage events, and that roll-up is derived over the
+  delegation edges.
 
 ## Alternatives considered
 
@@ -312,19 +342,24 @@ stated. Nothing here needs a control plane, as `001` requires.
 - **Add more tool names to the runner's list.** Rejected. F3 shows name-keyed
   counting failing silently: a delegation tool under a second name was never
   counted. Every new harness or rename repeats that.
-- **One budget field for both layers.** Rejected. The stage cap is workflow
+- **One count field for both layers.** Rejected. The stage cap is workflow
   configuration and works with no control plane. The ceilings are an
   authority the workflow may narrow but never widen. One field would either
   push control-plane authority into OSS configuration or leave standalone
-  sessions with no cap.
+  sessions with no cap. This is about counting children; D3's one budget is
+  the spend a parent and its children share, which is a different axis.
+- **A separate budget for each child.** Rejected at acceptance (D3). A child
+  with its own allowance lets a parent multiply its spend by spawning, and
+  leaves no single figure that bounds a subtree.
 
 ## Affected documents
 
-Edited in the accepting commit, according to the option chosen:
+Edited in the accepting commit (2026-10-04):
 
 - `013-orchestrator-and-governor.md` § Child-agent dispatch: the counting rule
-  (C4), declared delegation tools (C1), and the requirement that a dispatched
-  session be offered a child tool only with spawn authority (B2).
+  (C4), declared delegation tools (C1), the requirement that a dispatched
+  session be offered a child tool only with spawn authority granted by its
+  workflow (B2, D2), the one shared budget (D3) and cost roll-up (D4).
 - `002-provider-base-contract.md` § Capability matrix: `EmitsSubagentEvents`
   as a computed bit (C5), and the parent tool-use id on normalized events
   (C3).
@@ -333,9 +368,8 @@ Edited in the accepting commit, according to the option chosen:
   events.
 - `ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`:
   an addendum for the declared-delegation-tool field on a delivery (C1).
-- `README.md`: index entry (this commit) and status at acceptance.
-- `AGENTS.md`: a read-order row for sub-agents and child delegation, at
-  acceptance.
+- `README.md`: index entry and status.
+- `AGENTS.md`: a read-order row for sub-agents and child delegation.
 
 No `BOUNDARY-SYNC` region is touched.
 
@@ -350,8 +384,10 @@ This corpus carries no tracker identifiers. The delivery work, by shape:
 - the pi adapter's mapping to typed events and spans (C2), and the parent
   tool-use id (C3);
 - the matrix generator's computed bit and its fixtures (C5);
-- downstream, by shape only: spawn authority for dispatched sessions (B1,
-  B2), the pack's sub-agent tool (B3, B4), and cost roll-up over edges (DP4).
+- downstream, by shape only: spawn authority granted by the workflow under a
+  max-children cap (B1, B2, D2), the pack's sub-agent tool (B3, B4), children
+  charged to the parent's budget (D3), and cost roll-up to the parent session
+  and its work item over edges (D4).
 
 ## Implementation notes
 
@@ -360,7 +396,8 @@ This corpus carries no tracker identifiers. The delivery work, by shape:
   delegation tool is neither `Task` nor `Agent`. A session with no spawn
   authority is not offered the sub-agent tool. A delegation call whose result
   carries a child `SessionRef` produces a `subagent.started` event that carries
-  it.
+  it. A child requested after the shared budget is spent is refused, with a
+  typed reason (D3).
 - **The child `SessionRef` in a tool result.** It is a typed field in the
   tool's structured result, read by the adapter, never parsed from prose.
 - **Ordering.** C needs nothing from B and can land first. B's tool can ship
