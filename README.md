@@ -128,6 +128,8 @@ That discipline — particularly point (4), "removing the platform leaves a usab
 
 - **`ADR-2026-10-03-commit-coauthor-and-session-trailers.md`** — **Proposed.** The session contract gains an optional commit co-author pair (`CoAuthorName`, `CoAuthorEmail`), validated at intake. Every session commit carries an `Agent-Session: <sessionId>` trailer, plus `Co-Authored-By` when the pair is set, appended per exact line so a harness's own co-author line stays. Backstop commits pass the trailers as arguments; agent commits get them through a runner-owned hooks directory, outside every repository, selected by command-scope git configuration so it survives a repository's `core.hooksPath`, and chaining the repository's own hooks. Records that a host-supplied author identity overrides the runner default. Cross-cutting; mirrored as a stub in the platform corpus.
 
+- **`ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md`** — **Proposed.** How a dispatched session gets sub-agents, and how a harness without native sub-agents (`pi`) gets them. Three options: (A) a local sub-agent extension through the extension seam, whose children are not sessions, are unbudgeted and load without the policy boundary; (B) a sub-agent tool in a control-plane capability pack that calls the existing child-dispatch contract, so each child is an admitted `platform_dispatch` session, which needs spawn authority granted to dispatched sessions at admission; (C) the harness adapter emits the existing typed `subagent.*` events and spans for declared delegation tools, and the stage `maxSubAgents` cap counts those events instead of tool names. Recommends B plus C and leaves the choice, the spawn-authority grant, the budget layering and child cost roll-up to the founder. Cross-cutting; a mirrored stub follows in the platform corpus.
+
 ### Agents (archetypes)
 
 - **`agents/pm/backlog-writer.yaml`** — PM-archetype: refine/groom/author modes, no-sub-issue rule, haiku-executable scope discipline. Rensei-team tool allowlists live in `rensei-architecture/agents/pm/backlog-writer-rensei.yaml` via `extends:`.
@@ -265,6 +267,7 @@ renaming an ADR.
 | [`ADR-2026-10-01-explicit-endpoint-protocol-and-responses-surface.md`](ADR-2026-10-01-explicit-endpoint-protocol-and-responses-surface.md) | Accepted | shared | Explicit endpoint protocol and Responses gateway surface |
 | [`ADR-2026-10-03-commit-coauthor-and-session-trailers.md`](ADR-2026-10-03-commit-coauthor-and-session-trailers.md) | Proposed | shared | Commit co-author and session trailers on agent commits |
 | [`ADR-2026-10-03-executor-os-confinement.md`](ADR-2026-10-03-executor-os-confinement.md) | Accepted | shared | Executor OS confinement for harnesses without a sandbox of their own |
+| [`ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md`](ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md) | Proposed | shared | Sub-agents for dispatched sessions and for harnesses without native sub-agents |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
 
