@@ -7,7 +7,11 @@ split: inline-addenda
 
 # ADR-2026-09-27 — Execution security levels: six ordered dimensions, tighten-only composition, attested enforcement
 
-**Status:** Accepted (product-owner rulings, 2026-09-27; no proposal round)
+**Status:** Accepted (product-owner rulings, 2026-09-27; no proposal round).
+**Amended 2026-10-05** by [`ADR-2026-10-05-set-broad-enforce-the-minimum.md`](ADR-2026-10-05-set-broad-enforce-the-minimum.md)
+(Accepted): D2 rule 3 no longer refuses weakening at write time, and the
+`execution_security_weakening_refused` code is retired (D5). The effective result
+is unchanged: the strongest level across the chain still wins.
 **Date:** 2026-09-27
 **Boundary:** shared (OSS-canonical here: the vocabulary, the composition law,
 placement attestation, rendering, the receipt fields and the refusal codes. The
@@ -171,10 +175,16 @@ so a child is never weaker than its parent.
    ordered ladder: each level permits a subset of the level below it, so
    intersecting what every scope allows is taking the strongest level any scope
    requires. Rule 7 keeps that true for list contents.
-3. **Weakening is refused at write time.** Saving a level weaker than the
-   inherited one is refused with `execution_security_weakening_refused`, naming
-   the inherited level and its source scope. A later tightening at a wider scope
-   needs no repair: the narrower value becomes redundant, never effective.
+3. **Any scope may store any level; the strongest still wins.** Saving a level
+   weaker than the inherited one succeeds, and nothing is refused at write time
+   (`ADR-2026-10-05-set-broad-enforce-the-minimum.md` D1 and D6). The weaker value
+   is redundant, displayed as such with the scope whose level binds, and never
+   effective, so an outer scope's level is a floor for every scope inside it
+   whatever those authors store. A later tightening or loosening at a wider scope
+   needs no repair of anything stored beneath it. A minimum carried on a request
+   is stage-0 intent and, when below the inherited level, is redundant in the
+   same way. *(Amended 2026-10-05; this rule previously refused the write with
+   `execution_security_weakening_refused`.)*
 4. **Fail closed, and the control plane never defaults its own data.** An absent
    outermost value is `execution_security_unconfigured`, naming the dimension
    and the scope. An unreadable, malformed or erroring value at any scope, more
@@ -374,14 +384,15 @@ advertised that it always stamps; after that handshake a missing section is
 
 ### D5 — Refusal codes
 
-The six codes form the closed `ExecutionSecurityRefusalCode` enum; each surface
-carries the subset shown.
+The five codes form the closed `ExecutionSecurityRefusalCode` enum; each surface
+carries the subset shown. A sixth, `execution_security_weakening_refused`, was
+retired on 2026-10-05 with the write-time refusal it named (D2 rule 3): a write
+that stores a weaker level now succeeds, so there is nothing to refuse.
 
 | Code | Carried by | Meaning |
 |---|---|---|
 | `execution_security_unconfigured` | resolution refusal | The outermost scope has no value for a dimension |
 | `execution_security_unresolvable` | resolution, claim or secret-release refusal | A value is unreadable, malformed or erroring; more than one outermost value; or a session has no stamp |
-| `execution_security_weakening_refused` | scope-write refusal | A stored minimum below the inherited level; carries the inherited level and its source scope |
 | `execution_security_unmet` | stage-2 exclusion reason (the closed reason enum of the `ADR-2026-08-13` addendum) | The candidate cannot enforce the effective level; rule id `execution-security.<dimension>` |
 | `execution_security_unrenderable` | `AdaptationDenialCode`; provisioning refusal | The exact harness/version or provider has no channel for a required level |
 | `execution_security_receipt_unmet` | secret-release refusal | A report below the stamp, or a required provisioning record missing or malformed |
