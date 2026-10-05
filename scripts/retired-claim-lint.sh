@@ -61,6 +61,7 @@ RULES=(
   'FALLBACK_POOL_LIST%fallback pool (list|ids)%ADR-2026-08-12 D2%A separately authored fallback list; the ordered surviving set IS the fallback set'
   'UNCONDITIONAL_NO_SCORE%[Tt]here is no cost/latency score%ADR-2026-08-12 D3%Unqualified "routing never scores"; the unscored authored order is the DEFAULT ordering policy, not the only one'
   'BYPASS_ABSENT_DENY_MODE%bypass (when|where|if|unless) (a |no |there is no |there is a )?deny-preserving mode%ADR-2026-09-27 D4%Bypass licensed by a missing deny-preserving mode; bypass is legal only at effective toolApproval=bypass'
+  'WRITE_TIME_WEAKENING_REFUSED%[Ww]eakening is refused at write time|execution_security_weakening_refused%ADR-2026-10-05 D1/D6%A write-time refusal of a level weaker than the inherited one; any scope stores any level and the strongest is effective'
 )
 
 # ---- Parse args ----
