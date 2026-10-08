@@ -9,8 +9,8 @@ split: sibling-extensions
 
 **Status:** Accepted 2026-10-08 (founder acceptance as drafted, including D8;
 the six rulings are under "Decisions (founder, 2026-10-08)"). Architecture
-only: implementation is pending, and D8's implementation is gated on the
-acceptance of ADR-2026-08-31 D1 and D2 (see "Affected documents"). The corpus
+only: implementation is pending. D8's gate, the acceptance of ADR-2026-08-31
+D1 and D2, cleared on 2026-10-08 (see "Affected documents"). The corpus
 edits listed under "Affected documents" landed in the accepting commit, with
 two clarifications recorded under "Clarified at acceptance".
 **Date:** 2026-10-07
@@ -1303,12 +1303,14 @@ These edits landed in the commit that flipped this ADR to Accepted:
 - `013-orchestrator-and-governor.md` — worker lifecycle: a headless seat may
   outlive its daemon and is released only on terminal evidence; the
   `host-restart` failure mode and its re-dispatch rule (D8).
-- `ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md` — still
-  Proposed. D8 relies on its D1 (resume creates an incarnation, verified at the
-  layer that performs it, downgrading to seeded-fresh) and D2 (session state
-  outlives the process, at a declared session-owned location). D8 is accepted
-  as architecture; no D8 behaviour may ship before those two decisions are
-  accepted. That acceptance is tracked as a D8 unblocker.
+- `ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md` — D8
+  relies on its D1 (resume creates an incarnation, verified at the layer that
+  performs it, downgrading to seeded-fresh) and D2 (session state outlives the
+  process, at a declared session-owned location). D8 was accepted as
+  architecture with no D8 behaviour allowed to ship before those two were
+  accepted; they were accepted on 2026-10-08, so that gate is clear. Its D3
+  and D4 moved to `ADR-2026-10-08-session-state-vocabulary-and-recovery-migration.md`,
+  which is Proposed; D8 does not depend on them.
 - `ADR-2026-08-17-session-shim-adoption.md` D9 — the restart fence request gains
   a version that carries parked rows (D8). The schema lives in D9, outside the
   synchronized region; the platform mirror records the fence store's side.

@@ -14,6 +14,8 @@ implemented, shipped, released, migrated, or activated.
 the private sibling corpus)
 **Authors:** execution-layer workspace lane
 
+> **Note 2026-10-08:** [`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md) D2 is Accepted. Exact-harness state under the session-owned root is resume-bearing session state and inherits its retention law: declared location, resolvable without the originating process, deleted only by a declared transition with a receipt.
+
 ## Context
 
 `ADR-2026-08-22-session-owned-multi-repository-workarea.md` established the

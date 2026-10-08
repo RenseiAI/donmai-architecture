@@ -15,6 +15,8 @@ here; concrete authority stores, policy, routes, and rollout sequencing belong
 in implementation-specific extensions)
 **Authors:** stateful-link architecture lane
 
+> **Note 2026-10-08:** [`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md) D1 is Accepted. It places a session-level recovery taxonomy (continue, rebind, resume, restart, classify further) above this link-level contract and anchors the rebind prohibition on registered terminal evidence to the rebind transition; for resume that evidence is an ordinary precondition.
+
 ## Context
 
 A long-lived session may depend on a stateful relationship whose transport is

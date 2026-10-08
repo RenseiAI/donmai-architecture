@@ -15,6 +15,8 @@ here; concrete multi-tenant stores, routes, migrations, and rollout gates live
 in the platform mirror)
 **Authors:** data-lifecycle architecture lane
 
+> **Note 2026-10-08:** [`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md) D2 is Accepted. Harness session-state artifacts are a retained tier with declared deletion, not scratch; their lifetime follows the session's data lifecycle, and process death never triggers their deletion.
+
 ## Context
 
 Session-stream data does not keep one value profile for its whole lifetime.

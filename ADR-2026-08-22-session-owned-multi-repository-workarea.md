@@ -31,6 +31,8 @@ migration remain pending behind the proof obligations below.
 > linter exists to catch. The rule is added by the change that implements D2,
 > not by this one.
 
+> **Note 2026-10-08:** [`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md) D2 is Accepted. Exact-harness state under the session-owned root is resume-bearing session state and inherits its retention law: declared location, resolvable without the originating process, deleted only by a declared transition with a receipt.
+
 ## Context
 
 A session's workspace is one repository. `runtime/worktree.Manager.Provision`
