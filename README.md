@@ -279,6 +279,7 @@ renaming an ADR.
 | [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md) | Accepted | shared | Kit-declared dependency stores |
 | [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md) | Accepted | shared | Per-host repository keeper |
 | [`ADR-2026-10-08-session-state-vocabulary-and-recovery-migration.md`](ADR-2026-10-08-session-state-vocabulary-and-recovery-migration.md) | Proposed | shared | Session lifecycle state vocabulary and recovery-taxonomy migration |
+| [`ADR-2026-10-08-viewer-clipboard-from-osc52-set.md`](ADR-2026-10-08-viewer-clipboard-from-osc52-set.md) | Accepted | OSS-only | Viewer clipboard from an OSC 52 set |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
 
