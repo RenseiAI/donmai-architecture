@@ -7,11 +7,11 @@ split: sibling-extensions
 
 # ADR-2026-10-07 — Session-shim adoption for headless dispatched sessions
 
-**Status:** Proposed. Architecture only; nothing is built. This ADR sets out
-the options for each of seven decisions, recommends one, and leaves the open
-points listed under "Decision points for the founder". Acceptance records the
-chosen options and lands the corpus edits under "Affected documents" in the
-same commit.
+**Status:** Proposed. Architecture only; nothing is built. The founder ruled
+on the six open points on 2026-10-08 (see "Decisions (founder, 2026-10-08)").
+Five follow the recommendations; the sixth folds stop-and-resume into this ADR
+as D8. The status stays Proposed until the founder has reviewed D8. Acceptance
+lands the corpus edits under "Affected documents" in the same commit.
 **Date:** 2026-10-07
 **Boundary:** shared. OSS-canonical here: the headless workload profile of the
 session shim, how a headless runner's dependencies on the live daemon behave
@@ -46,9 +46,10 @@ modes where restart continuity is required").
   D1 this is a **rebind**: the same process and the same incarnation regain a
   lost binding.
 
-Code citations are to the `donmai` repository's main branch as of release
-v0.72.66, in the form `path:Symbol`, unless the text names an open pull
-request.
+Code citations are to the `donmai` repository's main branch as of
+2026-10-08 (after release v0.72.67 and the seat-budget, Linux confinement and
+session-detail authentication changes that merged that night), in the form
+`path:Symbol`, unless the text names an open pull request.
 
 ## Context
 
@@ -154,10 +155,14 @@ served by `daemon/server.go:handleSessionDetail`;
   (`afcli/agent_run.go:(*agentRunCredentialCache).current`), and the daemon
   stamps refreshed tokens into its store with
   `daemon/session_detail.go:(*sessionDetailStore).UpdateRuntimeCredentials`.
-  The store is in memory and is written only at acceptance
-  (`StoreIfAbsent` in `daemon/daemon.go`); no adoption path repopulates it. A
-  4xx answer is treated as permanent (`afcli/agent_run.go:permanentFetchError`).
-  After a restart the re-read therefore fails. The heartbeat, activity and
+  The read is authenticated by a per-session read token that the store mints
+  at acceptance and the spawner passes in `DONMAI_SESSION_READ_TOKEN`
+  (`daemon/session_detail.go`, `verifySessionReadToken`); without it the route
+  returns the detail with every credential cleared. The store and its read
+  tokens are in memory and are written only at acceptance (`StoreIfAbsent`,
+  called from `daemon/daemon.go`); no adoption path repopulates them. After a
+  restart the re-read therefore gets a 404 or a redacted detail, never a new
+  bearer. The heartbeat, activity and
   result posters fall back to the last bearer they hold
   (`runtime/heartbeat/pulser.go`, `runtime/activity/poster.go`,
   `result/poster.go`); the execution-event uploader returns an error instead
@@ -208,10 +213,14 @@ the worker environment (`daemon/worker_spawner.go:sessionEnv`) and layers
 per-session credentials through the `OnPreSpawn` rail; the standalone runtime
 adds a per-attempt bearer that it persists durably
 (`internal/localruntimeauth/credentials.go:(*Store).CreateAttempt`, checked by
-`VerifyAttempt`). The open change that keeps seat credentials off child argv
-(donmai pull request 806) moves the last argv-borne token on the fleet child
-path into the environment as well. Once a process has started, its environment
-cannot be changed from outside.
+`VerifyAttempt`). Two merged changes tightened this: donmai pull request 806
+moved the last argv-borne token (the fleet child's provisioning token) into the
+environment and the claude MCP header helper's bearer into an owner-only file,
+and pull request 812 moved pi's model credentials out of the harness child's
+environment into an owner-only per-session file
+(`provider/harness/pi/credential_file.go`), removed at session end. The worker
+also unsets its read token after the first detail read. Once a process has
+started, its environment cannot be changed from outside.
 
 **Service-manager kill scope.** The generated launchd job sets
 `AbandonProcessGroup` (`installer/launchd/installer.go`). The generated
@@ -242,7 +251,9 @@ terminal-shaped. The runner keeps its direct control-plane legs; the
 daemon-local legs move onto the fenced shim connection or reconnect to the same
 local address. Every shim-owned seat writes its terminal status to the durable
 outbox before the first send. The restart preflight counts shim-owned seats as
-covered and keeps refusing only for direct-owned ones.
+covered. A seat that cannot be adopted is stopped and later resumed as a new
+incarnation when its harness has a verified resume artifact; only the seats
+that can be neither adopted nor resumed still need the soft drain.
 
 | # | Decision | Chosen option |
 |---|---|---|
@@ -252,7 +263,8 @@ covered and keeps refusing only for direct-owned ones.
 | 4 | Adoption identity and lineage | ADR-2026-08-17 D1 to D10 unchanged; a new selected wire version that headless shims advertise exclusively; one closed `workload` field in the record (D4) |
 | 5 | Composition with budgets, priority and confinement | On systemd every shim-owned seat starts in its own transient scope, which is both the survival boundary and the budget cgroup; priority and budget are fixed at launch; confinement stays at the harness spawn (D5) |
 | 6 | Test plan | Real-binary upgrade of a live seat in a Linux container, a launchd smoke on macOS, and a failure matrix (D6) |
-| 7 | Rollout and fallback | Adopt-capable daemon first, consumer side second, per-host launch gate third; preflight refuses only for direct-owned seats; a "drain direct-owned only" mode for the mixed fleet (D7) |
+| 7 | Rollout and fallback | Adopt-capable daemon first, consumer side second, per-host launch gate third; preflight refuses only for seats that can be neither adopted nor resumed, with a drain mode for exactly those (D7) |
+| 8 | Seats that cannot be adopted (founder decision 6) | Cooperative stop for resume, a parked fence row, and a new incarnation seeded from a verified harness artifact; one session terminal across incarnations; the stop is uncharged; adoption always wins where it applies (D8) |
 
 ## D1 — Process ownership
 
@@ -381,8 +393,9 @@ record. Proxying everything through the shim (Option A) adds nothing for legs
 that do not involve the daemon at all. The shim connection is a Unix socket
 restricted to the daemon's user, checked by peer credentials and process start
 identity (ADR-2026-08-17 D3) and fenced by generation (D4 of that ADR). Those
-are the properties a bearer push needs, and a loopback TCP route does not have
-the first two.
+are the properties a bearer push needs. The loopback detail route
+authenticates a bearer, not a peer process, and its read tokens die with the
+daemon that minted them.
 
 **What freezing credentials in the environment implies for adoption.** The
 environment is fixed when the worker execs. Adoption therefore cannot, and must
@@ -402,12 +415,13 @@ The lease fuse is unchanged: a hosted seat whose bearer expires before a
 replacement daemon pushes a new one loses its lease after three failed ticks
 and ends as `lost-ownership`, writing its outbox record and tombstone on the
 way out (D3). With an hourly bearer that only bites when the daemon stays away
-for most of an hour; decision point 2 covers it.
+for most of an hour. The founder kept the lease with the runner (decision 2);
+D8 covers a restart that is expected to take longer.
 
 **This also closes a gap for interactive sessions.** Adopted interactive
 sessions use the same credential cache and have the same empty-store problem.
-`CredentialUpdate` is defined in the headless profile; whether the interactive
-profile adopts it in the same release is a decision point below.
+`CredentialUpdate` is added to the interactive profile in the same release
+(decision 5), as a new selected version of that profile.
 
 ## D3 — Exactly-once terminal result delivery
 
@@ -559,27 +573,54 @@ daemon's service does not kill it.
 - Other service managers and other operating systems keep headless shim launch
   off until a process-survival fixture exists for them (that ADR's D1).
 
-**The per-seat budget uses the same scope.** The open seat-budget change
-(donmai pull request 804) wraps the direct-spawn command with a transient
-systemd scope (`daemon/worker_spawner_seatbudget.go:applySeatBudgetToCmd`) but
-applies only environment caps on the shim path (`spawnThroughShim`), and its
-scope invocation does not target the user manager. Under this ADR:
+**The per-seat budget uses the same scope.** The merged seat-budget change
+(donmai pull request 804) already prefixes the worker command with
+`systemd-run [--user] --scope --collect` and the budget's limits
+(`daemon/seatbudget/cgroup.go:SystemdScopeArgsForBus`), on the direct path
+(`daemon/worker_spawner.go:(*WorkerSpawner).spawn`) and on the shim path
+(`daemon/session_shim_spawn.go:startShimProcess`). It picks `--user` from a
+live bus probe (`SystemdUserScopeForEUID`), needs systemd 252 or later
+(`MinScopeSystemd`), and names the unit from the session id
+(`ScopeName`, `donmai-seat-<id>.scope`, cut to 64 characters). Three things in
+it do not yet meet this ADR:
 
-1. The scope wrap moves to the shim launch, so it applies to every shim-owned
-   seat on systemd. With a budget the scope carries the limits (CPU set, CPU
-   quota, memory, IO weight); without one it carries none but still exists.
-2. The scope targets the daemon's own manager, so a user install needs no
-   system-manager authorization.
-3. The scope name is derived from the session identity, so the adopting daemon
-   finds it without a record. It reads the limits back from the scope and
-   reports what it observes, never what its configuration says.
-4. Adoption never changes a running seat's limits, in line with
-   ADR-2026-10-05 D1 rule 3. A budget change applies to new seats only.
-5. The scope is collected by systemd when its last process exits. No daemon
+- the scope exists only when an operator configured a seat budget
+  (`daemon/seat_budget.go:resolveSeatBudget` returns nothing otherwise), so a
+  shim-owned seat with no budget stays in the daemon unit's cgroup;
+- a host that cannot create the scope runs the seat unwrapped and reports
+  `none`, rather than refusing; and
+- the reported budget is derived from configuration and the placement probe,
+  not read back from the seat, and adopted shim handles report the daemon's
+  current budget (`daemon/session_shim_spawn.go:sessionShimHandles`), not the
+  one the seat got.
+
+Under this ADR:
+
+1. Every shim-owned seat on systemd starts in its own scope, budget or not.
+   With a budget the scope carries the limits; without one it carries none but
+   still takes the seat out of the daemon unit's cgroup. This applies to
+   interactive shims too (founder decision 5).
+2. A host that cannot create the scope does not launch headless shims; the
+   gate in D7 stays off there. A seat is never launched as an unscoped shim on
+   systemd.
+3. The scope name is derived from a fixed-length digest of the session
+   identity and the incarnation number, like the registry file names
+   (ADR-2026-08-17 D6), so two sessions can never collide on a truncated id and
+   a resumed incarnation (D8) never meets its predecessor's scope.
+4. The launching daemon records the limits the seat got in a secret-free
+   launch record beside the discovery record. An adopting daemon reports the
+   limits it reads back from the seat's cgroup, falling back to that launch
+   record, and never its own current configuration.
+5. Adoption never changes a running seat's limits, in line with ADR-2026-10-05
+   D1 rule 3. A budget change applies to new seats only.
+6. The scope is collected by systemd when its last process exits. No daemon
    ever stops a scope to make an upgrade fit.
 
-On hosts without cgroup enforcement, the worker-cap environment values
-(`GOMAXPROCS`, build-job counts) are set at launch and stay with the process.
+On hosts without a usable systemd, the worker-cap environment values
+(`GOMAXPROCS` and the build-job counts,
+`daemon/seatbudget/budget.go:WorkerCapEnv`) are set at launch and stay with the
+process; off Linux an enforced budget degrades to best-effort, as the merged
+code already reports.
 
 **Priority modes are fixed at launch.** The daemon's service priority mode
 (`installer/servicepriority`, merged in donmai pull request 800) is applied to
@@ -590,17 +631,27 @@ reports each seat's observed priority. Inheritance through a transient scope
 and through an abandoned launchd process group is to be shown by the D6
 fixtures, not assumed.
 
-**Confinement stays at the harness spawn.** The Linux mount-namespace backend
-(open, donmai pull request 807) and the macOS profile wrap the harness command
-inside the runner (`provider/harness/pi/pi.go` through `runtime/confinement`),
-as ADR-2026-10-03 D4 rule 1 requires. The headless shim is the runner process,
-so it sits outside the boundary and keeps writing its record, tombstone and
-outbox under the host state home. The boundary belongs to the harness process
-and survives adoption (that ADR's D4 rule 5). The Linux backend's
-`--die-with-parent` ties the confined harness to the runner, which is the right
-lifetime: if the shim process dies, the harness dies, and the D10 janitor
-proves the group gone. The transient scope must not add namespace hardening of
-its own, or the backend's nested-sandbox check refuses the seat.
+**Confinement stays at the harness spawn.** The merged Linux backend (donmai
+pull request 807) launches the harness through bubblewrap with
+`--unshare-user --unshare-pid --die-with-parent` and a tmpfs root, then a
+Landlock stage that re-executes the donmai binary before the harness
+(`runtime/confinement/backend_linux.go:mountNamespaceFlags`,
+`runtime/confinement/stage_linux.go`). It shares the network namespace, is
+applied by the pi adapter only when confinement is requested
+(`provider/harness/pi/pi.go:confinerForSession`), and refuses the spawn when
+the backend, its self-test or the nested-sandbox check fails. The macOS
+profile wraps the same spawn. Both sit inside the runner, as ADR-2026-10-03 D4
+rule 1 requires, so the headless shim, which is the runner process, stays
+outside the boundary and keeps writing its record, tombstone and outbox under
+the host state home. The boundary belongs to the harness process and survives
+adoption (that ADR's D4 rule 5). `--die-with-parent` ties the launcher to the
+runner, and killing the launcher ends the PID namespace and everything in it,
+which is the right lifetime: if the shim process dies, the harness dies, and
+the D10 janitor proves the group gone. A resumed incarnation (D8) is a new
+process, so it re-renders and re-applies confinement, with the self-test
+re-run if the harness binary changed. The transient scope must not add
+namespace hardening of its own, or the backend's nested-sandbox check refuses
+the seat.
 
 So the seat process is the right boundary for the budget, because a cgroup has
 to contain every process the seat starts, and the wrong boundary for
@@ -615,10 +666,12 @@ in that change an adopted shim's claim is empty after a restart, so the
 directory would be reclaimed only by the next startup sweep. The headless work
 closes that gap for both workload profiles.
 
-**Stalled-request retry.** The open stalled-request retry change (donmai pull
-request 803) watches the harness event stream inside the runner and has no
-relation to daemon liveness. It composes with this ADR unchanged, and a seat
-that is mid-retry when the daemon restarts simply continues.
+**Stalled-request retry.** The merged stalled-request retry (donmai pull
+request 803; off by default) watches the harness event stream inside the
+runner and has no relation to daemon liveness. It composes with adoption
+unchanged. Its recovery step, `runner/steering.go:resumeWithDirective`, which
+resumes the provider-native session with a directive, is the primitive D8's
+resumed incarnation reuses for its first turn.
 
 ## D6 — Test plan
 
@@ -694,17 +747,20 @@ older decoder.
 1. Shim-owned headless seats are covered by the same snapshot and fence as
    interactive shims (`sessionShimFenceSnapshot`,
    `verifyRestartRegistryCoverage`).
-2. Direct-owned seats still refuse a planned restart. The refusal gains a
-   closed cause, `direct_owned_sessions`, with the count, so a caller can tell
-   it apart from a fence failure.
-3. `POST /api/daemon/drain` gains a mode that drains direct-owned seats only.
-   The host stops launching new direct-owned seats, keeps launching shim-owned
-   ones, and the call returns when no direct-owned seat remains. The planned
-   restart then proceeds without stopping new work.
-4. A direct-owned seat is never converted. There is no option that kills
-   direct-owned seats to let a planned restart through. A bare signal or a
-   service-manager stop that skips the preflight keeps its unplanned-crash
-   meaning (ADR-2026-08-17 D9).
+2. A direct-owned seat whose harness is resume-qualified and whose resume
+   artifact verifies is stopped for resume and fenced as a parked session
+   (D8). Every other direct-owned seat still refuses a planned restart. The
+   refusal gains a closed cause, `direct_owned_sessions`, with the count of
+   seats that can be neither adopted nor resumed, so a caller can tell it apart
+   from a fence failure.
+3. `POST /api/daemon/drain` gains a mode that drains only the seats that can
+   be neither adopted nor resumed. The host stops launching new direct-owned
+   seats, keeps launching shim-owned ones, and the call returns when no such
+   seat remains. The planned restart then proceeds without stopping new work.
+4. A direct-owned seat is never converted to shim ownership. Apart from D8's
+   stop-for-resume, which is cooperative and fenced, no option kills a seat to
+   let a planned restart through. A bare signal or a service-manager stop that
+   skips the preflight keeps its unplanned-crash meaning (ADR-2026-08-17 D9).
 
 ### Rollout order
 
@@ -724,9 +780,10 @@ older decoder.
    only where the host passes its kill-scope requirement (D5) and the D6
    fixture for its service manager. Registration advertises the capability, so
    a control plane can tell which hosts adopt headless seats.
-4. **Transition drain, once.** On each host, existing direct-owned seats finish
-   under the direct-owned-only drain while new seats start shim-owned. This is
-   the last soft drain the host needs for an upgrade.
+4. **Transition, once.** On each host, existing direct-owned seats are stopped
+   for resume where D8 allows it; the rest finish under the drain mode of the
+   preflight's item 3 while new seats start shim-owned. That is the last soft
+   drain the host needs for an upgrade.
 5. **Default on**, then delete the direct-owned headless path once nothing
    depends on it (ADR-2026-08-17 D11 step 12).
 
@@ -740,27 +797,387 @@ older decoder.
   registry holds a live headless record, extending the artifact check
   ADR-2026-08-17 D11 already requires for the preflight route.
 - Hosts that cannot run headless shims (Windows today; macOS until the launchd
-  smoke passes) keep the direct path and the soft drain.
+  smoke passes) keep the direct path. Their resume-qualified seats use
+  stop-and-resume (D8); the rest keep the soft drain.
+- Stop-and-resume has its own rollout and fallback, in D8.
 
-## Decision points for the founder
+## D8 — Stop and resume for seats that cannot be adopted
 
-1. **Orphan deadline for headless seats.** Reuse the interactive deadline and
-   readoption policy as they are (recommended), or allow a longer headless
-   deadline because a hosted runner keeps its own lease alive.
-2. **Who refreshes the session lease after adoption.** Keep the runner's direct
-   lease refresh (recommended), or move it to the daemon for adopted seats so
-   that a seat with an expired bearer can still be kept alive by its host.
-3. **Credential refresh channel.** Push over the shim connection (recommended),
-   or rehydrate the daemon's HTTP session-detail store on adoption.
-4. **systemd posture.** A transient scope per shim-owned seat (recommended), or
-   `KillMode=process` on the daemon unit. The second also changes what happens
-   to direct-owned seats on stop, which then survive unadopted.
-5. **Fixing the interactive gaps in the same work.** The empty credential store
-   after adoption and the systemd kill scope also affect interactive shims.
-   Recommended: fix both profiles in the same release.
-6. **Hosts that cannot run shims.** Keep the soft drain, or use stop-and-resume
-   (a new incarnation seeded from retained harness state, per ADR-2026-08-31)
-   for harnesses with a verified resume artifact. Recommended: a separate ADR.
+Founder decision 6 puts this here. It is a fallback beside adoption, never a
+replacement for it.
+
+### Where it applies
+
+At a planned restart each seat takes the first path that applies:
+
+1. **Adopt.** A shim-owned seat is fenced and adopted (D1 to D7). Nothing is
+   interrupted.
+2. **Stop for resume.** A seat that cannot be adopted, whose harness is
+   resume-qualified and whose resume artifact verifies, is stopped
+   cooperatively, parked under the restart fence, and resumed by the
+   replacement daemon as a new incarnation.
+3. **Drain.** Every other seat keeps today's behaviour: the preflight refuses
+   until it finishes (D7).
+
+"Cannot be adopted" means one of three things: the host does not launch
+headless shims (no survival fixture for its service manager, or the gate is
+off); the seat was launched direct-owned before the gate was turned on; or a
+shim-owned seat was quarantined and is about to reach its orphan deadline. In
+the third case the shim takes the stop-for-resume exit instead of the terminal
+exit when its harness qualifies, so the next compatible daemon can resume what
+the quarantine would otherwise have ended.
+
+A live process that can be adopted is always adopted. In the vocabulary of
+ADR-2026-08-31 D1 a live process is a rebind case; resume applies only after
+the previous incarnation is gone and its end is recorded.
+
+Resume needs no surviving process, so the same path also covers a planned host
+reboot. It does not cover an unplanned crash: a crashed seat left no
+cooperative stop, no flushed artifact and no recorded end, which is the
+"classify further" case of ADR-2026-08-31 D1. Resume after a crash is outside
+this ADR.
+
+### Which harnesses qualify, and what a verified resume artifact is
+
+**Qualification is computed, never declared.** A harness adapter version is
+resume-qualified only when its resume fixture passes at that version: the
+fixture stops a scripted session mid-run through the stop-for-resume path,
+starts a new process from the artifact, and observes the harness reporting the
+earlier conversation as loaded. This is the same rule
+`ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md`
+D6 applies to capability bits, and an adapter-version bump re-runs the fixture
+(its D1.6). A harness without a passing fixture is not resume-qualified, and its
+seats keep the soft drain.
+
+**Where the harnesses stand today: none qualifies.** The generated capability
+matrix declares session resume for three production harnesses, codex, opencode
+and pi (`matrix/capability-matrix.json`, field `resume`, from
+`agent.Capabilities.SupportsSessionResume`), and not for claude, whose adapter
+returns `ErrUnsupported` from `Resume` (`provider/harness/claude/claude.go`).
+But every production use of `Resume` today is inside one live runner process:
+the only caller is `runner/steering.go:resumeWithDirective` (steering, turn
+continuation and the stalled-request retry), and the dispatch field meant to
+name a session to resume, `prompt/queued_work.go:ProviderSessionID`, is
+copied through and never read. No path starts a new process from a previous
+process's conversation. Per harness:
+
+- *codex* resumes a thread through its app-server from a rollout under
+  `CODEX_HOME`. For a headless seat that home is a randomly named directory
+  under the provider's temporary directory, the system one by default, created
+  per provider instance (`provider/harness/codex/config_boundary.go`), and no
+  record maps it to the session; a new process creates a fresh home and cannot
+  see the old thread. The interactive path already records home and thread id
+  with the shim
+  (`sessionshim/record.go:ResumeKey`) and keeps the home through teardown.
+- *opencode* reopens its on-disk session store through a fresh serve child
+  (`provider/harness/opencode/opencode.go`, `Resume`), but donmai does not
+  isolate that store, so it is not a session-owned location.
+- *pi* relaunches against its session storage (`provider/harness/pi/pi.go`,
+  `Resume`), which sits inside the repository checkout behind the checkout's
+  exclude file (`provider/harness/pi/confinement.go:sessionStateRoot`). Its
+  resume sends no prompt, so a directive would be dropped, and the adapter marks
+  the path untested.
+- *claude* already renders `--resume <id>` in its arguments
+  (`provider/harness/claude/cli_args.go`) but does not implement `Resume`, and
+  its conversation store is the CLI's own, outside anything donmai declares.
+
+ADR-2026-08-31 D2 rules out two of those placements by name, the checkout and
+the system temporary directory, and requires the others to be declared. So
+qualification needs adapter work first: each harness keeps its conversation
+state at a declared, session-owned location under the workarea root, keyed by
+the session, and its resume accepts a directive. The shared conformance check
+(`agent/conformance/checks.go:checkResumeContinues`) is not enough either: it
+proves that a resumed session starts and keeps the event contract, not that it
+loaded its history. Until a harness passes the D8 fixture, its seats keep the
+soft drain.
+
+**The artifact.** A resume artifact is the harness's own conversation state,
+identified by a closed set of facts the stopping runner records:
+
+- the harness key and adapter version, and the harness binary pin;
+- the harness's native session or thread identifier;
+- the path of the state, relative to the session-owned harness state directory
+  that the workarea root declares (never inside a repository checkout and never
+  in a system temporary directory, per ADR-2026-08-31 D2);
+- a content digest of that state, taken after the harness has flushed it; and
+- the model endpoint route the harness was started with.
+
+**Verification happens three times.**
+
+1. *At stop.* The preflight checks qualification before it asks for the stop.
+   The runner then stops the harness the way its adapter declares flushes the
+   conversation, confirms the state exists and records its digest. A harness
+   that fails to leave readable state is the rare case; the seat then ends as
+   `host-restart` with its WIP checkpoint, as described under "Terminal
+   delivery" below.
+2. *Before spawn.* The replacement daemon re-checks every recorded fact: the
+   state exists and its digest matches, the adapter version and binary pin
+   are the same or the new adapter version's fixture proves it reads the old
+   state, and the endpoint route is unchanged (the codex adapter already
+   refuses an in-process resume on a different gateway route). It also checks that the
+   upgraded host can still realize the seat's admitted execution cell: same
+   harness, same execution-security levels, same confinement. A failed check
+   is a typed refusal that names what was missing (ADR-2026-08-31 D1).
+3. *After spawn.* The harness must show that the conversation was loaded, for
+   example by reporting the resumed native identifier and a non-zero history.
+   A resume that starts blank is a **failed resume**: the incarnation is
+   recorded as `seeded_fresh` and briefed as a fresh start, as ADR-2026-08-31
+   D1 requires, instead of running on a conversation it does not have.
+
+### Incarnations and lineage
+
+The lineage rules of ADR-2026-08-17 D1 to D10 apply, with one addition: an
+incarnation counter.
+
+- **Identity.** `(org_id, session_id)` stays the only lifecycle identity. A
+  resume is not a new session, not a new dispatch and not a new attempt. The
+  standalone queue refuses a second attempt by design
+  (`internal/localqueue/types.go:AttemptRef`, minted once by `Claim`), so it
+  gains an incarnation counter inside the existing attempt instead.
+- **Incarnation number.** Each incarnation carries `process_epoch`, the existing
+  "monotonic per-session value for one shim incarnation", now used for every
+  incarnation whether or not it is shim-owned. The first is 1; a resume
+  writes the previous value plus one. A resumed incarnation that is shim-owned
+  gets a new `shim_id` and starts its own `controller_generation`.
+- **One live incarnation.** Incarnation N+1 may start only after incarnation
+  N's end is recorded and its process group is proved gone. Two live
+  incarnations of one session are the D2 duplicate case of ADR-2026-08-17 and
+  quarantine both.
+- **Provenance.** Each resumed incarnation records how it started (`resume` or
+  `seeded_fresh`), the incarnation it continues, and the artifact digest it was
+  seeded from.
+- **Resume record.** The stopping runner writes one record per parked session,
+  atomically and with the same modes as a discovery record (ADR-2026-08-17 D6),
+  in the same registry directory. It holds the identity, the stopped
+  incarnation number, the artifact facts above, the workarea root, the stop
+  reason, the stage counters and budget meter readings (turns, continuations,
+  sub-agents started, tokens, running time), and the list of work lost at the
+  stop. It holds no bearer, prompt or terminal output. Credentials for the new
+  incarnation are minted from the session identity, as for any spawn. Credential
+  files written for one incarnation, such as pi's owner-only credentials file
+  (`provider/harness/pi/credential_file.go`), belong to that incarnation and are
+  removed when it stops; they are never resume state.
+- **Admission is reused, not repeated.** The new incarnation runs under the
+  session's original admission receipt and effective cell. A running session
+  keeps what it was admitted with (ADR-2026-10-05 D1 rule 3), and a resume is
+  the same session. If the upgraded host cannot realize that cell, the seat is
+  not resumed.
+
+### The stop
+
+1. The preflight records the stop reason `host_restart` for the seat, then asks
+   the runner to stop for resume. This is not the daemon's per-session stop:
+   `StopSession` follows SIGTERM with SIGKILL after 250 ms
+   (`daemon/process_group_unix.go:sessionTerminationGrace`), and a SIGTERM'd
+   run today ends as `timeout` and posts a session terminal status
+   (`runner/loop.go`, `classifyStreamStop`; `runner/runner.go:terminalResultPostContext`).
+   A stop for resume must do neither. On the direct path the request is a
+   signal sent after the reason is recorded, the runner reads the reason back
+   before it chooses its exit path, and the daemon waits for the bound below
+   before it escalates; a signal with no recorded reason keeps today's meaning.
+   A quarantined shim at its orphan deadline takes the same path internally.
+2. The runner starts no new turn and waits for a safe point: the current tool
+   call finishes, bounded by the restart budget (ADR-2026-08-17 D9). A tool
+   call still running at the bound is interrupted and listed as lost.
+3. The runner stops the harness so that it flushes its conversation, verifies
+   the artifact, writes the resume record, and pushes a WIP checkpoint of the
+   workarea where the work owes a commit. That reuses the provider-error
+   checkpoint (`runner/provider_error_checkpoint.go:checkpointProviderError`,
+   which pushes `wip/<session>` within 20 seconds and sets `Resumable` and
+   `ResumeCheckpoint` on the result), extended from `provider-error` to
+   `host-restart`. The checkpoint is insurance for the case where no resume
+   happens. The workarea itself stays on disk: failed runs already keep their
+   workarea by default (`afcli/agent_run.go`, `--preserve-worktree`), and the
+   worker's exit path must not release it for `host-restart`.
+4. The runner exits with a new local failure mode, `host-restart`, and posts
+   **no** session terminal status. It stops refreshing its lease; the parked
+   session is held by the restart fence instead.
+5. Only after the runner has exited and its process group is proved gone does
+   the preflight add the session to its frozen snapshot, as a **parked row**:
+   identity, stopped incarnation number, the WIP checkpoint if one was pushed,
+   and no `shim_id`. A parked row is therefore evidence that no incarnation of
+   the session is running, which a shim row is not. A composing fence store
+   holds it like any other row. It needs a new version of the fence request,
+   because `restart-fence-v1` allows an empty `shimId` only for a malformed
+   quarantined record.
+
+### The resume
+
+The replacement daemon resumes parked sessions in the same startup phase in
+which it adopts shims: after auth-only registration and before it advertises
+capacity or claims new work (ADR-2026-08-17 D4). For each resume record it
+runs the before-spawn verification and puts the session in its adoption batch
+as a resume. The composing authority consumes the parked row in the same
+transaction that commits the batch, so a resume and an end decided elsewhere
+can never both win. Only after that commit does the daemon launch the new
+incarnation (shim-owned if the host now launches headless shims, direct-owned
+otherwise) and charge it to capacity. In the standalone runtime the local queue
+plays the authority's part.
+
+The new incarnation's runner starts the harness with `Resume` and the native
+identifier from the record, and its first turn is a directive delivered through
+the existing `runner/steering.go:resumeWithDirective` path. The directive names
+the work lost at the stop, so the agent does not assume an interrupted tool
+call completed. The workarea, its branch, its commits and its uncommitted
+changes are where the previous incarnation left them, under the same lease.
+
+### Terminal delivery across stop and resume
+
+- **A stop for resume is not a session end.** The stopped incarnation writes no
+  terminal status and no outbox record. Its end is recorded locally, in the
+  resume record and, for a shim, in its tombstone with cause
+  `stopped_for_resume`.
+- **One session terminal across all incarnations.** The incarnation that
+  finishes the work writes the session's terminal status through the D3 outbox.
+  The outbox key is the session and its attempt, which a resume does not
+  change, so a second terminal from any incarnation is a conflict, never a
+  second delivery.
+- **When no resume happens.** If the before-spawn check fails or the cell can
+  no longer be realized, the replacement daemon writes one terminal status for
+  the session with failure mode `host-restart`, carrying the WIP checkpoint as
+  its resume checkpoint. The record is first-writer-wins on the outbox key
+  (D3). If no daemon returns before the fence hold expires, the composing
+  authority may end the session as `host-restart` itself, on the evidence of
+  the parked row; that consumes the row, so a late resume is refused.
+- **A failed resume is not an end.** A harness that starts blank downgrades to
+  `seeded_fresh` and keeps running; nothing is delivered.
+- **Release still needs terminal evidence.** The claim, the workarea lease and
+  the fence rows are released only on the session's terminal status
+  (ADR-2026-08-17 rule 10). A parked row is the one fence row that may lead to
+  an end without its host returning, and only because it was written after the
+  process group was proved gone; elapsed time alone still releases nothing.
+
+### Budget charging
+
+- **The stop is uncharged.** A stop for resume is not a session end, so it
+  neither charges nor refunds a per-work-item dispatch budget. The session was
+  charged once, at dispatch, and stays charged once however many incarnations
+  it takes.
+- **A `host-restart` end is uncharged and may be dispatched again.** A
+  composing control plane that charges a per-work-item budget classifies it
+  with operator and upgrade stops: no charge and no failure backoff. Unlike
+  `operator-cancelled`, which is never dispatched again
+  (`ADR-2026-06-22-daemon-per-session-cancel-wire.md`), a `host-restart` end
+  may be dispatched again, from its WIP checkpoint, because nobody cancelled
+  the work.
+- **Spent cost stays spent.** Tokens and time used by every incarnation, including
+  a model request lost at the stop, roll up to the session. Nothing is refunded
+  because a stop happened.
+- **Caps continue.** The stage budget meter (tokens, duration, sub-agents) is
+  process-local today (`runner/budget.go:BudgetEnforcer`), as are the turn and
+  continuation counters, so a new process would start from zero. The resume
+  record carries their readings and the new incarnation's enforcer starts from
+  them. A resume never resets a cap, so a restart is never a way around one.
+
+### What is lost at a stop
+
+- A tool call still running at the safe-point bound. It is interrupted, listed
+  in the resume record, and named to the resumed agent.
+- A model request in flight: its tokens are spent and its output is discarded.
+- Anything the harness held only in process: background shells and servers it
+  started, local tool servers and their state, and any state its conversation
+  artifact does not record.
+- Wall-clock time between the stop and the resume.
+- A memory-inject block the runner has acknowledged but not yet handed to the
+  harness. A headless runner acknowledges on buffer
+  (`runner/loop.go:newInjectAcceptor`), so the control plane will not send it
+  again. The runner delivers buffered blocks at the safe point where it can;
+  any it cannot are listed by delivery id in the resume record, never by
+  content, and named to the resumed agent.
+
+Not lost: the conversation (in the artifact), the workarea with its committed
+and uncommitted changes, the branch and pull request, the session's counters
+and cost, and memory-inject deliveries not yet acknowledged, which the control
+plane delivers again and the runner deduplicates by delivery id.
+
+### Test plan
+
+The stop-and-resume tests need no service-manager survival, so they run on
+every operating system the daemon supports, with the standalone local runtime
+and with the stub hosted receiver of D6. The harness is a scripted fake that
+keeps its conversation in the session-owned state directory and, when resumed,
+reports how much history it loaded.
+
+1. **Acceptance.** Dispatch a seat on a host with headless shim launch off.
+   Call `POST /api/daemon/restart/prepare`. Expect `prepared`, a resume record,
+   a WIP checkpoint where the work owes a commit, a parked fence row, no
+   terminal status at the receiver, and no budget movement. Upgrade from N to
+   N+1. Expect N+1 to resume the seat before it reports ready, with incarnation
+   2, provenance `resume`, the fake reporting the full history, and the lost-work
+   directive delivered. Finish the work; expect exactly one terminal status and
+   one dispatch charge in total.
+2. **Failure matrix.**
+
+| Case | Expected |
+|---|---|
+| Artifact missing or digest mismatch at resume | Typed refusal naming the fact; session ends `host-restart` with its WIP checkpoint, uncharged |
+| Harness binary pin changed by the upgrade, no fixture proving compatibility | Same as above; never a resume against an unproven version |
+| Endpoint route changed | Typed refusal; the codex adapter's existing route check also refuses |
+| Harness starts blank after a verified artifact | Failed resume recorded; incarnation continues as `seeded_fresh` with a full briefing |
+| Tool call still running at the safe-point bound | Interrupted; listed as lost; named in the resume directive |
+| Previous incarnation's process group still alive | The new incarnation never starts; duplicate rule quarantines |
+| Daemon crashes during the stop, before the preflight returns | The preflight never returned `prepared`, so this is the unplanned case: no parked row, no resume, today's crash behaviour |
+| Host does not return before the fence hold expires | The authority ends the session as `host-restart` from the parked row; a late resume by the returning host is refused |
+| Resume and an authority-side end race | Exactly one consumes the parked row; the loser is refused before any process starts |
+| Host reboots between stop and resume | Resume proceeds from the on-disk record and artifact |
+| Older daemon (rollback) finds a resume record | The update path refuses the downgrade while a resume record exists |
+| Quarantined shim reaches its orphan deadline, harness qualified | Parks instead of ending; the next compatible daemon resumes it |
+| Two resumes in a row | Incarnation 3; caps keep counting from the record |
+| Composing plane receives the `host-restart` end | Classified uncharged, no backoff, dispatchable again from the checkpoint |
+
+3. **Fixture per harness.** The resume fixture that qualifies an adapter
+   version (above) is part of that harness's conformance suite and runs on
+   every adapter-version change.
+
+### Rollout relative to shim adoption
+
+Where both paths apply, adoption wins. Stop-and-resume ships alongside it:
+
+1. **With the adopt-capable release (D7 step 1).** Ship the resume record, the
+   resume-before-ready scan, the `host-restart` failure mode and the parked
+   fence row, with stop-for-resume disabled.
+2. **With the consumer step (D7 step 2).** The composing control plane holds
+   parked rows, classifies `host-restart` as uncharged and dispatchable again,
+   and accepts the session terminal from any incarnation of the session.
+3. **Per harness.** Move the harness's conversation state to a declared,
+   session-owned location (codex's headless home first, since its interactive
+   path already records one; then pi out of the checkout, opencode's store, and
+   claude's `Resume`), make its resume carry a directive, and add the fixture.
+   A harness becomes resume-qualified when that fixture passes at its adapter
+   version.
+4. **Per host, independent of the shim gate.** Enable stop-for-resume in the
+   preflight. It needs no service-manager fixture, so a host that cannot run
+   shims yet (macOS before the launchd smoke) gets it first, and loses its
+   soft drain for every qualified harness. On a host where shims are on, it
+   applies only to seats that cannot be adopted, which shrinks the one-time
+   transition of D7 step 4 to the seats whose harness is not qualified.
+
+**Fallback.** Turning stop-for-resume off returns those seats to the soft
+drain. A daemon that predates step 1 must not be installed while resume
+records exist; the update path refuses that downgrade, as it does for headless
+shim records (D7).
+
+## Decisions (founder, 2026-10-08)
+
+1. **Orphan deadline.** Headless seats reuse the interactive orphan deadline
+   and readoption policy unchanged (D4).
+2. **Lease after adoption.** The runner keeps refreshing its session lease
+   directly; the daemon does not take it over for adopted seats (D2, D3).
+3. **Credential channel.** Credential refresh is pushed as `CredentialUpdate`
+   over the shim connection; the daemon's HTTP session-detail store is not
+   rehydrated on adoption (D2).
+4. **systemd posture.** Every shim-owned seat starts in its own transient
+   systemd scope, which is also the per-seat budget cgroup (D5).
+   `KillMode=process` on the daemon unit is not used.
+5. **Interactive gaps.** The empty credential store after adoption and the
+   systemd kill scope are fixed for interactive shims in the same release as
+   headless adoption (D2, D5, D7).
+6. **Seats that cannot be adopted.** Against the recommendation, stop-and-resume
+   is designed here rather than in a separate ADR. On a host that cannot run
+   shims, or for a seat that cannot be adopted, a planned restart stops the seat
+   and resumes it as a new incarnation seeded from retained harness state, for
+   harnesses with a verified resume artifact. Soft drain remains the fallback
+   for harnesses without one. D8 is that design.
 
 ## What this ADR does not decide
 
@@ -773,9 +1190,12 @@ older decoder.
   [`ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`](ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md)
   D7.
 - Restart survival on Windows.
-- The interactive profile's own wire versions, which are unchanged.
+- The interactive profile's wire versions beyond adding `CredentialUpdate`
+  (founder decision 5).
+- Resume after an unplanned crash, and resume on a different host. D8 resumes
+  only a seat its own host stopped cooperatively, from state on that host.
 
-## Consequences (if the recommendations are chosen)
+## Consequences
 
 ### Positive
 
@@ -787,6 +1207,9 @@ older decoder.
   and a path to deleting the direct-owned code.
 - A terminal status survives any single process failure on the host.
 - Seat budgets and the kill-scope fix share one cgroup per seat on Linux.
+- Hosts that cannot run shims, seats launched before the gate, quarantined
+  shims and planned reboots stop costing whole seats for every harness that
+  qualifies for resume (D8). Only unqualified harnesses still drain.
 
 ### Negative
 
@@ -802,6 +1225,11 @@ older decoder.
   to every adopted shim (`011` § "Drain and restart semantics"). A
   service-manager stop that bypasses that path leaves seats running until they
   finish or reach their orphan deadline.
+- A resumed seat loses what was in flight at the stop (D8) and pays again for
+  the context it reloads. Resume is a cheaper failure than a re-dispatch, not a
+  free one.
+- Each harness needs a resume fixture per adapter version before it qualifies,
+  and the qualification can be lost on any harness upgrade.
 
 ### Risks
 
@@ -812,12 +1240,27 @@ older decoder.
   longer than the bearer's remaining life, the runner's lease fuse ends the
   seat as `lost-ownership`. The outbox and tombstone keep that outcome exact,
   but the seat's work stops. Mitigation: the push immediately after adoption
-  (D2), and decision point 2.
+  (D2). A planned outage long enough to matter is usually a reboot, which ends
+  every process anyway and is covered by D8.
 - **Duplicate terminal writers.** The runner and the daemon's fallback could
   both try to write. Mitigation: first-writer-wins on the outbox key and exact
   replay at the receiver.
 - **Scope creation fails on some installs.** Mitigation: refuse the seat before
   spawn with a typed reason; never launch an unscoped shim on systemd.
+- **Interrupted side effects.** A tool call cut off at the safe-point bound may
+  have half-applied an external effect (a push, a migration, an API write). The
+  resumed agent is told which call was cut off, but it cannot know how far the
+  call got. Mitigation: the safe-point wait lets most calls finish; the lost
+  list is explicit; harness tool idempotency stays the harness's concern.
+- **Resume fidelity drifts with harness releases.** A harness can change its
+  conversation format between versions. Mitigation: qualification is computed
+  per adapter version (D8), and an upgrade that changes the binary pin without
+  a passing compatibility fixture ends the seat as `host-restart` rather than
+  resuming on an unreadable artifact.
+- **The parked row is new authority.** It is the one fence row that can lead to
+  an end without its host returning. Mitigation: it is written only after the
+  process group is proved gone, and resume and authority-side ends consume it
+  in one transaction.
 
 ## Alternatives considered
 
@@ -828,7 +1271,8 @@ older decoder.
   incarnation from retained harness state. Rejected as the primary mechanism:
   not every harness has a verified resume artifact, a resume is a new
   incarnation with its own cost, and work in flight at the moment of the stop
-  is lost. It remains a candidate fallback (decision point 6).
+  is lost. Adopted instead as the fallback for seats that cannot be adopted
+  (founder decision 6, D8), never in place of adoption.
 - **A non-PTY byte-stream shim around the harness** (D1 Option A) and **a
   separate supervisor process** (D1 Option B). Rejected in D1.
 - **Give the daemon every control-plane leg of an adopted seat.** It would make
@@ -841,7 +1285,9 @@ Edits land in the commit that flips this ADR to Accepted:
 
 - `ADR-2026-08-17-session-shim-adoption.md` — core contract rule 1 names the
   headless profile's ownership (runner and harness process groups, no PTY, VT
-  or output sequence). Rule 1 sits inside the
+  or output sequence); rules 9 and 10 name the parked row of D8 as a fenced
+  correlation whose resolution is a successor incarnation's terminal or an
+  authority-side `host-restart` end. These rules sit inside the
   `adr-2026-08-17-session-shim-core-contract` synchronized region, so this needs
   paired PRs in both corpora and a green `scripts/check-boundary-sync.sh`. A
   non-synchronized note in D1 states that the shim's version stability comes
@@ -850,7 +1296,16 @@ Edits land in the commit that flips this ADR to Accepted:
   semantics" (the direct-owned-only drain mode and the typed preflight cause),
   § "Recovery from crash" (headless seats are adopted, not re-dispatched).
 - `013-orchestrator-and-governor.md` — worker lifecycle: a headless seat may
-  outlive its daemon and is released only on terminal evidence.
+  outlive its daemon and is released only on terminal evidence; the
+  `host-restart` failure mode and its re-dispatch rule (D8).
+- `ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md` — still
+  Proposed. D8 relies on its D1 (resume creates an incarnation, verified at the
+  layer that performs it, downgrading to seeded-fresh) and D2 (session state
+  outlives the process, at a declared session-owned location). Accepting D8
+  requires accepting those two decisions first, or with it.
+- `ADR-2026-08-17-session-shim-adoption.md` D9 — the restart fence request gains
+  a version that carries parked rows (D8). The schema lives in D9, outside the
+  synchronized region; the platform mirror records the fence store's side.
 - A new protocol document for selected version H under `protocol/`, written in
   the style of `protocol/session-shim-v5.md`.
 
@@ -886,3 +1341,15 @@ recorded here.
   headless lineage as a live owner.
 - Posters: `runtime/executionevent/uploader.go` falls back to the last bearer
   on a failed credential read, like the other posters.
+- Stop for resume (D8): a `host-restart` failure mode in `runner/failure.go`; a
+  stop request distinct from `StopSession`, with a bound long enough for the
+  safe point and the checkpoint push; `checkpointProviderError` extended to
+  `host-restart`; the worker exit path keeps the workarea for `host-restart`.
+- Resume (D8): a secret-free resume record beside the discovery record; a
+  resume scan in the startup adoption phase; `process_epoch` written from the
+  record instead of the constant 1 in `daemon/session_shim_spawn.go`; the
+  runner's first turn through `resumeWithDirective`; the stage budget meter
+  seeded from the record.
+- Harness adapters (D8): session-owned conversation state for codex, opencode
+  and pi, a directive-carrying resume for pi, `Resume` for claude, and a
+  history-loaded resume fixture beside `checkResumeContinues`.
