@@ -163,6 +163,8 @@ reaper integration live in the platform mirror)
 > frame would otherwise be untransmittable. Every other frame type, and every
 > other layer, keeps D5's byte-for-byte rule unchanged.
 
+> **Amendment 2026-10-08:** [Headless session-shim adoption](ADR-2026-10-07-headless-session-shim-adoption.md) extends this ownership model to headless dispatched sessions (D11 step 11) through a headless workload profile on selected wire v6 (`protocol/session-shim-v6.md`), and adds the parked restart-fence row of its D8 (stop and resume). Rules 1, 9 and 10 carry the paired amendments inside the synchronized region; the D1, D9 and D11 notes below are outside it.
+
 > **Amendment 2026-09-11:** [Retired carrier source reconciliation](ADR-2026-09-11-retired-carrier-source-reconciliation.md) registers an explicit current-no-stream CAS and retired-history proof3 profile. Only that fresh atomic profile may seed logical high-water from validated retirement evidence; ordinary recreation remains floor-only. Original unknown outcomes, local resume floors and all terminal release obligations are preserved.
 
 ## Context
@@ -233,6 +235,14 @@ control plane must implement consistently.
 1. **Ownership:** one session shim owns one harness process group, the PTY
    master, VT/snapshot state, recorder, output sequence, replay ring, and final
    exit observation. The daemon owns none of those resources after launch.
+
+   **Amendment 2026-10-08 — headless workload profile (rule 1).** Under the
+   headless workload profile of `ADR-2026-10-07-headless-session-shim-adoption.md`
+   the shim is the worker process itself and owns the runner and the harness
+   process group it starts. It has no PTY master, VT or snapshot state,
+   recorder, output sequence or replay ring, and its final exit observation is
+   recorded only after the harness group is proved gone. Every other rule
+   applies unchanged.
 2. **Identity:** `(org_id, session_id)` is the sole lifecycle identity.
    `shim_id`, `process_epoch`, PID, socket path, and controller generation are
    correlation or fencing values only; none can create, release, terminalize,
@@ -375,6 +385,16 @@ control plane must implement consistently.
     that evidence is durably accepted, so without this rule the next
     heartbeat — which omits the lineage — is refused as revision-stale
     forever and the host drains (observed 2026-09-02).
+
+    **Amendment 2026-10-08 — parked rows (rules 9 and 10).** A planned
+    restart may also fence a parked session of
+    `ADR-2026-10-07-headless-session-shim-adoption.md` D8: a session whose
+    incarnation was stopped for resume, frozen into the snapshot only after
+    its process group was proved gone. A parked row carries no shim
+    correlation. It resolves only by a successor incarnation's ordinary
+    terminal receipt or by an authority-side `host-restart` end, and a resume
+    and such an end consume the row in one transaction, so exactly one wins.
+    Elapsed time still releases nothing.
 11. **Typed recovery admission:** an externally composed daemon uses additive
     typed registration, refresh, and heartbeat seams. One process presents the
     same once-resolved controller id and exact
@@ -596,6 +616,14 @@ daemon job does not reap descendants, then demonstrated with a real launchd
 smoke. On systemd the equivalent unit posture must kill the daemon process, not
 the adopted shim cgroup. Unsupported service managers keep adoption disabled
 until a real process-survival fixture exists.
+
+*Note 2026-10-08.* "Small and version-stable" is a property of the wire, not of
+the binary: a started shim never changes its code, and compatibility comes from
+the negotiated range in D3. The interactive shim already runs inside the
+`agent run` worker together with the runner, and the headless profile of
+`ADR-2026-10-07-headless-session-shim-adoption.md` does the same. On systemd
+every shim-owned session starts in its own transient scope, outside the daemon
+unit's cgroup (that ADR's D5).
 
 ### D2 — Lifecycle identity remains `(org_id, session_id)`
 
@@ -1134,7 +1162,8 @@ permission to substitute a correlation id.
 The time fields are signed Unix nanoseconds and the sequence/generation
 fields are non-negative integers serialized without omission, including zero.
 `shimId` is the only correlation omitted when empty, which is allowed for a
-malformed quarantined record. The composing adapter transports the producer's
+malformed quarantined record (and, from the next fence request version, for
+the parked rows of `ADR-2026-10-07-headless-session-shim-adoption.md` D8). The composing adapter transports the producer's
 JSON bytes as an opaque body; it does not reconstruct this object from semantic
 fields.
 
@@ -1341,7 +1370,8 @@ The rollout is additive:
    remains conservation-only.
 10. Make shim ownership the default for interactive sessions.
 11. Extend the same ownership boundary to other long-lived session modes where
-   restart continuity is required.
+   restart continuity is required. Headless dispatched sessions do so under
+   `ADR-2026-10-07-headless-session-shim-adoption.md` (accepted 2026-10-08).
 12. Delete the direct daemon-owned session path once no served mode depends on
     it.
 

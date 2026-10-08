@@ -198,6 +198,21 @@ transaction or revision CAS. This fence is an
 optional composing callback for the single-machine OSS deployment, which has no
 remote reaper; the shim-owned orphan deadline still bounds local execution.
 
+**Headless seats** (`ADR-2026-10-07-headless-session-shim-adoption.md`,
+Accepted architecture; implementation pending). A headless dispatched session
+may be shim-owned as well: its `agent run` worker hosts the shim in process,
+keeps refreshing its own lease and posting its own terminal status, and may
+outlive its daemon. It is released only on terminal evidence, never because its
+daemon restarted. A seat that cannot be adopted may instead be stopped for
+resume: it exits with the local failure mode `host-restart` and posts no
+session terminal, and a later incarnation of the same session, seeded from a
+verified harness artifact, finishes the work and delivers the session's single
+terminal status. When no resume happens the session ends as `host-restart`:
+uncharged against a per-work-item budget, arming no failure backoff and,
+unlike `operator-cancelled`, eligible to be dispatched again from its WIP
+checkpoint. A stop for resume never resets a stage cap; the counters travel
+with the session.
+
 ## AgentRuntime dispatch
 
 The orchestrator admits a versioned `DispatchIntent` and selects one

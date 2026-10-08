@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-10-07
 boundary: shared
 split: sibling-extensions
@@ -7,11 +7,12 @@ split: sibling-extensions
 
 # ADR-2026-10-07 — Session-shim adoption for headless dispatched sessions
 
-**Status:** Proposed. Architecture only; nothing is built. The founder ruled
-on the six open points on 2026-10-08 (see "Decisions (founder, 2026-10-08)").
-Five follow the recommendations; the sixth folds stop-and-resume into this ADR
-as D8. The status stays Proposed until the founder has reviewed D8. Acceptance
-lands the corpus edits under "Affected documents" in the same commit.
+**Status:** Accepted 2026-10-08 (founder acceptance as drafted, including D8;
+the six rulings are under "Decisions (founder, 2026-10-08)"). Architecture
+only: implementation is pending, and D8's implementation is gated on the
+acceptance of ADR-2026-08-31 D1 and D2 (see "Affected documents"). The corpus
+edits listed under "Affected documents" landed in the accepting commit, with
+two clarifications recorded under "Clarified at acceptance".
 **Date:** 2026-10-07
 **Boundary:** shared. OSS-canonical here: the headless workload profile of the
 session shim, how a headless runner's dependencies on the live daemon behave
@@ -512,8 +513,8 @@ adjustments below. Nothing here touches its identity, fencing or release rules.
   incarnation; `process_epoch` does not advance on adoption.
 - **Wire (that ADR's D3).** Same socket location and modes, same peer-credential
   and start-identity checks, same `session-shim-v1` family token. The headless
-  profile is a new selected version, called H here (the next free version when
-  this is built). It keeps the v1 control messages (Hello, Welcome, Adopted,
+  profile is a new selected version, called H here; acceptance fixes H = 6
+  (`protocol/session-shim-v6.md`). It keeps the v1 control messages (Hello, Welcome, Adopted,
   Stop, Heartbeat, Exit, Error), adds `CredentialUpdate`, and refuses every
   PTY-shaped message (Output, Input, Resize, Snapshot, SnapshotRequest,
   HostFrame, AttributedInput, Checkpoint) with a typed error. **A headless shim
@@ -531,15 +532,17 @@ adjustments below. Nothing here touches its identity, fencing or release rules.
   nothing to sequence, replay or declare missing. Exit is the only terminal
   observation; it is immutable, delivered once per controller, and
   acknowledged by a generation-fenced acknowledgement before the shim stops
-  waiting, as an interactive Exit is. The protocol document for H fixes the
-  exact form. A headless
+  waiting, as an interactive Exit is. `protocol/session-shim-v6.md` fixes the
+  exact form (`HeadlessExit`). A headless
   shim is never offered to an external attach carrier; it is not quarantined
   for lacking one either.
-- **Registry (that ADR's D6).** The record gains one closed field,
-  `workload` (`pty` or `headless`), and its schema version moves. The record's
-  strict decoder (`sessionshim/record.go`, `DisallowUnknownFields`) makes an
-  older daemon classify the new record as malformed and quarantine it
-  (`record_malformed`), which is the safe outcome. The record stays secret-free.
+- **Registry (that ADR's D6).** A headless record gains one closed field,
+  `workload: headless`, and schema version 2; an interactive record is
+  unchanged (absence means `pty`) so that older daemons still decode it. The
+  record's strict decoder (`sessionshim/record.go`, `DisallowUnknownFields`)
+  makes an older daemon classify a headless record as malformed and
+  quarantine it (`record_malformed`), which is the safe outcome. The record
+  stays secret-free.
 - **Quarantine (that ADR's D7).** Unchanged. Quarantined headless shims charge
   capacity and appear in host status and the heartbeat.
 - **Orphan deadline (that ADR's D8).** Unchanged contract and defaults
@@ -1178,6 +1181,8 @@ shim records (D7).
    and resumes it as a new incarnation seeded from retained harness state, for
    harnesses with a verified resume artifact. Soft drain remains the fallback
    for harnesses without one. D8 is that design.
+7. **Acceptance.** The founder accepted the ADR as drafted on 2026-10-08,
+   including D8, and asked for the unblocking work to be scheduled.
 
 ## What this ADR does not decide
 
@@ -1281,7 +1286,7 @@ shim records (D7).
 
 ## Affected documents
 
-Edits land in the commit that flips this ADR to Accepted:
+These edits landed in the commit that flipped this ADR to Accepted:
 
 - `ADR-2026-08-17-session-shim-adoption.md` — core contract rule 1 names the
   headless profile's ownership (runner and harness process groups, no PTY, VT
@@ -1301,13 +1306,28 @@ Edits land in the commit that flips this ADR to Accepted:
 - `ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md` — still
   Proposed. D8 relies on its D1 (resume creates an incarnation, verified at the
   layer that performs it, downgrading to seeded-fresh) and D2 (session state
-  outlives the process, at a declared session-owned location). Accepting D8
-  requires accepting those two decisions first, or with it.
+  outlives the process, at a declared session-owned location). D8 is accepted
+  as architecture; no D8 behaviour may ship before those two decisions are
+  accepted. That acceptance is tracked as a D8 unblocker.
 - `ADR-2026-08-17-session-shim-adoption.md` D9 — the restart fence request gains
   a version that carries parked rows (D8). The schema lives in D9, outside the
   synchronized region; the platform mirror records the fence store's side.
-- A new protocol document for selected version H under `protocol/`, written in
-  the style of `protocol/session-shim-v5.md`.
+- `protocol/session-shim-v6.md` (new) — the selected-v6 delta: the headless
+  workload profile, `CredentialUpdate`/`CredentialResult` for both profiles,
+  and `HeadlessExit`.
+
+### Clarified at acceptance
+
+1. **H is 6.** The headless profile and the credential push share selected
+   version 6. Interactive v6 shims advertise `[1, 6]`, headless shims `[6, 6]`,
+   and the profile is declared in the existing optional `Hello` extension map,
+   because a new top-level `Hello` member would break older strict decoders
+   before selection.
+2. **Only headless records change.** D4's registry bullet said the record's
+   schema version moves; read literally that would make every older daemon
+   quarantine new interactive shims too. The schema version and the
+   `workload` member apply to headless records only, and interactive records
+   stay byte-identical.
 
 ## Affected work items
 

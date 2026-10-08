@@ -399,13 +399,39 @@ crash recovery, carrier proof reservation/admission drift refusal, and both
 immutable max-2 overlap directions; source compatibility or a green v1/v2
 adoption test does not satisfy it.
 
+### Headless seats (Accepted architecture; implementation pending)
+
+Per `ADR-2026-10-07-headless-session-shim-adoption.md`, a headless dispatched
+session can be shim-owned too. The daemon launches the `agent run` worker
+exactly as it launches an interactive shim, and the worker hosts the shim in
+process under the headless workload profile of selected wire v6
+(`protocol/session-shim-v6.md`): no PTY and no output stream, ownership,
+generation fencing, stop, liveness, a pushed `CredentialUpdate` and one
+`HeadlessExit`. A headless shim advertises only version 6, so an older daemon
+quarantines it rather than adopting it as a terminal. The runner keeps its own
+lease refresh and terminal post, and writes its terminal status to the
+durable outbox before the first send; an adopting daemon replays a pending
+record with fresh credentials. On systemd every shim-owned session,
+interactive or headless, starts in its own transient scope, which is both what
+keeps it out of the daemon unit's control-group kill and its seat-budget
+cgroup; a host that cannot create the scope does not launch shims. Selection
+is gated per host and is off until the host's service-manager survival
+fixture passes.
+
 ## Drain and restart semantics
 
 When the daemon needs to stop or restart (auto-update, manual stop, system
 reboot scheduled), it drains or fences according to the intended outcome:
 
 1. **Stop accepting new work.** Daemon updates its registered status to `draining` and reports it on the next heartbeat; a compliant orchestrator reads it and stops routing new sessions to the host. This depends on the heartbeat request actually carrying the status field on the wire, not just computing it internally — see `ADR-2026-08-03-daemon-host-status-signal-completion.md`, which closes a prior gap where the daemon computed this status every beat and silently dropped it before serialization. Until a daemon build including that fix is in use, treat "the orchestrator routes new sessions elsewhere" as aspirational rather than guaranteed.
-2. **Conserve in-flight ownership.** On the current direct-owned path, wait up
+2. **Conserve in-flight ownership.** Under `ADR-2026-10-07-headless-session-shim-adoption.md`
+   (accepted architecture; implementation pending) the preflight takes each
+   seat's first applicable path: a shim-owned seat is fenced and adopted; a
+   seat that cannot be adopted but whose harness is resume-qualified is stopped
+   for resume and fenced as a parked row (its D8); any other seat refuses the
+   planned restart with the closed cause `direct_owned_sessions`, and
+   `POST /api/daemon/drain` gains a mode that waits only for those seats. Until
+   that ships: on the current direct-owned path, wait up
    to `drainTimeoutSeconds` (default 600), then send SIGTERM. On a shim-enabled
    upgrade/restart, every installed caller first invokes
    `POST /api/daemon/restart/prepare`. That daemon-owned edge enters `draining`,
@@ -438,6 +464,7 @@ reboot scheduled), it drains or fences according to the intended outcome:
    and terminal tombstones, restores external carriers through the
    prepare-before-`Welcome`/commit-after-`Adopted` sequence, commits every
    per-scope batch, publishes locally, explicitly activates each v2 candidate,
+   and resumes parked sessions (`ADR-2026-10-07` D8) in the same phase,
    and then sends the first exact heartbeat before it may become `ready` or
    claim. Preparation is resolved from each authenticated
    live correlation, not from an inherited local fence ledger. Fence expiry
@@ -462,8 +489,11 @@ If the daemon process dies unexpectedly:
    inherit. Its composing carrier resolves any durable obligations from the
    authenticated post-`Hello` correlation; the daemon does not guess them. If no
    controller returns before the orphan deadline, the shim terminates and reaps
-   its own process group and persists a terminal tombstone. Direct-owned legacy
-   sessions still become ordinary orphans during migration. Workareas remain on
+   its own process group and persists a terminal tombstone. Shim-owned
+   headless seats behave the same way (`ADR-2026-10-07`). Direct-owned legacy
+   sessions, including every headless seat launched before its host's gate is
+   on, still become ordinary orphans during migration; resume after an
+   unplanned crash is not defined. Workareas remain on
    disk. Under the accepted, implementation-pending terminal-lease architecture,
    the new daemon loads the separate acquisition-quarantine journal first, then
    every durable `active` and `release-pending` lease, before classifying orphan
