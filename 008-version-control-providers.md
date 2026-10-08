@@ -324,6 +324,15 @@ The workarea provider's `acquire(spec)` includes `spec.source.repository` and `s
 
 The workarea provider doesn't assume any of these; it asks the right VCS provider to do it. This is what makes the local workarea cache work across VCS types — cache entries are keyed on `(vcsProviderId, repository, toolchain)`, not on git-specific assumptions.
 
+> **Amended 2026-10-08 by
+> [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md).**
+> On a host whose daemon runs the repository keeper, the git provider's `clone`
+> verb seeds from it. A mutable repository is cloned with
+> `git clone --reference <mirror> --dissociate <remote>` under the session's
+> credential. A read-only `context` repository is exposed as a pinned
+> read-only checkout. The verb's contract does not change. The keeper is an
+> object source beneath it, and every keeper failure degrades to a plain clone.
+
 ## OSS vs SaaS responsibilities
 
 | Concern | OSS | SaaS |

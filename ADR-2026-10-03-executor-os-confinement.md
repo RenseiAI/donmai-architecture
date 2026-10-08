@@ -18,6 +18,8 @@ reasons. A composing binary's own host profile and the hosted control plane's
 later minimums live in the platform corpus's mirrored stub.)
 **Authors:** architecture lane, filed by the coordinator session
 
+> **Note 2026-10-08:** [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md) is Accepted. Its keeper storage lies outside every writable class of D2, so a confined harness never writes it. Mutable leaves are seeded with `--reference <mirror> --dissociate`: self-contained, with no alternates and no hard links (D2.3, D2.4). Its D7 takes one narrow `fileRead` slice ahead of this ADR's D7 deferral: on a host that keeps mirrors for more than one credential scope, seats must not be able to read keeper storage. The means are a mount namespace that omits it, user separation, or a deny-read rule supplied through the D4 callback.
+
 ## Context
 
 A product-owner ruling of 2026-10-03 asks for real OS confinement for sessions
