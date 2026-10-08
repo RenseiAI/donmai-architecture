@@ -8,7 +8,9 @@ split: sibling-extensions
 # ADR-2026-10-08 — Kit-declared dependency stores
 
 **Status:** Proposed. Nothing in this ADR is built. It grants no implementation,
-release or activation authority until it is accepted.
+release or activation authority until it is accepted. The founder ruled on the
+draft's open questions on 2026-10-08 (§ "Rulings on the open questions").
+Acceptance is a separate call.
 **Date:** 2026-10-08
 **Boundary:** shared. The mechanism ships working in the OSS daemon for a
 single-tenant host: the manifest section, the host's dependency keeper (stores,
@@ -241,9 +243,10 @@ Each kit declares its package managers' stores. Each host's daemon owns one
   ABI, platform, scope). A later seat with the same key restores the snapshot
   and lets the manager's own offline install reconcile it. A failed reconcile
   falls back to a normal install.
-- **Budgets.** Stores and snapshots have a disk budget. Retained work areas get
-  a retention budget for the first time: installed trees are dropped first,
-  whole roots later.
+- **Budgets.** Stores and snapshots share one disk budget, and eviction takes
+  snapshots first. Retained work areas get a retention budget for the first
+  time: installed trees are dropped first, whole roots later, and a root with
+  unpushed work is archived, never deleted.
 - **Exact fallback.** When the keeper is disabled or degraded, the install
   step behaves as it does today.
 
@@ -449,19 +452,24 @@ keeper.
      the whole generation before publishing it.
    - The filler also checks that no `store.secrets` or `store.never_share`
      path exists in the generation.
-7. **Coverage and pre-warm.**
+7. **Coverage, and warming that never blocks** (founder ruling, 2026-10-08).
    - The catalog records which lockfile digests a generation covers, meaning
-     the filler completed `fetch` for those inputs.
-   - Before the install step, the worker asks the keeper to cover the
-     session's (scope, manager, lockfile digest), with a deadline (default
-     120 s).
-   - Requests are single-flight per digest. One fetch serves every waiter, so
-     a fan-out wave of nine sessions on one lockfile fetches once.
-   - At the deadline, the session installs online into its own view (D6), and
-     the fill continues for the next session.
+     the filler completed `fetch` for those inputs. Checking coverage is a
+     catalog lookup and never waits.
+   - A session never waits for the filler. When the bound generation does not
+     cover the session's lockfile digest, the session installs online at once
+     into its own view (D6). The keeper starts a background fill for that
+     digest, so a later session finds it covered.
+   - Fills are single-flight per (scope, manager, lockfile digest). A fan-out
+     wave on a new lockfile therefore causes one fill. Sessions that arrive
+     before the fill completes still fetch online for themselves.
+   - This is the repository keeper's rule (its D4 and D11): the keeper is a
+     fast path with an exact fallback, and it never fails or blocks a
+     session.
 8. **Write-back is a refetch.** When a session's online install fetched what
    the store lacked, or the session's commit changes the lockfile, the worker
-   reports the new lockfile digest and the filler fetches it. The seat's own
+   reports the new lockfile digest and the filler fetches it in the
+   background. The seat's own
    bytes are discarded with its root. A poisoned seat therefore never reaches
    another session through the store.
 9. **Locks.** Locks are cross-process, as in the keeper's D8:
@@ -541,8 +549,14 @@ Rules that hold for every exposure:
   - Elsewhere, the kit's `relocate` command rewrites the recorded path before
     reconcile. For pnpm 10, rewriting `storeDir` in `node_modules/.modules.yaml`
     turns an 8.1 s reinstall into a 0.4 s no-op.
+  - The founder accepted this coupling to a manager-internal file on
+    2026-10-08, gated per manager version. `relocate` runs only for a manager
+    version whose relocate fixture passes. That fixture restores at a new
+    path, relocates, reconciles to a no-op, and matches a fresh install.
   - A `records_path` manager with neither gets no snapshot restore
-    (`store_path_unstable`).
+    (`store_path_unstable`). Neither does a version whose relocate fixture
+    fails or has not run; the session does a normal install from the store
+    or online.
 - **The read slice.** As in the keeper's D7: on a host with stores for more
   than one scope, seats must not read other scopes' stores or snapshots. Any
   one of these satisfies it:
@@ -564,12 +578,14 @@ Rules that hold for every exposure:
 1. **It replaces `installSessionDependencies`.** For the selected mutable leaf,
    each applicable entry runs, in order:
    1. restore a snapshot (D7);
-   2. otherwise, ensure store coverage (D4 rule 7) and run `install` offline;
-   3. on a store miss, run `online`, when the session's effective `network`
-      level allows it. Otherwise the miss is reported as `store_miss_offline`.
+   2. otherwise, if the bound generation covers the lockfile (D4 rule 7), run
+      `install` offline;
+   3. otherwise, run `online` at once, when the session's effective `network`
+      level allows it, while the keeper fills the store in the background.
+      With network denied, the miss is reported as `store_miss_offline`.
 
-   The step stays best-effort, as today: a failure is logged and the session
-   continues.
+   No step waits for the keeper. The step stays best-effort, as today: a
+   failure is logged and the session continues.
 2. **The same confinement as the harness.** When the harness is confined, the
    install step runs under the same executor confinement, writable set and
    store view, because it runs package code. When the harness is unconfined,
@@ -604,6 +620,13 @@ Rules that hold for every exposure:
      Otherwise the capture is refused, with `install_outputs_undeclared` or
      `install_mutated_tracked`.
 
+   A tree an agent has touched is never captured. That covers a tree after
+   spawn, at release, during retention or archive, and in a resumed root
+   (founder ruling, 2026-10-08). An online install is not captured either:
+   its tree does not derive from a generation alone. On a new lockfile, the
+   first capture therefore comes from the first session that finds the
+   background fill complete.
+
    The keeper clones the installed paths into staging, makes them read-only,
    and publishes them by atomic rename. Captures are single-flight per key, and
    the first good capture wins. Capture adds one copy-on-write clone (about
@@ -611,12 +634,12 @@ Rules that hold for every exposure:
 3. **Restore and reconcile.**
    - The keeper clones `snapshot.installed` into the fresh leaf, with one
      `clonefile(2)` per directory or a reflink copy.
-   - It runs `relocate` when it is declared and needed, then `reconcile`
-     offline, under the install step's confinement and within a budget
-     (default 30 s).
+   - It runs `relocate` when it is declared and needed, and the manager
+     version's relocate fixture passes (D5). Then it runs `reconcile` offline,
+     under the install step's confinement and within a budget (default 30 s).
    - Success is a hit. On failure, the restored paths are removed, the
-     snapshot is quarantined (`reconcile_failed`), and the install step goes
-     on as D6 describes.
+     snapshot is quarantined (`reconcile_failed`), and the install step falls
+     back to a normal install, as D6 describes.
 4. **ABI safety.** Platform and runtime ABI are in the key, so a built native
    module is reused only under an identical key. A toolchain upgrade changes
    the key. Shared stores never hold build outputs (D4 rule 5 and
@@ -630,18 +653,32 @@ Rules that hold for every exposure:
    install is already fast and a virtual environment is not relocatable.
 7. **Invalidation is by key.** Correctness needs no TTL. Eviction follows D8,
    quarantine follows a failed reconcile, and an operator can purge.
-8. **Trust.** A snapshot holds what the lockfile-pinned packages' scripts
-   produced in a confined, pristine install in the same scope, before any agent
-   acted. Reusing it adds one exposure: the output of a non-deterministic or
-   malicious script is reused rather than re-run. An entry, or an operator,
-   can turn snapshots off for an entry whose `runs_package_code` is true.
+8. **Trust** (founder ruling, 2026-10-08).
+   - A snapshot holds what the lockfile-pinned packages' scripts produced in a
+     confined, pristine install in the same scope, before any agent acted.
+   - Install-script outputs are reused across the sessions of one credential
+     scope by default, and only from such snapshots (rule 2). They never cross
+     scopes (D3).
+   - Reuse adds one exposure: the output of a non-deterministic or malicious
+     script is reused rather than re-run.
+   - An entry, or an operator, may still turn snapshots off for an entry whose
+     `runs_package_code` is true.
 
 ### D8 — Budgets and garbage collection for stores and snapshots
 
-- **Budget.**
-  - The keeper has its own budget, `dependencyKeeper.maxDiskGb`, separate from
-    the repository keeper's and the workarea cache's. `0` means no limit.
+- **One budget** (the coordinator's default, 2026-10-08).
+  - The keeper has one budget, `dependencyKeeper.maxDiskGb`. It covers stores,
+    generations and snapshots together, separate from the repository keeper's
+    budget and the workarea cache's. `0` means no limit.
   - The cache's warn-at-80% and refuse-at-90% thresholds apply.
+  - Under pressure, eviction takes snapshots before stores, in this order:
+    1. quarantined snapshots;
+    2. other snapshots, least recently used first;
+    3. generations that no live root binds;
+    4. compaction of a store (below).
+
+    A snapshot is the cheaper loss: a store install rebuilds its tree in
+    seconds, while losing a store costs a refetch.
   - At the budget, the filler stops publishing, capture stops, and sessions
     degrade to `session-only` and online installs.
 - **Liveness is positive and root-bound.**
@@ -660,8 +697,6 @@ Rules that hold for every exposure:
   - Older generations retire once no live root binds them.
   - Manager prune commands such as `pnpm store prune` are not used. They read
     the project registry, which here is per-session bookkeeping.
-- **Snapshot eviction** is least recently used, among snapshots that are not
-  quarantined.
 - **Recovery order.** The dependency keeper reconciles its catalog after the
   repository keeper and before workarea-cache admission (`011` recovery
   order). A keeper that is still reconciling serves `session-only` and online
@@ -674,20 +709,30 @@ Rules that hold for every exposure:
    `PreserveWorktreeOnFailure`). It never applies to a root that is leased,
    release-pending, quarantined, parked for resume, adopted or unreconciled
    (`ADR-2026-07-18`, `ADR-2026-10-07` D8, `011`).
-2. **Dehydrate first.** After `retention.dehydrateAfterHours` (default 24),
+2. **Dehydrate first.** The defaults in this decision (24 hours, 14 days,
+   30 days) are the founder's of 2026-10-08. After
+   `retention.dehydrateAfterHours` (default 24),
    the keeper removes from each leaf exactly the installed paths that the leaf's
    install record lists. Those are the manifest-declared deletables of `011`,
    and they can be rebuilt from the recorded install key. Source, `.git` and
    every unignored file stay. A later restore of the root reinstalls from the
    recorded key, by snapshot or store.
 3. **Expire later.** After `retention.maxAgeDays` (default 14), or least
-   recently used first when `retention.maxDiskGb` is exceeded:
-   - a root is archived if any mutable leaf holds commits that are unreachable
-     from that leaf's remote-tracking refs;
-   - otherwise it is destroyed.
+   recently used first when `retention.maxDiskGb` is exceeded, a root is
+   archived or destroyed (founder ruling, 2026-10-08):
+   - **Archived, never destroyed,** if any mutable leaf holds unpushed work.
+     Unpushed work means any of:
+     - commits unreachable from that leaf's remote-tracking refs;
+     - uncommitted changes to tracked files;
+     - untracked files that git does not ignore.
+
+     Uncommitted changes are this ADR's conservative reading of "unpushed".
+   - **Destroyed** otherwise. Expiry may delete a root whose work is all on a
+     remote.
 
    Archives have their own age budget, `retention.archiveMaxAgeDays` (default
-   30).
+   30). Dropping an archive is a separate transition with its own receipt. It
+   is the only path by which unpushed work leaves the host.
 4. **Explicit transitions.** Each dehydrate and expire is an explicit
    transition with a receipt that names the policy and the bytes reclaimed. It
    is never a "looks orphaned" sweep. A root is disposed of as a whole, apart
@@ -711,8 +756,7 @@ Rules that hold for every exposure:
   - the manager, the exposure, and the path taken (`snapshot`, `store`,
     `online`, `session-only` or `skipped`);
   - the miss reason, from a closed enum (below);
-  - durations: the coverage wait, restore, relocate, reconcile, install and
-    seed;
+  - durations: restore, relocate, reconcile, install and seed;
   - the bytes the seat fetched itself;
   - the generation id and the install-key digest.
 - **Keeper events.**
@@ -755,8 +799,7 @@ type DependencyMissReason =
   | 'no_snapshot'                // no snapshot for the install key
   | 'store_path_unstable'        // records_path manager, no overlay, no relocate (D5)
   | 'reconcile_failed'           // snapshot quarantined (D7)
-  | 'not_covered'                // generation lacks the lockfile's artifacts
-  | 'ensure_timeout'             // the fill outlived the deadline (D4)
+  | 'not_covered'                // generation lacks the lockfile's artifacts; a background fill starts (D4)
   | 'fetch_requires_build'       // fetch would run package code (D4)
   | 'store_miss_offline'         // a miss with network denied (D6)
   | 'budget_exhausted'           // the keeper is at its budget (D8)
@@ -986,7 +1029,9 @@ for uv and pip. Each test must go red without the mechanism it covers.
 - **Retained roots.** A root retained before install records existed has its
   record written before anything is removed. A path that git does not ignore
   is never dehydrated.
-- **Fan-out.** Nine concurrent sessions on one lockfile cause one fetch.
+- **Fan-out without waiting.** Nine concurrent sessions on a new lockfile
+  cause one fill. None of them waits for it, and the tenth session installs
+  from the store.
 - **Opt-out.** With the keeper disabled, the install step runs exactly today's
   commands and environment, checked against a golden file.
 
@@ -999,35 +1044,44 @@ These are estimates from the measurements above, until Phase 1 reports.
   store install. With a snapshot it should take about 1.6 s (a 1.2 s restore
   plus a 0.4 s reconcile). On macOS a 3.7 s store seed runs concurrently.
 - **Agents' own installs** in confined seats stop starting cold.
-- **Network.** There is one fetch per lockfile, per scope, per host, instead of
-  one per session, and fan-out waves stop multiplying it.
+- **Network.** There is one fill per lockfile, per scope, per host, instead of
+  one fetch per session. Sessions never wait for it: those that arrive before a
+  new lockfile's fill completes still fetch online, so the first wave on a new
+  lockfile is not reduced, and every later one is.
 - **Disk.** Retained roots shed their installed trees after a day and expire
-  after two weeks. Stores and snapshots are bounded by their own budget.
+  after two weeks. Stores and snapshots share one budget.
   - A caveat on the figures: `du` counts copy-on-write clones in full. On a
     host whose installs already clone from the store, dehydration frees less
     than the 1.6 GB per root that `du` reports. Phase 1 measures the change in
     free space, not `du`.
 
-## Open questions for acceptance
+## Rulings on the open questions (2026-10-08)
 
-1. **Retention defaults.**
-   - Are these the right defaults: dehydrate after 24 hours, expire after
-     14 days, and drop archives after 30 days?
-   - Should expiry destroy a root whose commits are all reachable from a
-     remote, or always archive?
-2. **pnpm snapshots on macOS.** They need a kit-owned `relocate` that rewrites
-   a pnpm-internal file. The coupling is gated by a fixture keyed to the
-   manager version. Is that coupling acceptable? Without it, macOS pnpm
-   acquires use the warm store (about 5 s) rather than snapshots (about
-   1.6 s).
-3. **Snapshot trust.** Should lifecycle-script outputs be reused across
-   sessions of one scope by default (D7 rule 8)? The alternative is to restrict
-   snapshots to installs that run no package code.
-4. **The coverage deadline.** The default is 120 s of waiting for the filler
-   before installing online. Should a session instead start online at once,
-   and leave the fill to benefit the next session?
-5. **One budget or two.** Should stores and snapshots share
-   `dependencyKeeper.maxDiskGb`, or should snapshots get a separate share?
+The draft put five questions to the founder. The founder ruled on Q1–Q4 on
+2026-10-08. Q5 is the coordinator's default, not a founder ruling. The
+decisions above already carry each answer. The ADR stays Proposed, because
+acceptance is a separate founder call.
+
+1. **Retention (founder).** The defaults stand:
+   - installed dependencies are dehydrated after 24 hours;
+   - work areas expire after 14 days;
+   - archives are dropped after 30 days.
+
+   Expiry may delete a work area whose commits are all pushed. Anything with
+   unpushed commits is archived, never deleted (D9 rule 3).
+2. **pnpm path rewrite on macOS (founder).** Yes, gated per pnpm version by
+   a fixture. Where the fixture fails, the session falls back to a normal
+   reinstall (D5, and D7 rule 3).
+3. **Install-script outputs (founder).** They are reused across the sessions
+   of one credential scope by default. The only source is a snapshot captured
+   from a clean install before the agent starts. A tree an agent has modified
+   is never captured (D7 rules 2 and 8).
+4. **Warm wait (founder).** Never wait. A session installs online at once,
+   while the daemon warms the store in the background. This matches the
+   repository keeper's rule that the keeper never fails or blocks a session
+   (D4 rule 7, D6).
+5. **Disk budget (coordinator default).** One budget covers stores and
+   snapshots, and eviction takes snapshots before stores (D8).
 
 ## Consequences
 
@@ -1069,8 +1123,8 @@ These are estimates from the measurements above, until Phase 1 reports.
 
 - **Reused lifecycle output.** A malicious or non-deterministic install script
   has its output reused within a scope until the key changes. The key, the
-  pristine-capture rule and the scope bound the risk, and Open question 3 asks
-  whether to remove it.
+  pristine-capture rule and the scope bound the risk. The founder accepted
+  this exposure on 2026-10-08 (ruling 3).
 - **Filler credentials.** The filler holds a scope's registry credentials
   during a fetch. They are delivered per invocation and never persisted, but a
   compromised fetch binary sees them, exactly as a session's own install does
@@ -1118,8 +1172,7 @@ Amended in the accepting commit:
   - Add `dependency_path` beside `acquire_path`.
 - `011-local-daemon-fleet.md`
   - Add the keeper settings (`dependencyKeeper.enabled`,
-    `dependencyKeeper.maxDiskGb`, the coverage deadline and the compaction
-    window) and the `retention.*` settings.
+    `dependencyKeeper.maxDiskGb` and the compaction window) and the `retention.*` settings.
   - Add the keeper to the state-directory layout and the recovery order, and
     its fields to the daemon stats.
 - `004-sandbox-capability-matrix.md` — the store-view exposure per executor
