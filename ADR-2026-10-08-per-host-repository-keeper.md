@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-10-08
 boundary: shared
 split: sibling-extensions
@@ -7,8 +7,10 @@ split: sibling-extensions
 
 # ADR-2026-10-08 — Per-host repository keeper
 
-**Status:** Proposed. Nothing in this ADR is built. It grants no implementation,
-release or activation authority until it is accepted.
+**Status:** Accepted 2026-10-08 (founder acceptance as drafted). Architecture
+only: nothing is built, and implementation follows the rollout below. The
+corpus edits listed under "Affected documents" landed in the accepting commit,
+with the clarifications recorded under "Clarified at acceptance".
 **Date:** 2026-10-08
 **Boundary:** shared. The keeper is execution-layer plumbing and ships working
 in the OSS daemon for a single-tenant host: mirror storage, fetch coalescing,
@@ -232,6 +234,8 @@ receipt or the root lifecycle.
   keeper like any other provisioning.
 - **Accounting.** Keeper bytes are charged to the keeper's own identity, never
   to a session (`ADR-2026-08-22` D7.4).
+- **Git repositories only.** Dependency stores and toolchain caches are out of
+  the keeper's scope (D10).
 
 ### D2 — Mirror identity is (canonical remote, credential scope)
 
@@ -481,6 +485,12 @@ two file locks under `locks/`:
   - On a busy repository a prepared checkout goes stale within the hour.
   - The `003` cache stays specified and unbuilt. When its warmer is built, it
     seeds from the keeper.
+- **Dependency stores and toolchain caches.** The pnpm, bun and npm stores,
+  Go modules, cargo, uv and their kind are out of the keeper's scope. They are
+  the larger measured disk and start-up cost, and they are being designed
+  separately as a kit capability. That design is bound by confinement D2.2:
+  caches are seeded per session, or exposed read-only, and never shared
+  read-write. This ADR does not decide it.
 - **The unread `projects[].cloneStrategy` setting** is retired:
   - `shallow` and `full` lose their meaning, because full history from a
     mirror is cheap;
@@ -501,13 +511,13 @@ two file locks under `locks/`:
 
 | Phase | Where | Scope |
 |---|---|---|
-| 0 | the macOS reference host, this week | D1–D4, D8, D11, and a minimal D9 (budget, mirror eviction, recovery order), behind a daemon setting, for mutable repositories only. Retire `cloneStrategy`. Measure transfer, clone time and failures against the baseline above |
-| 1 | Linux seat hosts | D5–D7 with read-only binds. Context repositories become pinned checkouts there, and the shared sibling clones are no longer needed on those hosts. Keeper storage stays under the daemon's user, with seats under their own identity and cgroup. Prefer a filesystem with reflinks (XFS with `reflink=1`, or btrfs) for the workarea parent and the keeper |
-| 2 | macOS | D5 with per-session copy-on-write clones. Stop the operator refresh job for the shared sibling clones. Legacy shared-parent clones are reported as unowned, never deleted automatically (`ADR-2026-08-22` D9.4). Tune maintenance and eviction from Phase 0 data |
+| 1 | the macOS reference host, this week | D1–D4, D8, D11, and a minimal D9 (budget, mirror eviction, recovery order), behind a daemon setting, for mutable repositories only. Retire `cloneStrategy`. Measure transfer, clone time and failures against the baseline above |
+| 2 | Linux seat hosts | D5–D7 with read-only binds. Context repositories become pinned checkouts there, and the shared sibling clones are no longer needed on those hosts. Keeper storage stays under the daemon's user, with seats under their own identity and cgroup. Prefer a filesystem with reflinks (XFS with `reflink=1`, or btrfs) for the workarea parent and the keeper |
+| 3 | macOS | D5 with per-session copy-on-write clones. Stop the operator refresh job for the shared sibling clones. Legacy shared-parent clones are reported as unowned, never deleted automatically (`ADR-2026-08-22` D9.4). Tune maintenance and eviction from Phase 1 data |
 
 ### Expected effect
 
-These are estimates from the measurements above, until Phase 0 reports.
+These are estimates from the measurements above, until Phase 1 reports.
 
 - **Transfer from the git host** falls from about 18 GB a day to the deltas
   between fetches, which are kilobytes to a few MB each: more than 95% less.
@@ -522,6 +532,24 @@ These are estimates from the measurements above, until Phase 0 reports.
 - **Disk for mutable repositories** does not change, deliberately, because D4
   dissociates. On these hosts the disk levers are dependency installation and
   retention, which need their own decisions.
+
+## Clarified at acceptance
+
+Recorded on 2026-10-08, when the founder accepted the ADR as drafted:
+
+- **Rollout phases are numbered from 1.** Phase 1 is the macOS reference host
+  this week: mirrors with coalesced fetches, `--reference`/`--dissociate`
+  seeding of mutable repositories behind a daemon setting, and retirement of
+  `cloneStrategy`. Phase 2 is the Linux seat hosts, and Phase 3 is macOS
+  context checkouts. The draft numbered them from 0.
+- **Dependency stores and toolchain caches are out of scope** (D10). They are
+  being designed as a kit capability, and the keeper neither stores nor seeds
+  them.
+- **`ADR-2026-08-22` D3.2 is clarified** as D5 step 4 proposed. A read-only
+  leaf may be a read-only view of an immutable pinned checkout that no
+  session's mutation path reaches.
+- **The `cloneStrategy` claim is retired in the linter.**
+  `scripts/retired-claim-lint.sh` gains the rule `CLONE_STRATEGY_SETTING`.
 
 ## Consequences
 
@@ -597,42 +625,49 @@ These are estimates from the measurements above, until Phase 0 reports.
 
 ## Affected documents
 
-To be amended in the commit that accepts this ADR:
+Amended in the accepting commit:
 
 - `003-workarea-provider.md`
-  - § "The workarea cache": step 1 of the slow path becomes "seed from the
-    host's repository keeper".
-  - Add a short § "Repository keeper" summarizing D1–D9, and state that cache
-    entries seed from the keeper and are distinct from it.
+  - § "The workarea cache": step 1 of the slow path now seeds from the host's
+    repository keeper.
+  - New § "Repository keeper" summarizes D1–D9. It states that cache entries
+    seed from the keeper and are distinct from it, and that dependency stores
+    are out of the keeper's scope.
 - `011-local-daemon-fleet.md`
-  - Retire § "`projects[].cloneStrategy`" (D10).
-  - Add the keeper settings: `repoKeeper.enabled`, `repoKeeper.maxDiskGb`, the
-    fetch interval and the authorization window.
-  - Add the keeper's place in the state-directory layout and in the recovery
-    order, and its fields in daemon stats.
-- `008-version-control-providers.md` — note that the git provider's `clone`
-  verb may seed from the host's repository keeper (D1).
-- `004-sandbox-capability-matrix.md` — the pinned-checkout exposure per
-  executor class (D5 step 3).
+  - § "`projects[].cloneStrategy`" is retired (D10).
+  - New § "Per-host repository keeper" covers the keeper settings, its place
+    in the state directory, its stats and events, and hot reload.
+  - The recovery order gains keeper catalog reconciliation before
+    workarea-cache admission.
+- `008-version-control-providers.md` — the git provider's `clone` verb may
+  seed from the host's repository keeper (D1).
+- `004-sandbox-capability-matrix.md`
+  - Pinned-checkout exposure per executor class (D5 step 3).
+  - The daemon configuration example drops `cloneStrategy`.
 - `ADR-2026-08-22-session-owned-multi-repository-workarea.md`
-  - Clarify D3.2 (D5 step 4).
-  - Add forward notes on D7.4 and D7.8: the keeper is the git seed class.
+  - D3.2 is clarified (D5 step 4).
+  - A forward note on D7.4 and D7.8: the keeper is the git seed class.
 - `ADR-2026-08-30-workspace-root-and-lazy-repository-materialization.md` —
   forward note: `EnsureRepository` may seed from the keeper. A context
   repository's resolved ref is the pinned commit.
 - `ADR-2026-10-03-executor-os-confinement.md` — forward note: keeper storage is
-  outside the writable set, and D7 here is a narrow `fileRead` slice for
-  hosts that serve more than one scope.
+  outside the writable set. D7 here is a narrow `fileRead` slice for hosts
+  that serve more than one scope.
 - `ADR-2026-07-07-sibling-context-repos.md` — forward note: for executors that
   attest read-only enforcement, D5 replaces the shared sibling clone.
 - `ADR-2026-06-01-code-survival-pool-execution.md` — forward note: the
   ephemeral posture bypasses the keeper (D11).
-- The companion private corpus gets a mirrored stub carrying the platform
-  delta:
-  - how credential scopes are derived on a host that serves more than one
-    organization;
-  - an optional dispatch-time commit pin;
-  - placement affinity for hosts that already hold a mirror.
+- `scripts/retired-claim-lint.sh` — new rule `CLONE_STRATEGY_SETTING`.
+- `README.md` and `AGENTS.md` — status and index entries.
+
+No `BOUNDARY-SYNC` region is touched.
+
+The companion private corpus carries a mirrored stub with the platform delta:
+
+- how credential scopes are derived on a host that serves more than one
+  organization;
+- an optional dispatch-time commit pin;
+- placement affinity for hosts that already hold a mirror.
 
 ## Affected work items
 
@@ -646,7 +681,7 @@ None are cited here. Tracker references live in the companion private corpus.
   - Extract it into a keeper package that both the code-intelligence host and
     `runtime/worktree` use.
   - Replace its per-process mutex with the cross-process locks of D8.
-- **Phase 0 is a small change in `runtime/worktree`.** `provisionLayoutOnce`
+- **Phase 1 is a small change in `runtime/worktree`.** `provisionLayoutOnce`
   already threads a reference path into `provisionOnceWithReference`. The
   keeper supplies that path for the flat layout and for each declared mutable
   repository.

@@ -330,7 +330,13 @@ P95 target: < 5 seconds when a warm entry exists.
 
 ### `acquire(spec)` — slow path (cold or no match)
 
-1. `git worktree add` from a base clone, or `git clone` if no base.
+1. Seed each repository from the host's repository keeper:
+   `git clone --reference <mirror> --dissociate <remote>` for a mutable
+   repository, or a pinned read-only checkout for a read-only `context`
+   repository. Fall back to a plain `git clone` when the keeper is unavailable.
+   `git worktree add` from a shared base is not used for confined sessions:
+   `ADR-2026-10-03-executor-os-confinement.md` D2.4 refuses it. See
+   § "Repository keeper" below.
 2. Detect toolchain (kit-driven, see `005`); install via `mise`/`asdf`/equivalent.
 3. `pnpm install --frozen-lockfile` (or family equivalent).
 4. Run any kit-declared post-install steps.
@@ -368,6 +374,57 @@ P95 target: < 90 seconds for typical TS monorepo. Background warmer creates addi
 - **Staleness** — cache entries exceeding configured age (default 24h) are invalidated even without lockfile changes, to catch out-of-band dependency drift.
 - **Eviction** — LRU when the cache's disk envelope is exceeded; the envelope is the daemon setting `capacity.poolMaxDiskGb` (`011`). Additionally configurable per (repo, toolchain) key.
 - **Concurrency** — cache operations are serialized per (repo, toolchain) key via per-key mutex; multiple keys parallelize.
+
+### Repository keeper
+
+> **Added 2026-10-08 by
+> [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md)**
+> (Accepted architecture; implementation pending). The local provider still
+> clones each repository from its remote for every session until the keeper
+> ships.
+
+The **repository keeper** is the host's store of git objects. It is the git
+implementation of the provider-owned seed class that
+`ADR-2026-08-22-session-owned-multi-repository-workarea.md` D7.8 allows, and
+it sits beneath the git VCS provider's `clone` verb (`008`).
+
+It is not the workarea cache. Cache entries are prepared work areas with
+installed dependencies. The keeper holds only git objects and pinned
+checkouts. A cache entry seeds its repositories from the keeper like any other
+acquire.
+
+- **Mirrors.** The keeper holds one bare mirror per (canonical remote,
+  credential scope), in daemon-private storage outside every session root.
+  Only the keeper fetches. Fetches are single-flight, at most once per
+  freshness interval, and once more when a pinned commit is missing. Mirrors of
+  different scopes never share objects.
+- **Mutable repositories** are seeded with
+  `git clone --reference <mirror> --dissociate <remote>`, under the session's
+  own credential. The git host still authorizes the clone and supplies the
+  tip. The result is self-contained, with no alternates and no hard links.
+- **Read-only `context` repositories** are never cloned per session. Each is
+  one immutable **pinned checkout** per (mirror, commit), a depth-1
+  repository with no remote. The commit is recorded as the repository's
+  resolved ref. How the checkout reaches the session depends on what the
+  executor attests:
+  - a mount namespace: a read-only bind at the declared leaf;
+  - read-only enforcement without one: a per-session copy-on-write clone at
+    the leaf;
+  - no read-only enforcement: the context repository is not exposed at all.
+
+  A checkout is exposed only within a matching scope that was re-authorized
+  recently.
+- **Liveness, locks and budget.** A checkout stays live while any root that
+  references it is not durably released. That is derived from the root-bound
+  records, never from idle time. Locks are cross-process. The keeper has its
+  own disk budget, separate from this cache's envelope.
+- **It never fails a session.** Every keeper failure degrades to a plain
+  clone. A daemon with the keeper disabled, a standalone run, and work whose
+  posture forbids long-lived clones all provision as before.
+- **Out of scope.** Dependency stores and toolchain caches (the pnpm, bun and
+  npm stores, Go modules, cargo, uv) are not the keeper's. They are being
+  designed as a kit capability, bound by
+  `ADR-2026-10-03-executor-os-confinement.md` D2.2.
 
 ### Observability
 

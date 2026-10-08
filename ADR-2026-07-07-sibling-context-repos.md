@@ -10,6 +10,8 @@ boundary: OSS-only
 **Boundary:** OSS-only
 **Authors:** agent (org agent-docs convention program, 2026-07-07)
 
+> **Note 2026-10-08:** [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md) is Accepted. For an executor that attests read-only enforcement, a declared `context` repository becomes the host keeper's immutable pinned checkout (its D5), exposed read-only at the session's leaf. That replaces the shared sibling clone. The wire, the `../<name>` promise and the never-fatal posture are unchanged. Like the shallow sibling clone, a pinned checkout holds one commit of history.
+
 ## Context
 
 Every repo's `AGENTS.md` now contracts that the governing architecture corpus is

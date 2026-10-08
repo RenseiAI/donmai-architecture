@@ -212,13 +212,17 @@ If sessions are heavy (Cargo builds, large test suites), drop this. If sessions 
 
 Cores and memory the daemon will *not* touch. The user is still using their machine; sessions can't starve macOS or VSCode. Default is conservative (4 cores, 16 GB RAM); tune down if you want more session throughput.
 
-### `projects[].cloneStrategy`
+### `projects[].cloneStrategy` (retired)
 
-- `shallow` (default) — `git clone --depth 1`. Fast for short-lived sessions; loses history.
-- `full` — full clone. Slower first-time, supports `git log`-heavy operations.
-- `reference-clone` — clone-from-existing-local-mirror. Fast and full history if you already have a clone elsewhere on disk.
-
-The workarea provider's local cache composes with this — first acquire pays the clone cost; subsequent acquires reuse the cache entry.
+> **Retired 2026-10-08 by
+> [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md)
+> D10.** The setting was parsed, defaulted and validated, but nothing ever
+> passed it to provisioning. Every session cloned in full whatever the setting
+> said. Its values (`shallow`, `full`, `reference-clone`) lose their meaning,
+> because full history from the host's repository keeper costs about what a
+> shallow clone did, and seeding from a local mirror is now the default. See
+> § "Per-host repository keeper". A config file that still carries the key
+> keeps loading. The key is ignored, and the daemon logs a deprecation warning.
 
 ### `projects[].git.credentialHelper`
 
@@ -260,7 +264,7 @@ Two constraints bind the watcher that implements this:
 - **Watch the directory, not one basename.** A multi-scope host keeps one config file per served scope. A watcher bound to the primary file leaves every other scope frozen at boot — which is the frozen-state defect wearing a hot-reload badge.
 - **Merge per scope; never replace globally.** The reload composes each scope's project set into the shared spawner. A replace-shaped reload evicts the other scopes' projects and trades a frozen-state bug for a destructive one.
 
-`capacity.*`, `autoUpdate.*`, and `orchestrator.url` are the deliberate exceptions: they describe the process itself rather than what it serves, so a change to them may require a drain-aware restart. Everything describing *what the host serves* may not.
+`capacity.*`, `repoKeeper.*`, `autoUpdate.*`, and `orchestrator.url` are the deliberate exceptions: they describe the process itself rather than what it serves, so a change to them may require a drain-aware restart. Everything describing *what the host serves* may not.
 
 ## Session-shim adoption (Accepted architecture; implementation pending)
 
@@ -657,7 +661,8 @@ provider disposition followed by durable `released` does so.
 
 Recovery order is quarantine journal, leases and local claims, terminal-status
 outbox, downstream receipt/result outbox state when configured,
-session/catalog reconciliation, actionable indexes, then workarea-cache admission.
+session/catalog reconciliation, actionable indexes, repository-keeper catalog
+reconciliation, then workarea-cache admission.
 Duplicate terminal submissions reuse a record only for the same terminal-result
 identity and canonical-byte-equivalent Donmai invariants. A configured privileged
 consumer remains disabled unless the running released-artifact set and, when Kit
@@ -968,6 +973,67 @@ donmai session restore-workarea <session-id> --to ~/debug/sess-XYZ
 4. **Daemon-to-daemon delegation.** Two daemons on the same LAN: should one delegate work to the other when overloaded? Or always go through the orchestrator? Default: through the orchestrator (preserves audit chain, scope resolution, cost attribution). Direct delegation is a P3 optimization.
 
 These are intentional gaps for ADRs after operational experience.
+
+## Per-host repository keeper (Accepted architecture; implementation pending)
+
+`ADR-2026-10-08-per-host-repository-keeper.md` gives each host's daemon one
+**repository keeper**. None of it ships yet. Today every session still clones
+its repository from the remote. This section records what the daemon will do
+and what an operator will see.
+
+- **Storage.** The keeper lives at `<state-dir>/repo-keeper/`, mode `0700`,
+  owned by the daemon's user, on the same filesystem as `<worktree-root>`. It
+  holds:
+  - `mirrors/`: one bare mirror per (canonical remote, credential scope),
+    named by a digest of both;
+  - `checkouts/`: immutable pinned checkouts per (mirror, commit);
+  - `locks/`;
+  - a secret-free catalog.
+
+  It is never inside a session root, never a harness working directory, and
+  never bound writable into a seat. Its bytes are charged to the keeper, never
+  to a session.
+- **Settings.**
+  - `repoKeeper.enabled`: off until the rollout enables it.
+  - `repoKeeper.maxDiskGb`: `0` means no limit.
+  - `repoKeeper.fetchIntervalSeconds`: default 30.
+  - `repoKeeper.authorizationWindowSeconds`: default 600.
+
+  Like `capacity.*`, these describe the process, so a change may need a
+  drain-aware restart. The credential scope comes from the embedding binary,
+  never from this file. A single-tenant host has exactly one scope.
+- **Fetching.** Only the keeper fetches. A fetch is single-flight per mirror,
+  runs at most once per interval, and runs once more when a pinned commit is
+  missing. The credential is resolved per invocation and never written to the
+  mirror. An authorization refusal marks the mirror `revoked`.
+- **Seeding.** A mutable repository is cloned with
+  `git clone --reference <mirror> --dissociate <remote>`, under the session's
+  own credential. A read-only context repository is a pinned checkout, exposed
+  read-only per executor class: a read-only bind on the Linux mount-namespace
+  backend, or a per-session copy-on-write clone under the macOS profile.
+- **Failure is never fatal.** A missing, busy, revoked, over-budget or still
+  reconciling keeper degrades to a plain clone. With the keeper disabled,
+  provisioning is byte-for-byte unchanged.
+- **Maintenance.** The keeper runs maintenance itself (`gc.auto=0`) under the
+  mirror's exclusive lock. Mutable seeds are dissociated, so maintenance never
+  breaks a session.
+- **Eviction.** A pinned checkout is live while any root that references it is
+  not durably `released`, including roots that are leased, quarantined or
+  parked for resume. Idle time only orders eviction among unreferenced
+  checkouts. Within the budget, unreferenced checkouts are evicted first, then
+  mirrors with no in-flight seed. The warn-at-80% and refuse-at-90% disk
+  thresholds apply to the keeper's directory too.
+- **Recovery.** On start, the keeper reconciles its catalog after the session
+  and catalog reconciliation and before workarea-cache admission (see
+  § "Terminal workarea lease recovery and reaping").
+- **Observability.** Daemon stats gain keeper fields: mirror count, last fetch
+  per mirror, revoked count, bytes, and live checkouts. They carry no scope
+  values and no credential-bearing URLs. The keeper emits `repo-keeper.fetch`,
+  `repo-keeper.seed`, `repo-keeper.bind` and `repo-keeper.evict` events, with
+  duration and bytes. It adds no new HTTP route.
+- **Out of scope.** Dependency stores and toolchain caches (the pnpm, bun and
+  npm stores, Go modules, cargo, uv) are not the keeper's. They are being
+  designed as a kit capability.
 
 ## Executor OS confinement (Accepted architecture; implementation pending)
 
