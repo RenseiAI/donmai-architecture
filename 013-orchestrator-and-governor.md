@@ -213,6 +213,22 @@ unlike `operator-cancelled`, eligible to be dispatched again from its WIP
 checkpoint. A stop for resume never resets a stage cap; the counters travel
 with the session.
 
+### Recovery mechanism and evidence (ADR-2026-08-31 D1 and D2, Accepted 2026-10-08; implementation pending)
+
+Every recovery path declares which member of the closed taxonomy it performs
+(**continue**, **rebind**, **resume**, **restart**, or *classify further*) and
+records the evidence that selected it on the session record. The rebind
+prohibition on registered terminal evidence belongs to the rebind transition
+only; for resume, a clean terminal observation of the previous incarnation is
+the ordinary precondition. Absence (no claim, an elapsed deadline, a missing
+record, a dead PID without its start identity) selects nothing but *classify
+further*. A resume is verified at the layer that performs it: if the harness
+does not show the prior conversation loaded, the incarnation is recorded and
+briefed as seeded-fresh. Completion contracts therefore distinguish a resumed
+incarnation, which carries its own incarnation identity and provenance under
+the same session, from a continued one, which is the same incarnation; a
+resumed incarnation is never presented as the old one silently continuing.
+
 ## AgentRuntime dispatch
 
 The orchestrator admits a versioned `DispatchIntent` and selects one

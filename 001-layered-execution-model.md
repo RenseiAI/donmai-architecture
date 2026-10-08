@@ -258,6 +258,23 @@ duplicate lifecycle identities retain every live shim/process correlation.
 Adoption, external-carrier commit, terminal-tombstone handoff, and quarantine
 accounting finish before the host advertises capacity.
 
+Session recovery is a closed taxonomy selected from evidence, per
+[`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md)
+D1 and D2 (Accepted 2026-10-08; implementation pending): **continue**,
+**rebind** (the harness process is alive and the same incarnation regains a lost
+binding; registered terminal evidence disqualifies it), **resume** (the process
+is gone and a *new incarnation* is seeded from retained context; a clean
+terminal observation is its ordinary precondition), **restart** (a new session,
+said plainly), and *classify further* when the evidence is ambiguous. The
+mechanism is selected from verified artifacts, never from a proxy signal such
+as a name, a flag or a surviving row, and a resume the harness did not realize
+is a failed resume that downgrades to a seeded-fresh incarnation. An
+incarnation is a qualifier beneath the canonical session identity, never a
+second session. The harness session state that resume needs is a retained tier
+at a declared, session-owned location that a replacement controller can
+resolve without the original process; it is deleted only by a declared
+transition with a receipt, never because the process that wrote it is gone.
+
 The split between SandboxProvider and WorkareaProvider is critical. They are not the same concern — even on a perfectly fresh K8s pod, if you reuse it for a second session without resetting filesystem state, you get the false-positive QA bug that motivated this entire architecture. SandboxProvider gives you *compute*; WorkareaProvider guarantees *filesystem determinism inside that compute*; AgentRuntimeProvider says *which LLM speaks the protocol the orchestrator expects*.
 
 The codebase's existing `AgentProvider` (`packages/core/src/providers/types.ts`) is the OSS reference implementation of `AgentRuntimeProvider`. The renaming is corpus-only; the type stays the same.

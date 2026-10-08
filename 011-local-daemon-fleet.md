@@ -521,6 +521,20 @@ Every remediation string above is an admission that the daemon could not heal it
 - **A hint naming a command the binary does not register is a gate failure, not a typo.** Assert every user-facing remediation string against the registered command set.
 - **A condition that stops the host from serving does not live only in this log file.** It rides the host-status signal outward so it is visible wherever the user actually is — D7, on the signal completed by `ADR-2026-08-03-daemon-host-status-signal-completion.md`.
 
+## Harness session state (Accepted architecture; implementation pending)
+
+Per `ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md` D2, the
+state a harness keeps for its conversation (the artifact resume is keyed on) is
+session state, not process scratch. It lives at a declared, session-owned
+location under the session's workarea root that a replacement controller can
+resolve without the process that wrote it; never inside a repository checkout
+and never in a system temporary directory. Its lifetime follows the session's
+data lifecycle: deletion is an explicit transition with a resolved policy and
+a receipt, and a cleanup path deletes only what a manifest declares deletable.
+No sweep may use "the process that made this is gone", "this looks orphaned" or
+"nothing touched this recently" as its criterion, because process death is the
+precondition for resume.
+
 ## Session-owned multi-repository workarea (Accepted architecture; implementation and migration pending)
 
 `ADR-2026-08-22-session-owned-multi-repository-workarea.md` accepts the layout

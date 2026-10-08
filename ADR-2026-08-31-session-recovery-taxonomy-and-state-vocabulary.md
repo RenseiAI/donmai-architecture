@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-31
 boundary: shared
 split: sibling-extensions
@@ -7,7 +7,12 @@ split: sibling-extensions
 
 # ADR-2026-08-31 — Session recovery taxonomy and lifecycle state vocabulary
 
-**Status:** Proposed
+**Status:** Accepted 2026-10-08 for D1 and D2 (founder ruling). D3 and D4 were
+split out unchanged into
+[`ADR-2026-10-08-session-state-vocabulary-and-recovery-migration.md`](ADR-2026-10-08-session-state-vocabulary-and-recovery-migration.md),
+which remains Proposed; see "Split at acceptance". Architecture only:
+implementation is pending. The affected-document edits for D1 and D2 landed in
+the accepting commit.
 **Date:** 2026-08-31
 **Boundary:** shared (the taxonomy, the evidence polarity rule, the
 state-artifact retention law, and the naming law are canonical here; the
@@ -62,8 +67,10 @@ the mechanism needs is actually there.
 Session recovery is not one verb. It is a closed taxonomy whose member is
 selected from evidence; registered terminal evidence is a **prohibition** for
 one member and an **ordinary precondition** for another; the artifact a member
-depends on has a lifetime independent of the process that produced it; and a
-lifecycle state name may never assert intent the system did not have.
+depends on has a lifetime independent of the process that produced it. (The
+naming law, that a lifecycle state name may never assert intent the system did
+not have, moved with D3 to the follow-up ADR named under "Split at
+acceptance".)
 
 ### D1 — The closed recovery taxonomy
 
@@ -169,88 +176,17 @@ The cost is honest and worth stating: this lengthens what a host retains and
 charges disk against sessions that have finished. The answer is a declared
 retention tier with a receipt, not an undeclared sweep.
 
-### D3 — A state name may never assert intent the system did not have
+### Split at acceptance (2026-10-08)
 
-A lifecycle state name is read as a claim about **how the system arrived at
-that state**. `paused` claims an actor chose it. When nothing chose it, the
-name is false, and every reader pays for the falsehood by looking for a decision
-that does not exist. Naming an involuntary condition after a voluntary one
-spends the word as well: if the voluntary capability is later built, it cannot
-have the name that fits it.
-
-Applied to the state this ADR was written about:
-
-- **`stalled`** — involuntarily not active, and able to become active again when
-  the surrounding conditions permit. This is the honest name for the state a
-  degrade path produces when a session loses its binding: nobody chose it, the
-  work is not finished, and the condition is expected to clear.
-- **`paused`** — **reserved** for a deliberate act by a human or a coordinator.
-  That capability does not exist today. Reserving an unused name is nearly free;
-  recovering a spent one costs a migration and a period of ambiguity across
-  every surface that ever rendered it.
-
-The sub-distinction operators actually need is about **what is missing**, and it
-is expressible only because the host's holdings become continuously legible
-under `ADR-2026-08-31-continuous-host-holdings-claim.md`:
-
-- **`stalled — host holding`** — a host still claims the session. Rebindable
-  now, and the suggested action is a rebind.
-- **`stalled — host not holding`** — no host currently claims it. This is
-  **not** terminal and **not** a synonym for dead. It may become rebindable once
-  that host's own identity recovers; it may be **resumable later on a different
-  host** if its context was retained; or it may have genuinely ended — and only
-  registered terminal proof settles the last of those. Defining this state as
-  effectively terminal is the specific corner this ADR exists to avoid, because
-  it would quietly delete the resume case from the design.
-
-**The rename lands at the projection before the store, and the reason is not
-timidity.** Where one state value is read by many independent surfaces that each
-carry their own translation, renaming the persisted value first produces as many
-partial renames as there are surfaces, plus a window in which surfaces disagree
-about one session at one moment — which is the exact diagnostic cost this
-decision exists to remove. So: one canonical presentation map from lifecycle
-state to displayed name and condition, rendered by **every** surface; the
-persisted value migrates afterwards, under its own change, once every surface
-reads from the map. Consolidating the fan-out is a **precondition** for the
-storage migration, not a substitute for it, and an implementation that stops at
-the display layer has done half of this decision, not all of it.
-
-**A condition is not a state, and this is what makes the rule enforceable.** A
-degraded live-view channel, a retrying carrier, a stale claim, an unreconciled
-holding — these are conditions *on* a session. They render **beside** the state,
-never in place of it. A surface that substitutes a condition for a state has
-re-created the same lie in a different word: it reports something true about the
-transport as though it were true about the work.
-
-### D4 — Migration and proof
-
-The taxonomy lands as a typed discriminator with a recorded reason before it
-changes any behavior: every existing recovery path declares which member it is
-performing and on what evidence, the selection runs in shadow against the path's
-current decision, and the disagreements are reconciled. Only then does the
-discriminator drive.
-
-Required proof, each demonstrated red with the production seam disabled and
-green after restoration:
-
-- rebind refused against registered terminal proof;
-- rebind admitted on a fresh live holdings claim, and refused when the claim is
-  merely absent;
-- resume admitted on a clean terminal observation **plus** a verified readable
-  artifact;
-- resume refused when the artifact is absent, with a typed error naming exactly
-  what was missing;
-- a resume instruction whose harness incarnation started blank classified as a
-  failed resume and downgraded to seeded-fresh with briefing restored;
-- a fresh incarnation carrying a name never selecting the resume path;
-- session state artifacts surviving a controller restart, an orphan sweep, and a
-  workspace hygiene pass, and their deletion producing a receipt;
-- a cleanup path refusing to delete undeclared state;
-- every surface rendering the same state name for one session at one moment; and
-- a condition never replacing a state on any surface.
-
-Proposed status authorizes no reference-doc edit, protocol change, rename,
-migration, release, or activation.
+The founder accepted D1 and D2 on 2026-10-08 and kept D3 and D4 Proposed. D3
+(*a state name may never assert intent the system did not have*) and D4
+(*migration and proof*) moved unchanged, with their consequences, alternatives,
+affected documents, work items and implementation notes, to
+[`ADR-2026-10-08-session-state-vocabulary-and-recovery-migration.md`](ADR-2026-10-08-session-state-vocabulary-and-recovery-migration.md),
+which keeps their numbering so existing references to "ADR-2026-08-31 D3" and
+"D4" resolve there. That ADR is Proposed: the `stalled`/`paused` naming law, the
+presentation map, the persisted-value rename and D4's shadow-first migration
+and proof list grant no authority until it is accepted. D1 and D2 bind now.
 
 ## Consequences
 
@@ -258,15 +194,9 @@ migration, release, or activation.
 
 - The rebind invariant is written where it is true and stops forbidding a
   capability that is being built.
-- An operator can tell a recoverable session from a finished one from its name,
-  without reading a host by hand.
 - A resume that did not actually resume becomes a detectable, named failure
   instead of a blank seat presented as a continuation.
 - The artifact resume depends on stops being scratch that any sweep may claim.
-- A reserved `paused` remains available for the deliberate capability, at the
-  cost of one unused enum value.
-- Consolidating the state fan-out removes a recurring class of contradictory
-  readings across surfaces.
 
 ### Negative
 
@@ -275,24 +205,15 @@ migration, release, or activation.
 - Resume as a distinct incarnation means the session model carries incarnation
   identity and provenance it did not carry before.
 - Retaining session state past process death costs disk and lengthens teardown.
-- The rename is two changes, not one, and the first delivers operator value
-  while leaving a known inconsistency between what is displayed and what is
-  stored.
 
 ### Risks
 
 - **The taxonomy is treated as advisory and a path keeps selecting by proxy.**
   Mitigation: the discriminator is typed and recorded with its evidence, and the
   proof set includes the two shipped proxy-selection failures as fixtures.
-- **`stalled — host not holding` hardens into a terminal state in practice**
-  because nothing ever clears it. Mitigation: it is defined as an ambiguity
-  state, it carries an age, and clearing it is an obligation rather than a hope.
 - **Retention becomes indefinite.** Mitigation: retention is a declared tier
   with a receipt under the existing session data lifecycle law, not an absence
   of deletion.
-- **The display-first rename stalls at display.** Mitigation: the migration is
-  named as the completion of this decision, and consolidating the fan-out is
-  stated as its precondition rather than its replacement.
 - **Incarnation identity is mistaken for a new session.** Mitigation: the
   logical session identity is unchanged and canonical; incarnation is a
   qualifier beneath it, per the one-session substrate.
@@ -310,14 +231,6 @@ migration, release, or activation.
 - **Treat "no host claims it" as terminal.** Rejected: it is an unobservability
   statement, not a death certificate, and it would delete the case where a
   session resumes later on a different host.
-- **Keep `paused` and explain it in a tooltip or subtitle.** Rejected: the value
-  travels through interfaces, logs, receipts, and operator speech. A gloss
-  attached at one surface does not survive the trip, and the name is what people
-  repeat.
-- **Rename the persisted value first and let surfaces catch up.** Rejected on
-  sequencing, not on merit: with independent per-surface translations it yields
-  partial renames and a disagreement window. Deferred behind the presentation
-  map, not abandoned.
 - **Let each harness own where its session state lives.** Rejected: the
   divergence is the defect. Today one harness writes into the checkout and
   another into a system temporary directory, and neither placement survives what
@@ -329,7 +242,9 @@ migration, release, or activation.
 
 ## Affected documents
 
-On acceptance this ADR amends:
+The accepting commit (D1 and D2) amended the following. The items that belong
+to D3 (`014` and `ADR-2026-08-31-continuous-host-holdings-claim.md`) moved to
+the follow-up ADR.
 
 - `001-layered-execution-model.md` — Layer 3 gains the recovery taxonomy and the
   incarnation-versus-session distinction.
@@ -338,9 +253,6 @@ On acceptance this ADR amends:
   completion contracts distinguish a resumed incarnation from a continued one.
 - `011-local-daemon-fleet.md` — session state root placement, resolvability
   without the originating process, and declared-deletion-only cleanup.
-- `014-tui-operator-surfaces.md` — the canonical state presentation map, the
-  `stalled` vocabulary and its two sub-states, and the rule that conditions
-  render beside states.
 - `ADR-2026-08-30-recovery-semantics-for-stateful-links.md` — the session-level
   taxonomy sits above the link-level contract; the rebind prohibition is
   anchored to the rebind transition.
@@ -348,12 +260,10 @@ On acceptance this ADR amends:
   session-state artifacts are a retained tier with declared deletion, not
   scratch.
 - `ADR-2026-08-22-session-owned-multi-repository-workarea.md` and
-  `ADR-2026-08-30-workspace-root-and-lazy-repository-materialization.md` —
+  `ADR-2026-08-30-workspace-root-and-lazy-repository-materialization.md` (a
+  forward note on each) —
   exact-harness state under the session-owned root is resume-bearing state and
   inherits this retention law.
-- `ADR-2026-08-31-continuous-host-holdings-claim.md` — the holdings claim is what
-  makes the two `stalled` sub-states distinguishable without reading a host by
-  hand.
 - `ADR-2026-08-16-one-session-substrate-and-typed-event-spine.md` — incarnation
   identity is a qualifier beneath the canonical session identity, never a second
   session.
@@ -366,10 +276,6 @@ On acceptance this ADR amends:
   seeded-fresh with briefing.
 - Session state root placement, resolution without the originating process, and
   declared-deletion-only cleanup with receipts.
-- Canonical state presentation map consumed by every surface, followed by the
-  persisted-value migration.
-- The two `stalled` sub-states and their suggested operator actions.
-- Conformance fixtures for both shipped proxy-selection failures.
 
 No private tracker references belong in this public ADR.
 
@@ -384,11 +290,6 @@ No private tracker references belong in this public ADR.
 - Make the declared-deletable manifest the *only* input to any sweep that
   removes session-adjacent directories, and fail a sweep that encounters
   undeclared state rather than letting it choose.
-- Build the presentation map as a single module with per-surface render tests
-  before touching storage; the tests are what stop the fan-out from regrowing.
-- Keep the two `stalled` sub-states derived, not stored. They are a function of
-  the current holdings claim, and storing them creates a third thing that can be
-  stale.
 - When a resume instruction cannot be satisfied, the error names the artifact
   and the location it was expected at. An error that says only that resume
   failed sends the reader to the harness, which is the layer that was right.

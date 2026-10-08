@@ -17,6 +17,8 @@ wire namespaces, routes, policy, product projections, and rollout sequencing
 live in the platform mirror)
 **Revision:** 2
 
+> **Note 2026-10-08:** [`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md) D1 is Accepted. A resume creates a new execution *incarnation* with its own incarnation identity and provenance; that identity is a qualifier beneath the canonical `(org_id, session_id)` lifecycle identity, never a second session.
+
 ## Context
 
 Session lifecycle is easy to fragment accidentally. A workflow run, an
