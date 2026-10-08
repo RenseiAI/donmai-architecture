@@ -16,6 +16,8 @@ the private sibling corpus)
 
 > **Note 2026-10-08:** [`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md) D2 is Accepted. Exact-harness state under the session-owned root is resume-bearing session state and inherits its retention law: declared location, resolvable without the originating process, deleted only by a declared transition with a receipt.
 
+> **Note 2026-10-08:** [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md) is Accepted. `EnsureRepository` may seed from the host's repository keeper as a provider-internal optimization. A mutable repository is seeded with `--reference <mirror> --dissociate`, which leaves no alternate store or credential behind (D6). A read-only `context` repository is a pinned checkout, and its resolved ref is the pinned commit, which an idempotent replay never moves (D12 item 5). The observable contract (one declaration, one ensure, one receipt per key) is unchanged, and a keeper seed reports materialization path `seed` (D10).
+
 ## Context
 
 `ADR-2026-08-22-session-owned-multi-repository-workarea.md` established the

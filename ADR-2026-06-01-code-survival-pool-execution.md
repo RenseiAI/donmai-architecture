@@ -20,6 +20,8 @@ split: sibling-extensions
 - **Result seam is versioned:** the payload carries `contractVersion` (`platform/src/lib/factory/code-survival-scan-contract.ts`, `CODE_SURVIVAL_CONTRACT_VERSION`); ingestion rejects unknown majors so a stale worker image cannot write malformed rows.
 - **#1 build risk (acknowledged):** the worker poll/claim loop is agent/session-oriented today; the non-agent `code-survival-scan` work-type over it is net-new substrate (owned by RW0/RW1), not free reuse.
 
+> **Note 2026-10-08:** [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md) is Accepted. Its keeper keeps long-lived mirrors on a host. Work under this ADR's ephemeral-clone posture bypasses the keeper entirely (its D11): it never creates or reads a mirror, and it clones and scrubs exactly as locked above.
+
 ## Context
 
 Code-survival (REN-1247) re-scans each agent-authored merged PR at day 1/7/30/90, git-blames how many merged lines still exist, and (WI1) weights surviving lines by static reachability from user-facing entrypoints — feeding a Bayesian routing reward. The feature is **dark in production** (`code_survival_metrics` has 0 rows ever) because the current scanner is a platform-side serverless function that cannot run git: no git binary, no clones, and `go/callgraph` cannot run in a JS serverless function at all (`runs/2026-06-01-code-survival-runtime-research/00-RESEARCH.md §2`).

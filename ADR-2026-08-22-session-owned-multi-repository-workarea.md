@@ -33,6 +33,8 @@ migration remain pending behind the proof obligations below.
 
 > **Note 2026-10-08:** [`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md) D2 is Accepted. Exact-harness state under the session-owned root is resume-bearing session state and inherits its retention law: declared location, resolvable without the originating process, deleted only by a declared transition with a receipt.
 
+> **Note 2026-10-08:** [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md) is Accepted. Its repository keeper is the git implementation of D7.8's provider-owned seed class: bare mirrors and immutable pinned checkouts outside every session root, charged to the keeper per D7.4 and never to a session. D3.2 is clarified below for pinned checkouts.
+
 ## Context
 
 A session's workspace is one repository. `runtime/worktree.Manager.Provision`
@@ -204,6 +206,15 @@ names a role.
 materialised under `workareaRoot`, never in a shared parent, never in a
 host-global cache directory reachable by another session's mutation path. This
 is the clause that closes context-clone defects 1–3.
+
+*Clarified 2026-10-08 by [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md) D5:* a `read-only` leaf may be a read-only view
+of an immutable pinned checkout owned by the host's repository keeper, such as
+a read-only bind mount, provided that no session's mutation path reaches the
+checkout. The checkout is published once per (repository, credential scope,
+commit), never modified or freshened, and never bound writable anywhere, so
+defects 1–3 cannot recur through it. Its liveness derives from the root-bound
+records of the sessions that reference it (D7), not from a separate count. A
+`mutable` leaf is always the session's own repository.
 
 **D3.3 — Role does not imply authority.** The default-authority column above is
 a default at declaration time, not an inference rule at use time. See D6.

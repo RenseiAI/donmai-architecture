@@ -264,6 +264,21 @@ The seventh row — A2A as transport flavor — is its own provider implementati
 > executor registrable for singular default-primary intent but can never satisfy
 > a read-only-repository demand.
 
+> **Amended 2026-10-08 by
+> [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md)
+> D5.** How a read-only `context` repository reaches a session, by executor
+> class:
+>
+> - **A mount-namespace executor** bind-mounts the host's immutable pinned
+>   checkout read-only at the declared leaf.
+> - **An executor that enforces read-only leaves without a mount namespace**
+>   (the macOS profile) receives a per-session copy-on-write clone of the
+>   checkout at the leaf, never a symlink into host storage.
+> - **An executor that attests no read-only enforcement** receives no context
+>   repository (`ADR-2026-08-22` D8.4).
+>
+> This changes no provider's `repositoryAuthorityEnforcement` value.
+
 > **Amended 2026-09-27 by `ADR-2026-09-27-execution-security-levels.md`.** The
 > six `executionSecurityEnforcement` rows declare, per provider, the strongest
 > execution-security level the provider enforces **today**, and the honest value
@@ -684,16 +699,15 @@ capacity:
     memoryMb: 16384
 
 projects:
-  # Allowed projects, with credentials and clone strategy
+  # Allowed projects, with credentials. Repositories are seeded from the
+  # host's repository keeper (ADR-2026-10-08); there is no per-project clone strategy.
   - id: renseiai
     repository: github.com/renseiai/renseiai
-    cloneStrategy: shallow     # or 'full' | 'reference-clone'
     git:
       credentialHelper: osxkeychain
       sshKey: ~/.ssh/id_ed25519_renseiai
   - id: donmai
     repository: github.com/RenseiAI/donmai-libraries
-    cloneStrategy: full
     git:
       credentialHelper: osxkeychain
 
