@@ -1,6 +1,6 @@
 # 005 — Kit Manifest Spec
 
-**Status:** Reference. `[provides]` / `[depends_on]` cross-family-consumption blocks **Accepted (2026-05-06)** in lockstep with `002` v2. Package integrity and deterministic command/catalog composition **Accepted (2026-07-10)** by `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`.
+**Status:** Reference. `[provides]` / `[depends_on]` cross-family-consumption blocks **Accepted (2026-05-06)** in lockstep with `002` v2. Package integrity and deterministic command/catalog composition **Accepted (2026-07-10)** by `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`. Kit-declared dependency stores **Accepted (2026-10-08)** by `ADR-2026-10-08-kit-dependency-stores.md` (implementation pending).
 **Last updated:** 2026-07-10
 **Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`
 
@@ -94,6 +94,10 @@ interface KitContribution {
 
   // Workarea provisioning hints — what to clean, what to keep
   workareaConfig?: KitWorkareaConfig
+
+  // Dependency stores — one per package manager the kit supports; the
+  // host's dependency keeper warms and exposes them (ADR-2026-10-08)
+  dependencyStores?: KitDependencyStore[]
 
   // Lifecycle hooks specific to this kit
   hooks?: KitHooks
@@ -192,7 +196,7 @@ emits = ["entity", "repository", "named-query"]
 
 [provide.workarea_config]
 clean_dirs = ["target", ".gradle/caches/build-cache"]
-preserve_dirs = ["~/.m2/repository"]   # cache that survives release-to-pool
+preserve_dirs = []                     # in-leaf paths only; host caches are dependency stores
 
 # Per-OS toolchain install — used by the workarea provider when the
 # requested toolchain is not pre-warmed in the workarea cache. Kits declare these
@@ -262,6 +266,72 @@ capabilities = [
 ```
 
 The schema is open along well-defined extension points (additional `provide.*` arrays, custom `detect` checks via `exec`). Adding a new contribution type requires bumping `api`; consumers verify they understand it before activating.
+
+### Dependency stores
+
+> **Added 2026-10-08 by [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md)**
+> (Accepted architecture; implementation pending). It arrives with the
+> manifest `api` revision that
+> `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`
+> already requires.
+
+A kit declares each package manager it supports as one
+`[[provide.dependency_store]]` entry. The host's dependency keeper (`003`)
+does three things with it:
+
+- it keeps a warm store per (manager, layout, credential scope);
+- it exposes that store per session;
+- it snapshots pristine installed trees.
+
+The entry carries everything manager-specific:
+
+```toml
+[[provide.dependency_store]]
+manager   = "pnpm"
+ecosystem = "node"
+lockfiles = ["pnpm-lock.yaml"]
+inputs    = ["pnpm-workspace.yaml", "**/package.json", ".npmrc", ".pnpmfile.cjs", "patches/**"]
+version   = "pnpm --version"
+
+[provide.dependency_store.store]
+env          = ["NPM_CONFIG_STORE_DIR"]
+sharing      = "content-addressed"     # or "session-only"
+integrity    = "on-use"                # "on-use" | "on-fetch" | "none"
+content      = ["v10/files", "v10/index"]
+bookkeeping  = ["v10/projects"]
+records_path = true
+
+[provide.dependency_store.import]
+env = { NPM_CONFIG_PACKAGE_IMPORT_METHOD = "clone-or-copy" }
+
+[provide.dependency_store.commands]
+fetch    = "pnpm fetch"                                  # runs no package code
+install  = "pnpm install --offline --frozen-lockfile"
+online   = "pnpm install --prefer-offline --frozen-lockfile"
+relocate = "bin/pnpm-relocate"
+
+[provide.dependency_store.snapshot]
+installed         = ["node_modules", "**/node_modules"]
+abi               = ["os", "arch", "libc", "node-abi"]
+relocation        = "reconcile"
+runs_package_code = true
+```
+
+- **Declarations are claims.** Fixtures run per (manager version, OS) decide
+  which exposures and snapshot behaviours a host uses.
+- **Selection.** An entry applies to a mutable leaf that holds one of its
+  lockfiles. When two entries of one ecosystem match, the leaf's own
+  declaration decides (for Node, `packageManager`). Otherwise neither applies.
+- **What never moves.**
+  - `fetch` runs no package code.
+  - `store.secrets` paths (such as cargo's `credentials.toml`) are never
+    fetched into, seeded, snapshotted or exposed.
+  - `store.never_share` paths (outputs of package code) never enter a shared
+    store.
+- **OS-keyed commands.** Commands may be OS-keyed, like other commands.
+
+The full field table and the per-manager matrix are in the ADR. The matrix
+covers pnpm, bun, npm, yarn berry and classic, Go modules, cargo, uv and pip.
 
 ### Package envelope and path-bearing fields
 
@@ -379,7 +449,8 @@ Composition is where most subtle bugs live; explicit rules prevent silent surpri
 | `a2a_skills` | Concatenated; duplicate `id` errors. |
 | `intelligence_extractors` | Concatenated by `language` + `emits`. Multiple extractors may emit same kind; results de-duped at the memory layer. |
 | `workarea_config.clean_dirs` | Union. |
-| `workarea_config.preserve_dirs` | Union. |
+| `workarea_config.preserve_dirs` | Union, of paths inside the leaf only. A host-global path is retired by `ADR-2026-10-08-kit-dependency-stores.md`, whose dependency stores replace it. |
+| `dependency_store` | Union keyed by `manager`. Two kits that declare the same `manager` conflict unless the active composition lock selects one. |
 | `hooks` | All run; failure of any aborts. Foundation hooks run first. |
 
 ### Command ownership and generic aliases
@@ -628,6 +699,8 @@ The single most important compositional mechanic: kits declare toolchain demands
 
 The kit doesn't know which provider satisfied the toolchain. The provider doesn't know which kit imposed it. The toolchain spec (`{ java: "17", node: "20" }`) is the contract.
 
+A kit's `[[provide.dependency_store]]` entries are the dependency half of the same seam. The kit declares the manager, and the workarea provider's dependency keeper supplies the warm store and snapshots. Neither knows the other (`003` § "Dependency keeper").
+
 ## OSS vs SaaS responsibilities
 
 | Concern | OSS | SaaS |
@@ -639,6 +712,7 @@ The kit doesn't know which provider satisfied the toolchain. The provider doesn'
 | Kit contribution → adaptation entries | ✅ owns contract; implementation pending | consumes |
 | Applied kit contribution evidence | ✅ owns local receipt | aggregates |
 | Default language kits (TS, TS/Next.js, Go, Rust, Java, Python, Ruby) | ✅ ships (OSS catalog in `donmai-kits`) | consumes OSS catalog |
+| Dependency store entries + dependency keeper | ✅ ships (official kits' entries, the keeper, fixtures) | scope derivation on multi-org hosts, registry credentials, placement preference, fleet aggregation |
 | Local manifest discovery | ✅ ships | inherits |
 | Tessl / agentskills.io adapters | ✅ ships | inherits |
 | Registry adapters (Donmai + community) | ✅ ships | ✅ ships hosted registry |

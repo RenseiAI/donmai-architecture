@@ -62,6 +62,16 @@ Contract details:
 
 **Bug class prevented:** install conflicts, wrong-toolchain false negatives, slow per-session installs that should have been warmed in the workarea cache.
 
+> **Amended 2026-10-08 by [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md)**
+> (Accepted architecture; implementation pending). A framework's dependency
+> install is no longer an ad hoc `provide()` step. A kit declares each package
+> manager as a `[[provide.dependency_store]]` entry (`005`). The workarea
+> provider's dependency keeper then supplies a warm per-scope store and
+> installed-tree snapshots for it, the way the workarea provider supplies
+> toolchains. The kit does not know which host's store served it, and the
+> keeper does not know which kit declared the manager. The entry is the
+> contract.
+
 ## Seam 3 — A2A as Sandbox transport flavor
 
 **Problem:** A2A is agent↔agent at the protocol layer. SandboxProvider's `transportModel` is harness↔sandbox at the runtime layer. They look similar enough to conflate, and conflation breaks both.

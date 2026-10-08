@@ -18,6 +18,8 @@ the private sibling corpus)
 
 > **Note 2026-10-08:** [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md) is Accepted. `EnsureRepository` may seed from the host's repository keeper as a provider-internal optimization. A mutable repository is seeded with `--reference <mirror> --dissociate`, which leaves no alternate store or credential behind (D6). A read-only `context` repository is a pinned checkout, and its resolved ref is the pinned commit, which an idempotent replay never moves (D12 item 5). The observable contract (one declaration, one ensure, one receipt per key) is unchanged, and a keeper seed reports materialization path `seed` (D10).
 
+> **Note 2026-10-08:** [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md) is Accepted. Per-session dependency caches live in `session_cache`, which is `state/<harness-key>/ephemeral/cache/` under this ADR. The dependency install adds phases to D10's events (`dependency.install.*`), with the path `snapshot | store | online | session-only | skipped`.
+
 ## Context
 
 `ADR-2026-08-22-session-owned-multi-repository-workarea.md` established the

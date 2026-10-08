@@ -338,7 +338,8 @@ P95 target: < 5 seconds when a warm entry exists.
    `ADR-2026-10-03-executor-os-confinement.md` D2.4 refuses it. See
    § "Repository keeper" below.
 2. Detect toolchain (kit-driven, see `005`); install via `mise`/`asdf`/equivalent.
-3. `pnpm install --frozen-lockfile` (or family equivalent).
+3. Restore an install snapshot, or install from the scope's dependency store;
+   install online only on a store miss (§ "Dependency keeper").
 4. Run any kit-declared post-install steps.
 5. Mark the fresh session generation `acquired`, return. A cold acquire may also
    publish a separate reusable seed, but the session root itself never becomes it.
@@ -422,9 +423,56 @@ acquire.
   clone. A daemon with the keeper disabled, a standalone run, and work whose
   posture forbids long-lived clones all provision as before.
 - **Out of scope.** Dependency stores and toolchain caches (the pnpm, bun and
-  npm stores, Go modules, cargo, uv) are not the keeper's. They are being
-  designed as a kit capability, bound by
-  `ADR-2026-10-03-executor-os-confinement.md` D2.2.
+  npm stores, Go modules, cargo, uv) are not the keeper's. They belong to the
+  dependency keeper, below.
+
+### Dependency keeper
+
+> **Added 2026-10-08 by
+> [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md)**
+> (Accepted architecture; implementation pending). Until it ships, the runner
+> installs pnpm and Go dependencies with hard-coded commands against the
+> operator's own stores, and a confined harness gets empty per-session caches.
+
+The **dependency keeper** is the host's store of package-manager artifacts and
+installed-tree snapshots. Kits declare each package manager as a
+`[[provide.dependency_store]]` entry (`005`); the keeper itself names no
+manager. Like the repository keeper, it is a provider-owned seed class
+(`ADR-2026-08-22-session-owned-multi-repository-workarea.md` D7.8) outside
+every session root, and it is not the workarea cache.
+
+- **Stores.** The keeper holds one store per (manager, store layout,
+  credential scope), and no content crosses scopes. Only the keeper's filler
+  writes a store, by running the entry's fetch command (which runs no package
+  code) into immutable generations. Nothing a session downloads is promoted
+  into a store.
+- **Views.** A session sees its scope's store through a per-session view,
+  bound to the entry's variables for both the install step and the harness:
+  - an overlay on a Linux mount namespace;
+  - a copy-on-write seed on macOS or a reflink filesystem;
+  - a read-only view or a manager-native proxy, where the manager's fixture
+    passes.
+
+  Imports never hard-link outside the confinement writable set.
+- **The install step** runs before spawn, under the harness's confinement:
+  1. restore a snapshot;
+  2. otherwise, install offline from the store when it covers the lockfile;
+  3. otherwise, install online at once while the keeper fills the store in
+     the background.
+
+  It never waits for the keeper, and it stays best-effort.
+- **Snapshots.** Pristine installed trees become copy-on-write snapshots,
+  keyed by inputs, manager, runtime ABI, platform and scope. They are captured
+  only from a clean offline install before the agent starts. A restore is
+  reconciled by the manager's own offline install, and a failed reconcile
+  quarantines the snapshot and falls back. A tree an agent has touched is
+  never captured.
+- **Budget and retention.** One disk budget covers stores and snapshots, and
+  snapshots are evicted first. Retained work areas have a retention budget
+  (`011`): installed trees are dehydrated after 24 hours, roots expire after 14
+  days, and a root with unpushed work is archived, never destroyed.
+- **Observability.** `dependency_path` (below), typed miss reasons, and an
+  estimated time saved.
 
 ### Observability
 
@@ -441,9 +489,10 @@ toolchain_resolved
 clean_state_checksum
 acquire_path: 'pool-warm' | 'pool-fresh' | 'cold'
 acquire_duration_ms
+dependency_path: 'snapshot' | 'store' | 'online' | 'session-only' | 'skipped'
 ```
 
-The `acquire_path` field is the operational hook for "are we missing cache warmth?" alerts. Its value literals keep the `pool-` prefix — see the note above on unchanged type literals.
+The `acquire_path` field is the operational hook for "are we missing cache warmth?" alerts. Its value literals keep the `pool-` prefix — see the note above on unchanged type literals. `dependency_path` (`ADR-2026-10-08-kit-dependency-stores.md`; implementation pending) reports how the install step obtained the session's dependencies.
 
 ## Snapshot-aware implementations
 
