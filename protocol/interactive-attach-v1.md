@@ -2,7 +2,7 @@
 title: interactive-attach-v1 — interactive PTY session attach wire protocol
 status: Proposed
 date: 2026-07-12
-revision: v1.0-draft6 (2026-09-02) — § 7/§ 13 host-lost / host-still-absent error codes (bounded host-less resume)
+revision: v1.0-draft7 (2026-10-08) — § 9 OSC 52 set exception (viewer-local)
 protocol-version: interactive-attach-v1
 boundary: OSS-only
 derived-from: asciinema ALiS live-stream protocol (shape only; NOT byte-compatible)
@@ -16,7 +16,7 @@ sign-off:
 
 **Status:** Proposed
 **Date:** 2026-07-12
-**Revision:** v1.0-draft6 (2026-09-02) — § 7/§ 13 host-lost / host-still-absent error codes (bounded host-less resume)
+**Revision:** v1.0-draft7 (2026-10-08) — § 9 OSC 52 set exception (viewer-local)
 **Protocol version:** `interactive-attach-v1`
 **Normative for:** the OSS PTY session host and framing library in `donmai`, the
 relay, and every viewer (web, iOS).
@@ -42,6 +42,26 @@ section may be amended by its owning wave via PR to this file **with the sign-of
 cell updated in the same PR** — never silently.
 
 ## Changelog
+
+### v1.0-draft7 (2026-10-08) — § 9 OSC 52 set exception (viewer-local)
+
+Records ADR-2026-10-08-viewer-clipboard-from-osc52-set. The § 9 OSC 52 row's
+disposition stays **strip**, and the stream half of the conformance corpus is
+unchanged. No frozen byte-level rule changes, so no protocol version is minted.
+
+The row's rationale gains a named exception. A paragraph after the table states
+the viewer-local conditions under which a viewer MAY offer the decoded text of a
+**set** to its own clipboard:
+- input control (the pen);
+- a forwarded key press or mouse button press or release within 2 s;
+- one write per such gesture;
+- `sanitizerHoldMaxBytes`;
+- controls removed and one trailing line break dropped;
+- a mandatory facts-first preview.
+
+The governing invariant is unchanged: a clipboard write is not terminal input,
+and the viewer still never emits input in response to output. The corpus gains
+optional `clipboard` fixtures that pin the decoded text across ports.
 
 ### v1.0-draft6 (2026-09-02) — § 7/§ 13 host-lost / host-still-absent error codes
 
@@ -718,14 +738,28 @@ variants of every strip row) is the shared test fixture.
 **OSC 52 set exception (ADR-2026-10-08-viewer-clipboard-from-osc52-set).** The
 sequence is always stripped from the stream. A viewer MAY offer the decoded text
 of a **set** (`52;Pc;Pd` with non-empty base64 `Pd` that decodes to UTF-8) to its
-own clipboard only when it holds the pen, the pen holder's own input reached the
-session within 2 s, no earlier write consumed that input, and the sequence fit
-`sanitizerHoldMaxBytes`. Control characters other than HT, LF and CR are removed
-from the text. Every forwarded write shows a visible preview: the first ~40
-characters with line breaks, tabs and invisible formatting characters rendered
-visibly, the total length, and the line count for multi-line text. A dropped
-write never shows the preview; the pen holder sees "copy blocked" instead. Query
-(`Pd = ?`) and clear (empty `Pd`) forms are never answered or offered.
+own clipboard. A viewer that does so MUST meet all of the following.
+
+- **Input control.** The viewer holds the pen.
+- **A recent gesture.** A gesture reached the session within 2 s, and no earlier
+  write consumed it. A gesture is a key press, or a mouse button press or
+  release report, that the viewer forwarded to the session. Mouse-motion, wheel
+  and focus reports never count, and neither do replies the viewer's terminal
+  generates or input the viewer keeps local.
+- **Bounded.** The sequence fit `sanitizerHoldMaxBytes`.
+- **Clean text.** Control characters other than HT, LF and CR are removed, and
+  one trailing line break is dropped. A text left empty is never offered.
+- **A visible preview for every forwarded write.**
+  - It leads with facts the text cannot control: its length, its line count,
+    and whether it ends with a line break.
+  - Then comes a delimited excerpt of at most 40 glyphs. Long text shows its
+    start and end around an ellipsis. Line breaks, tabs and invisible or
+    default-ignorable characters are rendered visibly.
+  - The facts are never clipped, and no "copy blocked" notice replaces the
+    preview while it shows.
+- **Dropped writes.** A dropped write never shows the preview; the pen holder
+  sees "copy blocked" instead.
+- **Never answered or offered:** query (`Pd = ?`) and clear (empty `Pd`) forms.
 
 **UI-rendered protocol strings (frozen).** The "length-capped,
 control-char-stripped" treatment on the title-chip row applies to **every

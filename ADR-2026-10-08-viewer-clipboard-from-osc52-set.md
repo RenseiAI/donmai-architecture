@@ -3,7 +3,7 @@ status: Accepted
 boundary: OSS-only
 ---
 
-# ADR-2026-10-08-viewer-clipboard-from-osc52-set
+# ADR-2026-10-08 — Viewer clipboard from an OSC 52 set
 
 **Status:** Accepted (2026-10-08, product-owner acceptance with the copy-preview requirement, rule 6)
 **Date:** 2026-10-08
@@ -30,22 +30,41 @@ The threat the §9 row names is real. A session's output is attacker-influenceab
 
 OSC 52 stays **stripped from the stream**; the byte disposition and the conformance corpus do not change.
 
-In addition, a viewer **MAY** offer the decoded text of an OSC 52 **set** to its local clipboard when **all** of the following hold:
+In addition, a viewer **MAY** offer the decoded text of an OSC 52 **set** to its local clipboard. A viewer that does so **MUST** meet all of the following:
 
-1. **Set only.** The sequence is `52 ; Pc ; Pd` where `Pd` is non-empty, valid base64, and decodes to valid UTF-8.
+1. **Set only.** The sequence is `52 ; Pc ; Pd` where `Pd` is non-empty, valid base64 (padded base64 must be complete; unpadded is accepted), and decodes to valid UTF-8.
+   - `Pc` may name any of the selection targets `c`, `p`, `q`, `s`, `0`–`7`, or none. Every target is offered to the viewer's one clipboard, and a terminal viewer forwards it as `c`.
    - A query (`Pd = ?`) is never answered and never forwarded.
    - A clear (empty `Pd`) is ignored.
-   - Control characters other than HT, LF and CR are removed from the text.
+   - Control characters other than HT, LF and CR are removed from the text. LF and CR are kept on purpose for multi-line copies, except that **one trailing line break is dropped**: a copy-on-select rarely wants it, and it is what makes a pasted command run at once in a shell without bracketed paste.
+   - A text left empty (only controls, or one line break) is never offered, so a session can never clear the clipboard.
 2. **Input-control holder.** The viewer holds the pen. Only the pen holder's input reaches the session, so only their action can have caused the copy. A spectator never receives another user's copy.
-3. **Own recent gesture.** The pen holder's own input reached the session within a short window: at most 2 s, ending at their latest input to this session. On the web that input is a mouse button or key press in the terminal; in a terminal viewer it is input forwarded to the session.
+3. **Own recent gesture.** A **gesture** reached the session within a short window: at most 2 s, ending at the latest gesture. A gesture is input the viewer actually forwarded to the session, and only one of:
+   - a key press;
+   - a mouse **button press or release** report.
+
+   These never count as a gesture:
+   - mouse-motion reports (`?1003`, and `?1002` motion with a button held);
+   - wheel reports;
+   - focus reports (`?1004`);
+   - bytes the viewer's own terminal generates in reply to output;
+   - anything the viewer keeps local and does not forward (its own copy keystroke, a force-select drag, a modifier alone).
 4. **One write per gesture.** A gesture admits at most one write, so a session cannot keep overwriting the clipboard.
 5. **Bounded.** The size is bounded by `sanitizerHoldMaxBytes`: a longer set is stripped whole without being offered. A viewer may apply a smaller cap.
-6. **Visible preview.** Every write the viewer forwards to a clipboard shows a short, visible notice of what was copied, so a substituted clipboard is visible before it is pasted. The notice carries:
-   - the first characters of the decoded text (about 40), with line breaks, tabs, and every other control or invisible formatting character (zero-width, bidi override) rendered visibly, so nothing in the text can hide or reorder what the notice shows;
-   - the total length;
-   - a multi-line marker (the line count) when the text spans more than one line.
+6. **Visible preview.** Every write the viewer forwards to a clipboard shows a visible notice of what was copied, derived from the exact text written, so a substituted clipboard is visible before it is pasted. The notice:
+   - **leads with facts the text cannot control:**
+     - the total length in characters;
+     - the line count;
+     - whether the text ends with a line break.
+   - **then renders an excerpt of the text** between delimiters that the excerpt neutralizes inside itself.
+     - At most 40 glyphs are shown. Longer text shows its start and its end around an ellipsis, so a payload hidden after padding stays visible.
+     - Line breaks, tabs, and every control, format, or default-ignorable character (zero-width, bidi override, fillers) are rendered visibly, so nothing in the text can hide or reorder what the notice shows.
+   - **never has its facts clipped:** an excerpt is shortened or dropped before the facts.
+   - **is never replaced or hidden by a "copy blocked" notice while it shows:** a later notice waits, or both show.
 
-   A web viewer shows it as a transient notice (for example `Copied: "npm run build⏎npm test" · 22 chars · 2 lines`); a terminal viewer flashes it in its status line. A write the viewer drops never shows the preview. When the input-control holder's copy is dropped (no recent gesture, over the size cap, or refused by the local clipboard), the viewer shows a "copy blocked" notice instead. A viewer that does not hold input control stays silent.
+   Example: `Copied 62 chars · 1 line · ends with ⏎: ‹echo hi…url evil|sh⏎›`. A web viewer shows it as a transient notice; a terminal viewer shows it in its status line.
+
+   A write the viewer drops never shows the preview. When the input-control holder's copy is dropped (no recent gesture, a second write for one gesture, over the size cap, or refused by the local clipboard), the viewer shows a "copy blocked" notice instead. A viewer that does not hold input control stays silent.
 
 A viewer that forwards to a terminal emits the 7-bit form `ESC ] 52 ; c ; <base64> ESC \`. The operator's terminal then applies its own OSC 52 policy.
 
@@ -62,7 +81,7 @@ Reference implementation: `attachwire/sanitize`.
 
 ### Negative
 
-- A session that knows the operator just pressed a key or clicked can, within the window, put **different** text on the clipboard than what was selected. The viewer cannot see the session's selection to compare. Rules 2–4 shrink the window to one write the operator triggered, and rule 6 makes a substitution visible before the operator pastes. They do not prevent it.
+- A session that knows the operator just pressed a key or clicked can, within the window, put **different** text on the clipboard than what was selected. The viewer cannot see the session's selection to compare. Rules 2–4 shrink the window to one write per key press or click the operator sent, and rule 6 makes a substitution visible, facts first, before the operator pastes. They do not prevent it.
 - Browsers can refuse the write once their own user-activation window has passed. Web viewers must surface that ("copy blocked by the browser").
 
 ### Risks
@@ -76,7 +95,8 @@ Reference implementation: `attachwire/sanitize`.
 
 ## Affected documents
 
-- `protocol/interactive-attach-v1.md` §9 (edited in the accepting commit). The OSC 52 row's disposition stays **strip**, and its rationale now names this ADR's exception. A paragraph after the table states rules 1–6 in brief. The frozen byte-level disposition and the conformance corpus are unchanged.
+- `protocol/interactive-attach-v1.md` §9 (edited in the accepting commit, recorded as revision v1.0-draft7 with a changelog entry). The OSC 52 row's disposition stays **strip**, and its rationale now names this ADR's exception. A paragraph after the table states rules 1–6 in brief. The frozen byte-level disposition and the stream half of the conformance corpus are unchanged. The corpus gains optional `clipboard` fixtures that pin the hook (rule 1) across ports.
+- The exception applies to v1 viewer legs. `interactive-attach-v2` inherits the sanitizer at its pinned revision, and its first profile carries no viewer leg.
 
 This ADR has no platform-specific portion. The protocol and its §9 table are canonical in this corpus only, so no mirrored stub is required.
 
