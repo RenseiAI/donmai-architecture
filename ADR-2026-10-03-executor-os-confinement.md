@@ -20,6 +20,8 @@ later minimums live in the platform corpus's mirrored stub.)
 
 > **Note 2026-10-08:** [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md) is Accepted. Its keeper storage lies outside every writable class of D2, so a confined harness never writes it. Mutable leaves are seeded with `--reference <mirror> --dissociate`: self-contained, with no alternates and no hard links (D2.3, D2.4). Its D7 takes one narrow `fileRead` slice ahead of this ADR's D7 deferral: on a host that keeps mirrors for more than one credential scope, seats must not be able to read keeper storage. The means are a mount namespace that omits it, user separation, or a deny-read rule supplied through the D4 callback.
 
+> **Note 2026-10-08:** [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md) is Accepted. It realizes D2.2's seeded and read-only caches for kit-declared package managers. A session gets a per-session overlay, copy-on-write seed, read-only view or proxy over an immutable store generation that only the daemon's filler writes. Imports never hard-link outside the writable set (D2.3). The dependency install step runs under the harness's confinement, and the install step and the harness bind the same store view.
+
 ## Context
 
 A product-owner ruling of 2026-10-03 asks for real OS confinement for sessions

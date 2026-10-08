@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-10-08
 boundary: shared
 split: sibling-extensions
@@ -7,10 +7,12 @@ split: sibling-extensions
 
 # ADR-2026-10-08 — Kit-declared dependency stores
 
-**Status:** Proposed. Nothing in this ADR is built. It grants no implementation,
-release or activation authority until it is accepted. The founder ruled on the
-draft's open questions on 2026-10-08 (§ "Rulings on the open questions").
-Acceptance is a separate call.
+**Status:** Accepted 2026-10-08 (founder acceptance as drafted). Architecture
+only: nothing is built, and implementation follows the rollout below. The
+founder ruled on the draft's open questions the same day (§ "Rulings on the
+open questions"). The corpus edits listed under "Affected documents" landed in
+the accepting commit, with the clarifications recorded under "Clarified at
+acceptance".
 **Date:** 2026-10-08
 **Boundary:** shared. The mechanism ships working in the OSS daemon for a
 single-tenant host: the manifest section, the host's dependency keeper (stores,
@@ -341,7 +343,8 @@ runs_package_code = true
 5. **`preserve_dirs` stops naming host caches.** Host-global entries in
    `workarea_config.preserve_dirs` (any path outside the leaf) lose their
    meaning, because the keeper replaces them. Entries inside the leaf keep
-   their `003` cache meaning. The accepting commit adds a retired-claim rule.
+   their `003` cache meaning. The accepting commit adds the retired-claim rule
+   `PRESERVE_DIRS_HOST_CACHE`.
 6. **Managers leave the runner and the adapters.** The runner's hard-coded
    pnpm and Go commands become the official kits' entries. The pi adapter's
    hard-coded cache list becomes the union of the selected entries'
@@ -1059,8 +1062,8 @@ These are estimates from the measurements above, until Phase 1 reports.
 
 The draft put five questions to the founder. The founder ruled on Q1–Q4 on
 2026-10-08. Q5 is the coordinator's default, not a founder ruling. The
-decisions above already carry each answer. The ADR stays Proposed, because
-acceptance is a separate founder call.
+decisions above already carry each answer. The founder then accepted the ADR
+as drafted (§ "Clarified at acceptance").
 
 1. **Retention (founder).** The defaults stand:
    - installed dependencies are dehydrated after 24 hours;
@@ -1082,6 +1085,27 @@ acceptance is a separate founder call.
    (D4 rule 7, D6).
 5. **Disk budget (coordinator default).** One budget covers stores and
    snapshots, and eviction takes snapshots before stores (D8).
+
+## Clarified at acceptance
+
+These were recorded on 2026-10-08, when the founder accepted the ADR as drafted.
+
+- **Unpushed work includes uncommitted and untracked files.** The draft read
+  "unpushed" conservatively, and the founder confirmed that reading. Unpushed
+  work is:
+  - commits unreachable from a leaf's remote-tracking refs;
+  - uncommitted changes to tracked files;
+  - untracked files that git does not ignore.
+
+  A root holding any of these is archived at expiry, never destroyed (D9
+  rule 3).
+- **Dropping an archive is the only exit.** Dropping an archive after
+  `retention.archiveMaxAgeDays` (30) is the only path by which unpushed work
+  leaves a host. It is its own explicit transition, with its own receipt (D9
+  rules 3 and 4).
+- **`preserve_dirs` is retired for host-global paths.**
+  `scripts/retired-claim-lint.sh` gains the rule `PRESERVE_DIRS_HOST_CACHE`.
+  The `005` example no longer names a host cache.
 
 ## Consequences
 

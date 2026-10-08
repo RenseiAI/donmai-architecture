@@ -26,6 +26,8 @@ extensions:
 **Authors:** architecture lane (research agent), answering an owner question
 about repeated clones on shared seat hosts.
 
+> **Note 2026-10-08:** [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md) is Accepted. It is the kit capability that D10 points to: dependency stores and installed-tree snapshots belong to a separate dependency keeper. That keeper reuses this one's pattern of a scope callback, cross-process locks and root-bound liveness, and it likewise never fails or blocks a session.
+
 ## Context
 
 ### The question

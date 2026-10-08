@@ -35,6 +35,8 @@ migration remain pending behind the proof obligations below.
 
 > **Note 2026-10-08:** [`ADR-2026-10-08-per-host-repository-keeper.md`](ADR-2026-10-08-per-host-repository-keeper.md) is Accepted. Its repository keeper is the git implementation of D7.8's provider-owned seed class: bare mirrors and immutable pinned checkouts outside every session root, charged to the keeper per D7.4 and never to a session. D3.2 is clarified below for pinned checkouts.
 
+> **Note 2026-10-08:** [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md) is Accepted. Its store generations and installed-tree snapshots are D7.8's "prepared dependency tree": provider-owned seeds outside every session root, charged to the dependency keeper per D7.4. A restored tree is the session's own copy-on-write copy. Its retention budget disposes of a durably terminal, preserved root as a whole (D7). The one exception is dehydration, which removes only the installed paths the root's install record declares.
+
 ## Context
 
 A session's workspace is one repository. `runtime/worktree.Manager.Provision`

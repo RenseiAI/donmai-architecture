@@ -279,6 +279,30 @@ The seventh row — A2A as transport flavor — is its own provider implementati
 >
 > This changes no provider's `repositoryAuthorityEnforcement` value.
 
+> **Amended 2026-10-08 by
+> [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md)
+> D5.** How a kit-declared dependency store reaches a session, by executor
+> class:
+>
+> - **A mount-namespace executor** mounts a per-session overlay. Its lower
+>   layer is the scope's immutable store generation, read-only. Its upper
+>   layer is the session's `session_cache`. It sits at a store path that is
+>   the same for every session of the scope.
+> - **An executor without a mount namespace** (the macOS profile) receives a
+>   per-session copy-on-write seed of the generation in `session_cache`.
+>   Where the manager's fixture passes, it may instead receive a read-only
+>   view, whose content links to the generation while its bookkeeping stays
+>   per session.
+> - **Any executor** may receive a manager-native read-only proxy (a local
+>   module proxy or a wheel directory) that feeds a per-session cache.
+> - **Otherwise** the session gets an empty per-session cache.
+>
+> Imports never hard-link outside the writable set
+> (`ADR-2026-10-03-executor-os-confinement.md` D2.3). A host that serves more
+> than one scope keeps seats from reading other scopes' stores. No exposure
+> puts shared store bytes inside the writable set, so this changes no
+> `fileWrite` attestation.
+
 > **Amended 2026-09-27 by `ADR-2026-09-27-execution-security-levels.md`.** The
 > six `executionSecurityEnforcement` rows declare, per provider, the strongest
 > execution-security level the provider enforces **today**, and the honest value

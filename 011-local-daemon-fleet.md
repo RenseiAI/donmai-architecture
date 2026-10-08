@@ -264,7 +264,7 @@ Two constraints bind the watcher that implements this:
 - **Watch the directory, not one basename.** A multi-scope host keeps one config file per served scope. A watcher bound to the primary file leaves every other scope frozen at boot — which is the frozen-state defect wearing a hot-reload badge.
 - **Merge per scope; never replace globally.** The reload composes each scope's project set into the shared spawner. A replace-shaped reload evicts the other scopes' projects and trades a frozen-state bug for a destructive one.
 
-`capacity.*`, `repoKeeper.*`, `autoUpdate.*`, and `orchestrator.url` are the deliberate exceptions: they describe the process itself rather than what it serves, so a change to them may require a drain-aware restart. Everything describing *what the host serves* may not.
+`capacity.*`, `repoKeeper.*`, `dependencyKeeper.*`, `autoUpdate.*`, and `orchestrator.url` are the deliberate exceptions: they describe the process itself rather than what it serves, so a change to them may require a drain-aware restart. Everything describing *what the host serves* may not.
 
 ## Session-shim adoption (Accepted architecture; implementation pending)
 
@@ -662,7 +662,8 @@ provider disposition followed by durable `released` does so.
 Recovery order is quarantine journal, leases and local claims, terminal-status
 outbox, downstream receipt/result outbox state when configured,
 session/catalog reconciliation, actionable indexes, repository-keeper catalog
-reconciliation, then workarea-cache admission.
+reconciliation, dependency-keeper catalog reconciliation, then workarea-cache
+admission.
 Duplicate terminal submissions reuse a record only for the same terminal-result
 identity and canonical-byte-equivalent Donmai invariants. A configured privileged
 consumer remains disabled unless the running released-artifact set and, when Kit
@@ -1032,8 +1033,107 @@ and what an operator will see.
   `repo-keeper.seed`, `repo-keeper.bind` and `repo-keeper.evict` events, with
   duration and bytes. It adds no new HTTP route.
 - **Out of scope.** Dependency stores and toolchain caches (the pnpm, bun and
-  npm stores, Go modules, cargo, uv) are not the keeper's. They are being
-  designed as a kit capability.
+  npm stores, Go modules, cargo, uv) are not the keeper's. See § "Kit
+  dependency stores".
+
+## Kit dependency stores (Accepted architecture; implementation pending)
+
+`ADR-2026-10-08-kit-dependency-stores.md` gives each host's daemon a
+**dependency keeper**, and kits declare each package manager's store. None of
+it ships yet:
+
+- the runner installs pnpm and Go dependencies with hard-coded commands against
+  the operator's own stores;
+- a confined harness gets empty per-session caches.
+
+This section records what the daemon will do and what an operator will see.
+
+- **Storage.** The keeper lives at `<state-dir>/dep-keeper/`, mode `0700`,
+  owned by the daemon's user, on the same filesystem as `<worktree-root>`. It
+  holds:
+  - `stores/<scope-digest>/<manager>/<layout>/generations/<n>/`, with a
+    `current` pointer;
+  - `snapshots/<scope-digest>/<manager>/<install-key>/`;
+  - `locks/`;
+  - a secret-free catalog.
+
+  It is never inside a session root, and never bound writable into a seat. Its
+  bytes are charged to the keeper.
+- **Settings.**
+  - `dependencyKeeper.enabled`: off until the rollout enables it.
+  - `dependencyKeeper.maxDiskGb`: one budget for stores, generations and
+    snapshots. `0` means no limit.
+  - `dependencyKeeper.compactionWindowDays`: default 14.
+  - `retention.dehydrateAfterHours` (24), `retention.maxAgeDays` (14),
+    `retention.maxDiskGb` (0, no limit) and `retention.archiveMaxAgeDays`
+    (30). `0` disables each rule.
+
+  The credential scope and the filler's registry credentials come from the
+  embedding binary, never from this file. A single-tenant host has exactly one
+  scope.
+- **Filling.** Only the keeper's filler writes a store. It runs the kit
+  entry's fetch command, which runs no package code, into a new generation,
+  confined, with the scope's credentials in memory. Fills are single-flight
+  per (scope, manager, lockfile digest). Nothing a session downloads is
+  promoted.
+- **Never blocking.** A session whose lockfile the store does not cover
+  installs online at once, and the fill runs in the background for later
+  sessions. A disabled, reconciling or over-budget keeper means today's
+  install.
+- **Views.** The same view is bound for the install step and the harness:
+  - an overlay at a stable path on the Linux mount-namespace backend;
+  - a copy-on-write seed on macOS or a reflink filesystem;
+  - a read-only view or a proxy where the manager's fixture passes;
+  - otherwise, an empty per-session cache.
+- **Snapshots.** A snapshot is captured only from a clean offline install
+  before the harness spawns. It is restored by copy-on-write clone and
+  reconciled by the manager's own offline install. A failed reconcile
+  quarantines it.
+- **Eviction.** Under budget pressure the keeper evicts, in order:
+  1. quarantined snapshots;
+  2. other snapshots, least recently used first;
+  3. generations that no live root binds;
+  4. then it compacts a store, refetching only the lockfiles used within the
+     window.
+
+  A generation stays live while any root that binds it is not durably
+  `released`. The warn-at-80% and refuse-at-90% disk thresholds apply.
+- **Retention of retained work areas.** Retention applies only to roots that
+  are durably terminal and were retained by preservation
+  (`PreserveWorktreeAlways`, `PreserveWorktreeOnFailure`). It never applies to
+  a root that is leased, release-pending, quarantined, parked for resume,
+  adopted or unreconciled.
+  - **Dehydrate** after 24 hours. Remove exactly the installed paths in the
+    root's install record. Roots retained before install records existed are
+    classified first, and only git-ignored paths that match a kit's declared
+    installed paths qualify.
+  - **Expire** after 14 days, or least recently used first over
+    `retention.maxDiskGb`. A root is archived if any mutable leaf holds
+    unpushed work:
+    - commits unreachable from its remote-tracking refs;
+    - uncommitted changes to tracked files;
+    - untracked files that git does not ignore.
+
+    Otherwise it is destroyed.
+  - **Drop an archive** after 30 days. This is the only path by which unpushed
+    work leaves the host.
+  - Every dehydrate, expire and archive drop is an explicit transition with a
+    receipt naming the policy and the bytes reclaimed. None is a "looks
+    orphaned" sweep.
+- **Recovery.** The dependency keeper reconciles its catalog after the
+  repository keeper and before workarea-cache admission.
+- **Observability.**
+  - Daemon stats gain dependency fields: hit and miss counts and rates per
+    manager and path (1 h, 24 h, 7 d); miss reasons; estimated time saved,
+    with the baseline's sample count; keeper bytes and budget pressure;
+    retained roots by state; and bytes reclaimed.
+  - The keeper emits `dependency.install.*`, `dependency.fill.*`,
+    `dependency.snapshot.*`, `dependency.store.compacted`,
+    `retention.dehydrated` and `retention.expired`.
+  - None of these carry a scope value, a registry URL or a credential. The
+    keeper adds no HTTP route.
+- **Out of scope.** Build caches (`GOCACHE`, cargo's `target/`, `.next/cache`)
+  stay per session.
 
 ## Executor OS confinement (Accepted architecture; implementation pending)
 
