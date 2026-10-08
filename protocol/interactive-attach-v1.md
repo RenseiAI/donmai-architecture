@@ -696,7 +696,7 @@ Disposition vocabulary: **pass** (render normally) · **strip** (remove entirely
 | SGR (color/attributes) | `ESC[…m` | **pass** | cosmetic; bounded to the cell grid |
 | Cursor addressing / erase | `CUP`/`ED`/`EL`/scroll region | **pass**, VT-bounded | applied within the emulator grid; the VT clamps out-of-bounds moves |
 | Private modes | alt-screen `?1049`, bracketed paste `?2004`, mouse `?1000–?1006` | **pass** | required by real TUIs; only pen-holding driver input is honored |
-| **OSC 52 (clipboard)** | `ESC]52;c;<b64>BEL` | **strip** | paste-jacking / clipboard theft — never write a viewer clipboard from the stream |
+| **OSC 52 (clipboard)** | `ESC]52;c;<b64>BEL` | **strip** | paste-jacking / clipboard theft — never write a viewer clipboard from the stream; the one exception is the gated, previewed **set** below |
 | **OSC 8 (hyperlink)** | `ESC]8;;<url>ESC\` | **display-only** | render link text; no auto-navigation; on explicit user gesture only, `http`/`https` scheme allowlist, full URL shown |
 | OSC 0/1/2 (title set) | `ESC]0;<title>BEL` | **neutralize** | never retitle the viewer window/tab; MAY show a length-capped, control-char-stripped session-title chip |
 | OSC 4/10/11/12 (palette/fg/bg/cursor color **set**) | `ESC]10;…` | **pass** | cosmetic |
@@ -714,6 +714,18 @@ a sequence that could cause the terminal to *emit input* or *touch host resource
 outside the grid* is stripped. W4/W5/iOS ship the **same** table; a conformance
 corpus of hostile sequences (one per row, plus the split-at-every-interior-byte
 variants of every strip row) is the shared test fixture.
+
+**OSC 52 set exception (ADR-2026-10-08-viewer-clipboard-from-osc52-set).** The
+sequence is always stripped from the stream. A viewer MAY offer the decoded text
+of a **set** (`52;Pc;Pd` with non-empty base64 `Pd` that decodes to UTF-8) to its
+own clipboard only when it holds the pen, the pen holder's own input reached the
+session within 2 s, no earlier write consumed that input, and the sequence fit
+`sanitizerHoldMaxBytes`. Control characters other than HT, LF and CR are removed
+from the text. Every forwarded write shows a visible preview: the first ~40
+characters with line breaks, tabs and invisible formatting characters rendered
+visibly, the total length, and the line count for multi-line text. A dropped
+write never shows the preview; the pen holder sees "copy blocked" instead. Query
+(`Pd = ?`) and clear (empty `Pd`) forms are never answered or offered.
 
 **UI-rendered protocol strings (frozen).** The "length-capped,
 control-char-stripped" treatment on the title-chip row applies to **every
