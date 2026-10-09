@@ -13,6 +13,18 @@ boundary: OSS-only
 **Supersedes:** `005-kit-manifest-spec.md` last-applied-wins command rule,
 manifest-as-signature-target wording, and scan-order identity resolution
 
+> **Amended 2026-10-08 — the manifest revision this ADR requires is
+> `donmai.dev/v3`.** Where this ADR says "a future manifest revision" (§1
+> "Reference closure") or "a new manifest revision" (§4), the revision is
+> **`donmai.dev/v3`**. `donmai.dev/v2` was taken first by
+> [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md)
+> for its `[[provide.dependency_store]]` section, and the two ADRs do not share
+> a revision. Nothing else changes: a consumer that does not understand the
+> revision still rejects it rather than ignoring its authority metadata.
+> `donmai.dev/v3` is reserved: it is not yet implemented, and a kit does not
+> declare it until the changes this ADR requires of the revision land. The
+> revision table is in `005-kit-manifest-spec.md` § "Manifest `api` revisions".
+
 ## Context
 
 A kit is a directory-backed execution contribution, not a standalone TOML

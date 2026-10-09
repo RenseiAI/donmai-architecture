@@ -31,6 +31,17 @@ extensions:
 **Authors:** architecture lane (research agent), answering a founder question
 about dependency installs on shared seat hosts.
 
+> **Amended 2026-10-08 — the manifest revision is `donmai.dev/v2`, and it is
+> this ADR's alone.** As accepted, the "Kit manifests" bullet in Context and
+> D1 rule 4 said the `[[provide.dependency_store]]` section rides the manifest
+> `api` revision that
+> [`ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`](ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md)
+> requires. It does not. The section is the **`donmai.dev/v2`** revision, which
+> it took first. The revision that ADR requires for its own changes is
+> **`donmai.dev/v3`** (see its amendment note of the same date). Both places
+> are corrected below. Nothing else in this ADR changes. The revision table is
+> in `005-kit-manifest-spec.md` § "Manifest `api` revisions".
+
 ## Context
 
 ### The question
@@ -196,8 +207,9 @@ This ADR fits inside Accepted decisions and must not reopen them.
 - **Placement.** `ADR-2026-08-12-placement-composition-law-and-single-fallback-rule.md`
   D3: ranking orders candidates and never gates them.
 - **Kit manifests.** `005`: a new contribution type needs an `api` revision.
+  This section is `donmai.dev/v2`.
   `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`
-  already requires the next revision.
+  separately requires a revision of its own, `donmai.dev/v3`.
 - **Sweeps.** `011`: no sweep may use "this looks orphaned" or "nothing touched
   this recently". Deletion is an explicit transition, and a cleanup deletes
   only what a manifest declares deletable.
@@ -337,9 +349,10 @@ runs_package_code = true
    active composition lock selects one, exactly as generic commands do in
    `005`.
 4. **The manifest revision.** The section is a new contribution type, so it
-   arrives with a manifest `api` revision. It rides the revision that
-   `ADR-2026-07-10` already requires. A consumer that does not understand the
-   revision rejects it; it never half-applies it.
+   arrives with a manifest `api` revision, `donmai.dev/v2`. The revision that
+   `ADR-2026-07-10` requires for its own changes is a different one,
+   `donmai.dev/v3`; the two ADRs do not share a revision. A consumer that does
+   not understand the revision rejects it; it never half-applies it.
 5. **`preserve_dirs` stops naming host caches.** Host-global entries in
    `workarea_config.preserve_dirs` (any path outside the leaf) lose their
    meaning, because the keeper replaces them. Entries inside the leaf keep

@@ -1,7 +1,7 @@
 # 005 — Kit Manifest Spec
 
 **Status:** Reference. `[provides]` / `[depends_on]` cross-family-consumption blocks **Accepted (2026-05-06)** in lockstep with `002` v2. Package integrity and deterministic command/catalog composition **Accepted (2026-07-10)** by `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`. Kit-declared dependency stores **Accepted (2026-10-08)** by `ADR-2026-10-08-kit-dependency-stores.md` (implementation pending).
-**Last updated:** 2026-07-10
+**Last updated:** 2026-10-08
 **Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`
 
 > **Naming note:** "Kit" is a placeholder. The brand team is selecting from a candidate list (Ofuda 🪧, Inro 📿, Haori 🧥) under the parent brand "donmai." A future ADR replaces the term throughout this corpus once chosen. Until then, every reference to "Kit" in this doc is a placeholder for the final family name.
@@ -267,13 +267,31 @@ capabilities = [
 
 The schema is open along well-defined extension points (additional `provide.*` arrays, custom `detect` checks via `exec`). Adding a new contribution type requires bumping `api`; consumers verify they understand it before activating.
 
+### Manifest `api` revisions
+
+Each revision is named by the manifest's `api` value. A consumer that does not
+understand a revision rejects the manifest; it never half-applies it. The
+number belongs to the kit manifest alone: other documents that carry a
+`donmai.dev/vN` string number themselves independently.
+
+| `api` | State | Adds |
+|---|---|---|
+| `donmai.dev/v1` | Current. `rensei.dev/v1` is its legacy spelling. | The contribution set in this document, apart from the rows below. |
+| `donmai.dev/v2` | The dependency-stores revision. | `[[provide.dependency_store]]`, per [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md). A v1 manifest that declares the section is rejected. |
+| `donmai.dev/v3` | Reserved for the package and composition ADR. Not yet implemented. | The revision [`ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`](ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md) requires: path-bearing fields typed as package paths, structured command identity, alias claims, replacement requests, and target-owner delegations. |
+
+Both ADRs were accepted before any revision had a number. The dependency-stores
+ADR first said its section rides the revision the package and composition ADR
+requires; that was corrected on 2026-10-08, and both ADRs carry an amendment
+note of that date.
+
 ### Dependency stores
 
 > **Added 2026-10-08 by [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md)**
-> (Accepted architecture; implementation pending). It arrives with the
-> manifest `api` revision that
+> (Accepted architecture; implementation pending). It is the
+> `donmai.dev/v2` manifest `api` revision; the revision
 > `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`
-> already requires.
+> requires is the separate `donmai.dev/v3`.
 
 A kit declares each package manager it supports as one
 `[[provide.dependency_store]]` entry. The host's dependency keeper (`003`)
@@ -343,8 +361,8 @@ also names a stable publisher identity; the pinned catalog snapshot or explicit
 local trust policy must authorize that signer for the kit-id namespace.
 
 Every field whose value can name package-owned content must become explicitly
-typed as a package path in the next manifest revision. Inline shell text,
-system executable names, URLs, and package paths are distinct kinds. A
+typed as a package path in the `donmai.dev/v3` manifest revision. Inline shell
+text, system executable names, URLs, and package paths are distinct kinds. A
 publisher must not infer ownership from slashes or filename extensions. Package
 paths are normalized, contained beneath the package root, present in the signed
 inventory, and resolved without symlinks or special files. The full normative
@@ -478,9 +496,10 @@ composition digest.
 
 The v1 `[provide.commands]` map is a legacy alias claim. Two v1 kits exporting
 the same key conflict unless an external composition lock selects the owner. A
-new manifest revision is required to encode structured aliases, replacement
-requests, and target-owner delegations; consumers that do not understand it
-must reject that revision rather than fall back to last-wins behavior. Full
+new manifest revision, `donmai.dev/v3`, is required to encode structured
+aliases, replacement requests, and target-owner delegations; consumers that do
+not understand it must reject that revision rather than fall back to last-wins
+behavior. Full
 semantics are in
 `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md` §4.
 
