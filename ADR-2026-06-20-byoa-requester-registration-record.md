@@ -23,6 +23,18 @@ date: 2026-06-20
 > record. Read "allowed workflows" below as "allowed cards (and the optional workflow
 > narrowing)".
 
+> **Amended 2026-10-17 by
+> [`ADR-2026-10-17-sponsored-agent-principals.md`](ADR-2026-10-17-sponsored-agent-principals.md)
+> D7 rule 5.** A registration is one of two kinds, fixed at creation: an **inbound
+> requester** (`external:<org>:<handle>`, everything below) or a **sponsored agent
+> principal** (`agent:<org>:<handle>`), an agent that acts inside the control plane
+> as the actor of its own executions, created by an accountable human who is
+> recorded as its sponsor. Both kinds share the handle namespace, the credential
+> binding of Decision 3, the resolve-at-dispatch gate of Decision 4 and the
+> lifecycle. For a sponsored agent principal the allowed projects are exactly its
+> explicit grant set, and **an empty set reaches nothing**: Decision 2's "unset
+> means org-wide" applies to inbound requesters only. Every reader checks the kind.
+
 ## Context
 
 `ADR-2026-06-19-requester-provider-inbound-agent-family.md` defines the inbound
