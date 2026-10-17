@@ -22,6 +22,14 @@ ADR; this corpus holds a thin mirrored stub that carries the four rules below
 verbatim.)
 **Authors:** architecture lane, filed by the coordinator session
 
+> **Amended 2026-10-17 by
+> [`ADR-2026-10-17-sponsored-agent-principals.md`](ADR-2026-10-17-sponsored-agent-principals.md).**
+> The actor of R3 is a person or a **sponsored agent principal**: a durable agent
+> identity that an accountable human created and sponsors, with a named handle and
+> one explicit grant set. R3 (inside the synchronized region, paired with the
+> platform corpus's mirrored stub), D3 rules 2 and 6, and the "service identity"
+> alternative carry the amendment. Nothing else in this record changes.
+
 ## Context
 
 A control plane that lets one agent start another has to answer four questions,
@@ -78,7 +86,7 @@ mirrored stub, and elaborated in D1 to D5.
 
 **R2. Clamp quantities, refuse capabilities.** A request for more of a quantity than the effective value runs at the effective value and says so in the response, the receipt and the inventory. Once a quantity is used up, the next request is refused and names the binding scope. A request for a capability that the effective settings do not grant is refused with a typed error that names the binding scope and a remedy. A capability is never silently narrowed.
 
-**R3. The workflow decides who an execution acts as.** An execution acts as the principal that the workflow's configuration or an explicit run parameter names, never the principal its trigger type happens to carry. A binding is the bound principal's own recorded act, and authored configuration alone is not authority. With no actor, no agent execution runs. Children act as the same actor, whose own access is the last term of every admission.
+**R3. The workflow decides who an execution acts as.** An execution acts as the principal that the workflow's configuration or an explicit run parameter names, never the principal its trigger type happens to carry. That principal is a person or a sponsored agent principal, a durable agent identity that an accountable human created and sponsors. A binding is the bound principal's own recorded act or, for a sponsored agent principal, the recorded act of a human who administers it, and authored configuration alone is not authority. With no actor, no agent execution runs. Children act as the same actor, whose own access is the last term of every admission.
 
 **R4. Every agent starts with a positive inventory, and a narrow job is a tool allow-list.** An agent starts with the exact list of what it can do and how, derived from the same resolution that admitted it. Prohibitions are not enumerated, and a capability that is absent fails at call time with a typed error. A session restricted to orchestration is enforced below the prompt, as an allow-list on the tools the harness will run and on the credentials the session holds, never as an instruction.
 
@@ -163,7 +171,12 @@ there are.
    principals may bind through its policy engine, and may restrict that later
    without changing this rule. What this corpus requires is that binding
    **another** principal is never possible by authoring: configuration alone is
-   not authority.
+   not authority. *Amended 2026-10-17
+   ([`ADR-2026-10-17-sponsored-agent-principals.md`](ADR-2026-10-17-sponsored-agent-principals.md)
+   D4):* a sponsored agent principal may also be bound by a human who administers
+   agent principals in the org, acting from the principal's own administration
+   surface, and that binding is recorded and removable by either. A project's
+   workflow author who does not administer agent principals still cannot bind one.
 3. **A parameter is accepted only when it is the authenticated caller,** or when
    it is carried from run state that an authenticated caller set when the run
    began.
@@ -178,7 +191,11 @@ there are.
    decision instead of letting it continue.
 6. **Accountability follows the actor.** Attribution, including the commit credit
    of `ADR-2026-10-03-commit-coauthor-and-session-trailers.md`, names the actor
-   and never a service identity minted for the occasion.
+   and never a service identity minted for the occasion. *Amended 2026-10-17
+   ([`ADR-2026-10-17-sponsored-agent-principals.md`](ADR-2026-10-17-sponsored-agent-principals.md)
+   D5):* a sponsored agent principal is not such an identity. It is created once
+   by a named human, its sponsor, with an explicit grant set. Records name it as
+   the actor, and an attribution that must name a human names its sponsor.
 7. **Single-machine deployments** need no control plane for this: the operator
    who starts the daemon is the actor.
 
@@ -300,7 +317,11 @@ run, querying its capabilities, and reading repositories.
 - **Derive the actor from the trigger.** Rejected. It makes the same workflow
   behave differently by how it is started and gives a schedule no actor.
 - **A service identity for unattended runs.** Rejected. Accountability then names
-  nobody, and the access the run holds is not any person's.
+  nobody, and the access the run holds is not any person's. *Narrowed 2026-10-17
+  ([`ADR-2026-10-17-sponsored-agent-principals.md`](ADR-2026-10-17-sponsored-agent-principals.md)):*
+  the rejection stands for an identity minted for the occasion. A sponsored agent
+  principal is not one: it is created once, it is named, its sponsor is on record,
+  and its reach is an explicit grant set someone chose.
 - **List prohibitions in the prompt.** Rejected. It spends the prompt on what the
   agent cannot do, and the constraint lasts only as long as the model follows it.
 - **A separate coordinator class with its own limits.** Rejected. A coordinator is
