@@ -26,10 +26,10 @@ provide correlations, but neither correlation nor an aggregate is an inference
 identity. The [gateway contract](ADR-2026-07-24-translating-gateway-model-endpoint-host.md)
 separates translation from model execution; usage must preserve that distinction.
 
-This proposal fixes identity, counting vocabulary, evidence, and projections. A platform
+This ADR fixes identity, counting vocabulary, evidence, and projections. A platform
 companion ADR will reference this canonical contract for ingest, storage, and
 retention without redefining its shared semantics. Its extension and mirrored
-stub are separate deliverables; this proposal does not require a hosted service.
+stub are separate deliverables; this ADR does not require a hosted service.
 
 ## Decision
 
