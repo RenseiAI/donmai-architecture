@@ -27,6 +27,8 @@ at admission time.
 implications live in the mirrored platform stub)
 **Authors:** mixed-agent execution architecture lane
 
+> **Amendment 2026-10-18:** Usage-v2 D3/D6 preserves `commercialMode` independently of auth mechanism. Subscription or self-hosted usage may be unpriced; measured tokens never establish a monetary charge. Admission receipts remain immutable. See [usage-v2](ADR-2026-10-18-usage-v2-atom-identity-evidence-and-projection.md).
+
 ## Context
 
 The two-axis provider model correctly separates the harness that drives an

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Proposed counting-law checks; optional paths support isolated negative tests.
+# Counting-law checks; optional paths support isolated negative tests.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 check() {
@@ -23,8 +23,39 @@ check() {
          ($v.total_basis == "derived_input_plus_output" and
           ($u.input_tokens | count) and ($u.output_tokens | count) and
           $u.total_tokens == $u.input_tokens + $u.output_tokens)) else true end);
+    def rolled($values; $usage):
+      ([$usage, $values[]] | map(keys) | add | unique) as $fields |
+      all($fields[]; . as $k |
+        [$values[] | {present: has($k), value: .[$k]}] as $vs |
+        if any($vs[]; .present | not) then ($usage | has($k) | not)
+        elif all($vs[]; .value == null) then ($usage | has($k)) and $usage[$k] == null
+        else $usage[$k] == ([$vs[].value | select(. != null)] | add) end);
+    def observations:
+      . as $f | if has("observations") then
+        .usage_version == 2 and
+        all(.attempts[]; (.usage_atom_id | type == "string" and length > 0)) and
+        ([.attempts[].usage_atom_id] | unique | length) == (.attempts | length) and
+        ([.observations[].event_id] | unique | length) == (.observations | length) and
+        all(.observations[];
+          . as $o |
+          (if (.usage_atom_id | type != "string") or
+            ([$f.attempts[].usage_atom_id] | index($o.usage_atom_id) == null)
+           then error("double count: missing or unresolved usage_atom_id") else true end) and
+          (.event_id | type == "string" and length > 0) and
+          (.observer | type == "string" and length > 0) and
+          (.selected | type == "boolean") and
+          (["provider_reported","gateway_reported","transcript_derived","terminal_aggregate","estimated"] | index($o.source) != null) and
+          (["complete","partial","unavailable"] | index($o.completeness) != null) and
+          (if has("usage") then valid else .selected == false and .completeness == "unavailable" end)) and
+        all(.attempts[]; . as $a |
+          [$f.observations[] | select(.usage_atom_id == $a.usage_atom_id and .selected)] as $selected |
+          ($selected | length == 1) and $selected[0].usage == $a.usage and
+          $selected[0].token_semantics == $a.token_semantics and
+          $selected[0].total_basis == $a.total_basis) and
+        rolled([.observations[] | select(.selected) | .usage]; .logical.usage)
+      else true end;
     length == 1 and (.[0] |
-      . as $f | (.attempts | length > 0) and
+      . as $f | observations and (.attempts | length > 0) and
       ([.attempts[].inference_attempt_id] | unique | length) == (.attempts | length) and
       [.attempts[].attempt_ordinal] == [range(1; (.attempts | length) + 1)] and
       all(.attempts[]; valid) and (.logical | valid) and
@@ -60,7 +91,22 @@ if [[ "${1:-}" == --selftest ]]; then
   jq '.attempts[0].usage as $failed | .attempts[1].usage |= with_entries(.value += $failed[.key])' \
     fixtures/usage-v2/retry-fallback.json > "$scratch/bad.json"
   if check "$scratch/bad.json"; then echo 'FAIL: accepted repeated failed-attempt tokens' >&2; exit 1; fi
-  echo 'usage-v2 selftest: PASS (3 corruptions rejected)'
+  for mutation in correlation selection evidence; do
+    case "$mutation" in
+      correlation) filter='del(.observations[1].usage_atom_id)' ;;
+      selection) filter='.observations[1].selected = true' ;;
+      evidence) filter='.observations[0].source = "invented"' ;;
+    esac
+    jq "$filter" fixtures/usage-v2/transcript-recovery.json > "$scratch/bad.json"
+    if check "$scratch/bad.json" 2>"$scratch/error"; then
+      echo "FAIL: accepted $mutation corruption" >&2; exit 1
+    fi
+    if [[ "$mutation" == correlation ]]; then
+      rg -q 'double count' "$scratch/error" || { cat "$scratch/error" >&2; exit 1; }
+    fi
+    echo "usage-v2 mutant: $mutation rejected"
+  done
+  echo 'usage-v2 selftest: PASS (6 corruptions rejected)'
 else
   if [[ $# == 0 ]]; then set -- fixtures/usage-v2/*.json; fi
   for fixture in "$@"; do

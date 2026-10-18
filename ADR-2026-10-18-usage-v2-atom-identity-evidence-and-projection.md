@@ -7,7 +7,7 @@ split: sibling-extensions
 
 # ADR-2026-10-18 — Usage-v2 atom identity, evidence, and projection
 
-**Status:** Accepted (part 1; no runtime availability implied)
+**Status:** Accepted (founder approval 2026-10-18; no runtime availability implied)
 **Date:** 2026-10-18
 **Boundary:** shared
 **Authors:** execution architecture contributors
@@ -26,16 +26,16 @@ provide correlations, but neither correlation nor an aggregate is an inference
 identity. The [gateway contract](ADR-2026-07-24-translating-gateway-model-endpoint-host.md)
 separates translation from model execution; usage must preserve that distinction.
 
-This first part proposes fixed identity and counting vocabulary. A platform
+This ADR fixes identity, counting vocabulary, evidence, and projections. A platform
 companion ADR will reference this canonical contract for ingest, storage, and
 retention without redefining its shared semantics. Its extension and mirrored
-stub are separate deliverables; this proposal does not require a hosted service.
+stub are separate deliverables; this ADR does not require a hosted service.
 
 ## Decision
 
 Use one logical inference identity with separately identified physical attempts.
 Count each attempt's selected usage once, preserving overlaps and unknown values.
-The examples are proposed contract fixtures, not a complete production schema.
+The examples are contract fixtures, not a complete production schema.
 
 ### D1 — Identity and correlation
 
@@ -77,15 +77,14 @@ A correction replaces the selected value for an atom, not its attempt identity.
 Concurrent corrections conflict rather than both counting. A logical rollup sums
 the latest selected revision of each distinct attempt, including failed attempts.
 Multiple observations of an attempt, cumulative stream snapshots, terminal
-summaries, and logical rollups are never additional attempts. Selection between
-competing evidence sources and its completeness policy remain part-2 work.
+summaries, and logical rollups are never additional attempts. D4 defines selection between competing evidence sources and completeness.
 
 ### D2 — Token vocabulary and containment
 
 Counts are nonnegative integers (at most 2^53 - 1 in these JSON examples)
 in tokens under the reporting model's tokenizer;
 bytes, characters, requests, currency, and seconds are not tokens. Never retokenize
-text and label it vendor-reported. The proposed JSON usage fields are:
+text and label it vendor-reported. The JSON usage fields are:
 
 | Field | Meaning |
 |---|---|
@@ -120,7 +119,7 @@ same containment semantics; incompatible definitions require separate rollups.
 numeric total is present. A derived total equals input + output and requires both
 numeric parents. A reported total retains its vendor definition and need not
 equal input + output. The fixtures identify the definition and reporting path;
-part 2 will close the evidence and completeness enums, not infer them from values.
+D4 closes evidence and completeness enums; neither is inferred from values.
 
 Three JSON states are distinct: an absent field means missing/unknown, `0` means
 measured zero, and `null` means not applicable under the stated definition.
@@ -158,6 +157,138 @@ An unavailable identity is absent; an inapplicable axis is null. Routing through
 an operator does not establish model vendor, inference host, or commercial mode.
 No endpoint URL, credential, or raw model content is needed in these fixtures.
 
+### D4 — Evidence, completeness, and selection
+
+Every observation carries `event_id`, `observer`, `usage_atom_id`, `source`,
+`completeness`, and an authority-assigned `selected` flag. The closed source enum
+is `provider_reported | gateway_reported | transcript_derived |
+terminal_aggregate | estimated`. Source describes how counts were obtained:
+forwarded native provider counters remain `provider_reported`; a gateway's own
+measurement is `gateway_reported`. Observer identifies the reporting component.
+These are usage evidence, separate from the spine's event-origin evidence kinds.
+
+| Completeness | Claim |
+|---|---|
+| `complete` | Final observation accounts for the attempt under its stated definition; optional inapplicable counters may be null. |
+| `partial` | Some consumption is known, but coverage or finality is incomplete. |
+| `unavailable` | No reliable consumption counts; never synthesized as zero. |
+
+Selection precedence is native per-attempt provider evidence, then correlated
+gateway evidence, then transcript recovery, then terminal fallback, then an
+explicit estimate. Lower-priority observations never add to a selected atom.
+Gateway observations reconcile by `usage_atom_id`, not by creating another
+attempt. Native evidence arriving later replaces fallback through a D1 correction.
+A late transcript after native evidence is retained unselected. Equal-priority
+conflicting evidence raises a typed conflict; wall-clock arrival never decides.
+Completeness is independent of source and outcome: partial native evidence does
+not become complete merely because a terminal aggregate exists.
+
+Exactly one current observation is selected per atom; immutable observation
+payloads remain intact and selection revisions are authority-owned. Do not mix
+fields across sources to manufacture a complete observation. Terminal aggregates
+are fallback and session cross-checks only. A summary without per-attempt identity
+cannot be allocated to known atoms or added to their totals; preserve it as an
+unreconciled session check. Missing correlation is a typed unresolved/double-count
+risk, excluded from authoritative sums until reconciled. No heuristic join.
+
+### D5 — Attempt lifecycle and possible charges
+
+Usage completeness describes measurement, not session success or billing status.
+Each attempt records whether **charge may have occurred**: `yes | no | unknown`.
+Only positive evidence that dispatch never reached model execution permits `no`;
+a transport error, cancellation acknowledgement, or zero counters does not.
+
+| Case | Usage and identity rule | Charge may have occurred |
+|---|---|---|
+| Streaming | One atom; terminal cumulative snapshot replaces earlier snapshots; never sum chunks. | yes after execution; unknown if reachability is unknown |
+| Retry | New attempt and ordinal, including failed attempts; sum distinct selected atoms. | yes or unknown per dispatched attempt |
+| Fallback | New attempt even when model/endpoint changes; no cumulative retry counts. | yes or unknown independently |
+| Timeout | Keep known counts partial; missing terminal evidence remains unknown. | unknown unless execution is confirmed, then yes |
+| Cancel | Preserve consumption before cancellation; no refund inferred. | yes or unknown after dispatch |
+| Partial response | Preserve measured fields; absent fields poison only their rollups under D2. | yes when execution is observed |
+| Failed before provider | Keep attempt identity, unavailable counts and dispatch-failure evidence. | no only with proof of no execution; otherwise unknown |
+
+Unavailable -> partial -> complete measurements advance only through immutable
+observations and serialized selection revisions. Duplicate delivery is a no-op;
+a correction can revise counts downward without a negative consumption attempt.
+Terminal session state never prevents a late correction or recovery. A correction
+recomputes affected rollups and exposes their new revision, without reopening the
+session. Conflicts and unresolved correlations retain the previous valid selection
+and surface a typed condition; they never silently increase charges.
+
+### D6 — Projection law and authority
+
+For a given revision, every projection uses the same distinct selected atom set
+and D2 field-wise rollup. Carry identities, source, completeness, revision and
+coverage alongside counts. Call, turn, session and terminal totals overlap and
+MUST NOT be summed together. A turn groups logical inferences by explicit native
+correlation; an absent turn correlation stays absent.
+
+| Projection | Authoritative question and limits |
+|---|---|
+| Usage-v2 atoms and selection revisions | What measured consumption belongs to each physical attempt and logical inference? Canonical accounting input, including failures. |
+| Six-kind span tree | Where did latency, errors and causality occur? `llm` projects selected attempt usage with atom correlations; gateway spans link the same atom. `tool`, `chain`, `retrieval`, `agent`, `subagent` add no consumption. A logical `llm` rollup lists its contributing atoms and is not another attempt. |
+| `usage.recorded`, scope `call` | Durable usage observation/correction notification for a logical inference, with attempt/atom references and revision; replay preserves event identity. |
+| `usage.recorded`, scope `turn` or `session` | Versioned rollup over named covered atoms; authoritative for that event's declared coverage only, never extra billing input. |
+| Terminal session summary | Completion-time snapshot and reconciliation check, not final usage authority; exposes partial/unavailable coverage and later revision links. |
+| Billing input | Distinct selected atoms at named revisions plus commercial mode; a separate pricing/settlement authority determines money and invoice commitments. Tokens alone never establish price or payment. |
+
+The execution-event log remains replay authority with its existing event IDs and
+cursors. Usage identity does not replace those laws or create a fifth telemetry
+plane. Trace/analytics/export paths are rebuildable projections. Billing commitments
+remain separately auditable; later corrections require explicit billing adjustment
+rather than rewriting a settled invoice. OSS persists and projects usage locally;
+hosted ingest, tenant policy, pricing and storage mechanics belong downstream.
+
+**Supersession:** for usage-v2, any claim that Redis delivery, Collector receipt,
+ClickHouse analytics, or a terminal/Postgres session-summary row alone establishes
+canonical consumption is superseded by selected atom identity and revisions.
+Postgres may implement a durable ledger, but a product name confers no authority.
+This does not replace the session event log, lifecycle tiers, archive obligations,
+or existing committed-cost authority; store topology is a companion decision.
+
+### D7 — Privacy and version skew
+
+Usage is metrics-only by default: identities, numeric counters, qualified resource
+references, evidence and completeness. No raw prompt, output, tool arguments or
+results, credentials, endpoint headers, or provider request/response body belongs
+in an atom, span usage attributes, or usage event. Content capture is separate,
+opt-in, access-controlled and governed by its own retention/deletion policy.
+A pre-persistence redaction hook rejects forbidden content, including optional
+extensions; failure is typed and fails closed. Digest hooks use approved keyed
+or otherwise privacy-reviewed digests, with algorithm/key-version references;
+never hash raw low-entropy content as a privacy substitute. Digests cannot join
+otherwise uncorrelated calls. Exports inherit redaction and deletion obligations.
+
+Usage envelopes declare `usage_version: 2`. Existing part-1 examples are vocabulary
+examples; upgraded observation fixtures carry this version explicitly.
+
+| Compatibility case | Required behavior |
+|---|---|
+| New producer, old consumer | Negotiate a supported version; an explicit lossy legacy projection declares lost evidence/completeness. Never silently reinterpret v2 or use that projection as canonical billing input. |
+| Old producer, new consumer | Explicit legacy adapter preserves missing/zero/null, declares inferred evidence and unavailable coverage; never invents attempt correlation or completeness. |
+| Unknown version | Typed `unsupported_usage_version`, no accounting/charge side effects; retain only bounded redacted diagnostic metadata and request supported replay. |
+| Additive optional fields | Ignore unknown optional fields only within a supported version; preserve opaque metrics-only extensions when forwarding. Required semantics or enum changes require version negotiation. |
+| Corrections | New immutable event with D1 keys and expected revision; unsupported correction handling blocks accounting promotion, never treats replacement as a delta. |
+| Unsupported source cell | Typed `unsupported_usage_source` keyed by harness adapter version, endpoint/protocol and source; report unavailable coverage, never synthesize measured zeros or silently promote estimates. |
+
+### Producer and consumer matrix
+
+This table defines shared obligations, not hosted implementation availability.
+
+| Component | Produces or consumes | Contract obligation |
+|---|---|---|
+| OSS runner | Produces native attempt observations and local rollups | Allocate D1 identities before dispatch; expose unsupported cells and retries. |
+| Closed composing binary | Produces/forwards the same wire envelope | Preserve identity, revisions and redaction; composition adds no accounting atom. |
+| Translating gateway | Produces correlated observations | Propagate/map atom identity; distinguish forwarded native counters from own evidence. |
+| Platform trace path | Consumes span projection | Causality and latency; never sum gateway and harness usage. |
+| Platform event path | Consumes durable usage events | Idempotent replay/corrections under existing spine cursors. |
+| Platform billing path | Consumes selected atoms | Price eligible revisions under explicit commercial rules; audit adjustments. |
+| Platform analytics path | Consumes rollups | Rebuildable analysis with source, completeness and revision. |
+| Web | Consumes session/turn/call projections | Display unknown and unpriced explicitly; refresh on corrections. |
+| iOS | Consumes the same projections | Same coverage and revision semantics; no client-side token pricing inference. |
+| Customer OTLP/export | Consumes trace and/or accounting projections | Label projection type, retain atom correlation and privacy controls; never imply spans are invoices. |
+
 ## Consequences
 
 ### Positive
@@ -187,28 +318,21 @@ No endpoint URL, credential, or raw model content is needed in these fixtures.
 
 ## Affected documents
 
-The span contract, session spine, and gateway contract linked above are inputs;
-no Accepted document is amended by this part. Part 2 must reconcile their
-projection and supersession notes, along with the execution-cell, durable-event,
-harness-versioning, and session-data-lifecycle references. No synchronized region
-changes here. The README generated ADR index gains this proposal.
+The span contract, session spine, durable-event bus, execution-cell and data-lifecycle
+docs carry dated amendment notes outside synchronized regions; those notes take
+contract effect with this acceptance. Gateway and harness-versioning contracts supply
+endpoint and adapter identities without amendment. The generated README index lists
+this ADR as Accepted.
 
 ## Affected work items
 
-Architecture-owner review precedes part 2. The producer adapters and companion
-ledger work can use these proposed identity and vocabulary fixtures for planning;
-this document does not authorize release or activation.
+Architecture-owner approval was recorded 2026-10-18. The producer adapters and
+companion ledger work build on this accepted identity and vocabulary; this document
+does not authorize release or activation.
 
 ## Implementation notes
 
-[Golden fixtures](fixtures/usage-v2/README.md) exercise direct, terminal-stream,
-and failed-retry/fallback accounting. Run `bash scripts/check-usage-v2-fixtures.sh`
-and its `--selftest` mode. The checker is a corpus test, not runtime code.
-
-Part 2 edits this same ADR after this part merges and receives owner review:
-source/evidence and completeness enums; projection law for spans, `usage.recorded`
-call/turn/session events, terminal summaries and billing; privacy; version skew;
-producer/consumer matrix; unpriced/local and transcript-recovery fixtures; remaining
-failure/cancellation semantics; and the decision whether to move to Accepted.
-It must preserve the existing event identity and cursor laws rather than create
-another independent telemetry plane. No storage-topology authority changes here.
+[Golden fixtures](fixtures/usage-v2/README.md) exercise all six examples. Run
+`bash scripts/check-usage-v2-fixtures.sh` and its `--selftest` mode. The checker is
+a corpus test, not runtime code or live vendor conformance. Implementation, release and
+activation remain separate from this acceptance.

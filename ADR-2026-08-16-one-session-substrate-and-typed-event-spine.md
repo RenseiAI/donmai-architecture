@@ -19,6 +19,8 @@ live in the platform mirror)
 
 > **Note 2026-10-08:** [`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md) D1 is Accepted. A resume creates a new execution *incarnation* with its own incarnation identity and provenance; that identity is a qualifier beneath the canonical `(org_id, session_id)` lifecycle identity, never a second session.
 
+> **Amendment 2026-10-18:** Usage-v2 D6 makes call/turn/session `usage.recorded` overlapping revisioned projections of selected atoms. Preserve event IDs and cursors; terminal summaries never add consumption or prevent late corrections. See [usage-v2](ADR-2026-10-18-usage-v2-atom-identity-evidence-and-projection.md).
+
 ## Context
 
 Session lifecycle is easy to fragment accidentally. A workflow run, an

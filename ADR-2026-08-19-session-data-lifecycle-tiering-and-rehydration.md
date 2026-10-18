@@ -17,6 +17,8 @@ in the platform mirror)
 
 > **Note 2026-10-08:** [`ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md`](ADR-2026-08-31-session-recovery-taxonomy-and-state-vocabulary.md) D2 is Accepted. Harness session-state artifacts are a retained tier with declared deletion, not scratch; their lifetime follows the session's data lifecycle, and process death never triggers their deletion.
 
+> **Amendment 2026-10-18:** Usage-v2 D6 supersedes any usage authority inferred solely from a Redis, Collector, ClickHouse or Postgres summary location. Selected atom revisions determine consumption; analytics remain rebuildable, and billing commitments retain their separate authority. Tiering must preserve usage identity, coverage and correction links. See [usage-v2](ADR-2026-10-18-usage-v2-atom-identity-evidence-and-projection.md).
+
 ## Context
 
 Session-stream data does not keep one value profile for its whole lifetime.
