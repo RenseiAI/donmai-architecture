@@ -17,6 +17,8 @@ separation are OSS-canonical here; multi-tenant tables, routes, concrete wire
 namespace, hosted workflow admission, and rollout live in the platform mirror)
 **Authors:** execution-event design lane
 
+> **Amendment 2026-10-18:** Usage-v2 D4–D7 adds atom correlation, evidence, completeness and corrections to usage projections without changing durable event identity, cursor or delivery laws. Rollup and call scopes are never additive billing inputs. See [usage-v2](ADR-2026-10-18-usage-v2-atom-identity-evidence-and-projection.md).
+
 ## Context
 
 The accepted one-session-substrate ADR establishes one strict typed event spine

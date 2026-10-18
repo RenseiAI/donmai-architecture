@@ -12,6 +12,8 @@ split: inline-addenda
 **Boundary:** shared (canonical here; synchronized mirror in the platform corpus)
 **Authors:** agent:claude (P2-WS1 wire-contract design session)
 
+> **Amendment 2026-10-18:** Usage-v2 D6 projects selected atoms into `llm` spans; other kinds add no consumption. The frozen zero-omitting span wire remains unchanged; usage-v2 preserves measured zero and absent counts separately. Spans explain causality, not invoice authority. See [usage-v2](ADR-2026-10-18-usage-v2-atom-identity-evidence-and-projection.md).
+
 ## Context
 
 The execution layer emits a coarse **session-event projection** today — a flat

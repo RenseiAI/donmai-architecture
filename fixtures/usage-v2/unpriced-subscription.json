@@ -1,0 +1,24 @@
+{
+  "usage_version": 2,
+  "logical": {
+    "logical_inference_id": "unpriced-subscription",
+    "semantic_operation": "chat",
+    "usage": {"input_tokens": 100, "cache_read_input_tokens": 0, "cache_write_input_tokens": 0, "output_tokens": 20, "reasoning_output_tokens": null, "total_tokens": 120},
+    "token_semantics": {"definition": "synthetic-inclusive-v1", "cached_in_input": true, "reasoning_in_output": true},
+    "total_basis": "provider_reported"
+  },
+  "attempts": [{
+    "inference_attempt_id": "attempt-1",
+    "attempt_ordinal": 1,
+    "outcome": "succeeded",
+    "usage": {"input_tokens": 100, "cache_read_input_tokens": 0, "cache_write_input_tokens": 0, "output_tokens": 20, "reasoning_output_tokens": null, "total_tokens": 120},
+    "token_semantics": {"definition": "synthetic-inclusive-v1", "cached_in_input": true, "reasoning_in_output": true},
+    "total_basis": "provider_reported",
+    "usage_atom_id": "subscription/attempt-1"
+  }],
+  "observations": [
+    {"event_id": "subscription-native", "observer": "harness", "usage_atom_id": "subscription/attempt-1", "source": "provider_reported", "completeness": "complete", "selected": true, "usage": {"input_tokens": 100, "cache_read_input_tokens": 0, "cache_write_input_tokens": 0, "output_tokens": 20, "reasoning_output_tokens": null, "total_tokens": 120}, "token_semantics": {"definition": "synthetic-inclusive-v1", "cached_in_input": true, "reasoning_in_output": true}, "total_basis": "provider_reported"}
+  ],
+  "path": {"model_vendor_id": "vendor-a", "endpoint_operator_id": "operator-a", "inference_host_id": "host-a", "translating_gateway_id": null, "commercial_mode": "subscription"},
+  "pricing": {"status": "unpriced"}
+}
