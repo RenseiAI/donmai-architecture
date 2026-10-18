@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-10-18
 boundary: shared
 split: sibling-extensions
@@ -7,7 +7,7 @@ split: sibling-extensions
 
 # ADR-2026-10-18 — Usage-v2 atom identity, evidence, and projection
 
-**Status:** Proposed (part 1; no runtime availability implied)
+**Status:** Accepted (part 1; no runtime availability implied)
 **Date:** 2026-10-18
 **Boundary:** shared
 **Authors:** execution architecture contributors
@@ -188,7 +188,7 @@ No endpoint URL, credential, or raw model content is needed in these fixtures.
 ## Affected documents
 
 The span contract, session spine, and gateway contract linked above are inputs;
-no Accepted document is amended by this Proposed part. Part 2 must reconcile their
+no Accepted document is amended by this part. Part 2 must reconcile their
 projection and supersession notes, along with the execution-cell, durable-event,
 harness-versioning, and session-data-lifecycle references. No synchronized region
 changes here. The README generated ADR index gains this proposal.

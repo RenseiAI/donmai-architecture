@@ -282,7 +282,7 @@ renaming an ADR.
 | [`ADR-2026-10-08-session-state-vocabulary-and-recovery-migration.md`](ADR-2026-10-08-session-state-vocabulary-and-recovery-migration.md) | Proposed | shared | Session lifecycle state vocabulary and recovery-taxonomy migration |
 | [`ADR-2026-10-08-viewer-clipboard-from-osc52-set.md`](ADR-2026-10-08-viewer-clipboard-from-osc52-set.md) | Accepted | OSS-only | Viewer clipboard from an OSC 52 set |
 | [`ADR-2026-10-17-sponsored-agent-principals.md`](ADR-2026-10-17-sponsored-agent-principals.md) | Accepted | shared | Sponsored agent principals: an agent identity with a human sponsor, a named handle and one explicit grant set |
-| [`ADR-2026-10-18-usage-v2-atom-identity-evidence-and-projection.md`](ADR-2026-10-18-usage-v2-atom-identity-evidence-and-projection.md) | Proposed | shared | Usage-v2 atom identity, evidence, and projection |
+| [`ADR-2026-10-18-usage-v2-atom-identity-evidence-and-projection.md`](ADR-2026-10-18-usage-v2-atom-identity-evidence-and-projection.md) | Accepted | shared | Usage-v2 atom identity, evidence, and projection |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
 
