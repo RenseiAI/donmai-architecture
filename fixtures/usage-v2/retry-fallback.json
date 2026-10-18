@@ -1,0 +1,27 @@
+{
+  "logical": {
+    "logical_inference_id": "retry-fallback",
+    "semantic_operation": "chat",
+    "usage": {"input_tokens": 150, "cache_read_input_tokens": 30, "cache_write_input_tokens": 0, "output_tokens": 35, "reasoning_output_tokens": 10, "total_tokens": 185},
+    "token_semantics": {"definition": "synthetic-inclusive-v1", "cached_in_input": true, "reasoning_in_output": true},
+    "total_basis": "derived_input_plus_output"
+  },
+  "attempts": [
+    {
+      "inference_attempt_id": "attempt-1",
+      "attempt_ordinal": 1,
+      "outcome": "failed_partial",
+      "usage": {"input_tokens": 60, "cache_read_input_tokens": 10, "cache_write_input_tokens": 0, "output_tokens": 5, "reasoning_output_tokens": 2, "total_tokens": 65},
+      "token_semantics": {"definition": "synthetic-inclusive-v1", "cached_in_input": true, "reasoning_in_output": true},
+      "total_basis": "derived_input_plus_output"
+    },
+    {
+      "inference_attempt_id": "attempt-2",
+      "attempt_ordinal": 2,
+      "outcome": "succeeded",
+      "usage": {"input_tokens": 90, "cache_read_input_tokens": 20, "cache_write_input_tokens": 0, "output_tokens": 30, "reasoning_output_tokens": 8, "total_tokens": 120},
+      "token_semantics": {"definition": "synthetic-inclusive-v1", "cached_in_input": true, "reasoning_in_output": true},
+      "total_basis": "derived_input_plus_output"
+    }
+  ]
+}

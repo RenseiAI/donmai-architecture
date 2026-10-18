@@ -1,0 +1,29 @@
+{
+  "logical": {
+    "logical_inference_id": "gateway-stream",
+    "semantic_operation": "chat",
+    "usage": {"input_tokens": 200, "cache_read_input_tokens": 80, "cache_write_input_tokens": 0, "output_tokens": 40, "reasoning_output_tokens": 10, "total_tokens": 240},
+    "token_semantics": {"definition": "synthetic-inclusive-v1", "cached_in_input": true, "reasoning_in_output": true},
+    "total_basis": "derived_input_plus_output"
+  },
+  "attempts": [
+    {
+      "inference_attempt_id": "attempt-1",
+      "attempt_ordinal": 1,
+      "outcome": "succeeded",
+      "usage": {"input_tokens": 200, "cache_read_input_tokens": 80, "cache_write_input_tokens": 0, "output_tokens": 40, "reasoning_output_tokens": 10, "total_tokens": 240},
+      "token_semantics": {"definition": "synthetic-inclusive-v1", "cached_in_input": true, "reasoning_in_output": true},
+      "total_basis": "derived_input_plus_output"
+    }
+  ],
+  "observations": [
+    {"event_id": "chunk-1", "inference_attempt_id": "attempt-1", "terminal": false},
+    {
+      "event_id": "chunk-2",
+      "inference_attempt_id": "attempt-1",
+      "terminal": true,
+      "usage": {"input_tokens": 200, "cache_read_input_tokens": 80, "cache_write_input_tokens": 0, "output_tokens": 40, "reasoning_output_tokens": 10, "total_tokens": 240}
+    }
+  ],
+  "path": {"model_vendor_id": "vendor-a", "endpoint_operator_id": "operator-b", "translating_gateway_id": "gateway-a", "upstream_wire_protocol": "protocol-a", "downstream_wire_protocol": "protocol-b"}
+}
