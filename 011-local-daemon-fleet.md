@@ -155,7 +155,7 @@ Welcome to Donmai. Let's get your machine working.
   Where do work assignments come from?
   > 1. Self-hosted (OSS only)        — point at your own webhook target
     2. Local file queue (single-user) — for solo dev, no network
-    3. Donmai Platform (SaaS)        — register with donmai.dev/dashboard (see platform extensions doc)
+    3. Hosted platform (SaaS)        — register with a hosted control plane (see platform extensions doc)
   Choice [1]:
 
 [4/5] Project allowlist
@@ -184,7 +184,7 @@ Welcome to Donmai. Let's get your machine working.
 
 The wizard writes `~/.donmai/daemon.yaml` matching the schema in `004`. Idempotent: re-running re-prompts for changed values without resetting unchanged ones.
 
-The Step 3 "Donmai Platform (SaaS)" choice walks through registration with `donmai.dev/dashboard`; that branch is documented in the platform-extensions doc.
+The Step 3 "Hosted platform (SaaS)" choice walks through registration with a hosted control plane; that branch is documented in the platform-extensions doc. (The former hosted `donmai.dev/dashboard` deployment is retired; that path now redirects to the site home page.)
 
 ### Machine identity is minted once and referenced, never derived
 
@@ -253,7 +253,7 @@ Where the daemon receives work assignments.
 
 - `file:///$HOME/.rensei/queue` — local file queue. Solo dev, no network. The OSS layer ships a minimal queue runner that delivers work from local Linear webhooks or CLI dispatch.
 - `https://your-deployed-orchestrator.example.com` — self-hosted orchestrator endpoint.
-- `donmai.dev/dashboard` — the SaaS control plane (platform-extension; see the platform-extensions doc for setup).
+- a hosted control-plane URL — the SaaS control plane (platform-extension; see the platform-extensions doc for setup).
 
 ### Which keys are hot-reloadable
 
