@@ -112,6 +112,23 @@ subcommand set, with read-only effect; a refresh
 may then add such a contract-shaped invocation without a code change, and every
 other path keeps the rule above.
 
+**Clarification (2026-10-13).** The exception above generalizes from one
+contract shape to a closed set of contract families. A host may run a signed
+declarative execution contract when: the contract is closed-schema data bound
+to a vetted in-host executor for its family; its signature verifies against a
+trust root independent of the delivery source; every value that reaches the
+executed command or request comes only from signed literals and validated
+typed inputs, with no shell and no expression on that path; the contract
+delivers no code; and its effect is limited to what the host's trust policy
+permits for the contract's signer. Three families are admitted: a host binary
+the operator installed and consented to, with read-only effect (above); a
+command run inside a workarea from code the installing tenant already holds,
+within that execution's isolation boundary, with writes confined to declared
+paths and verified after the run; and an outbound HTTPS request from the
+host's egress executor to declared destinations, with a credential attached
+only for the declared destinations. A new family is still an in-host code
+change and a redeploy, and publisher-supplied code remains deferred.
+
 The `invoke(verbId, input, ctx)` contract is the **seam** for two deferred paths —
 sandboxed external execution, and a local daemon-proxy path. Both land as a new
 implementation of that interface rather than a re-architecture. Credentials resolve
