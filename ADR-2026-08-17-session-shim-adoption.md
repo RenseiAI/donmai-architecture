@@ -588,6 +588,25 @@ control plane must implement consistently.
     bytes, cursor floors and full correlation/release obligations survive.
     See `ADR-2026-09-11-retired-source-complete-lifecycle.md`. Architecture is
     accepted; implementation and every new profile advertisement remain gated.
+
+    **Amendment 2026-10-21 (proposed) — a carrierless pending candidate is
+    retirable on the carrier-idle ground.** "Pending candidates still block
+    retirement under ordinary eligibility" applies to the terminal ground and
+    to a candidate whose carrier is, as far as the relay knows, still live. It
+    does not exempt a stream from the carrier-idle ground. Otherwise an
+    admitted successor whose leg dies before activation, and which nothing
+    abandons, pins its stream for the life of the store, against the uniform
+    memory bound above. The candidate's carrier runs on the stream's single
+    carrier-idle clock. In-lock admission stops the clock. The room starts it
+    only when no host transport remains, so neither the active leg nor the
+    candidate leg can start it while the other is live. A stream with an
+    admitted pending candidate is therefore retirable only after the full
+    window with no carrier, and only once the room is ended. Retirement keeps
+    the reservation's carrier-epoch floor (a schema-2 reservation already
+    raises it to the candidate epoch), so no candidate epoch is ever re-issued.
+    A host that dials back after retirement is refused as drifted and the
+    control plane re-prepares, which is the trade the carrier-idle ground
+    already makes for an active carrier.
 <!-- BOUNDARY-SYNC-END: adr-2026-08-17-session-shim-core-contract -->
 
 ### D1 — Process ownership moves to a per-session shim
