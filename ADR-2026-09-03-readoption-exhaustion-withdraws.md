@@ -200,14 +200,17 @@ waiting for it.
    continued (or was re-entered under this authority), the held-past-window
    predicate is consulted at every window end, on every attempt and on every
    paced keepalive tick. The first false answer ends the window the ordinary
-   way. A false answer from the lineage-held predicate, or a shim that stops
-   being observable, ends it the same way. The ordinary way means
-   `OnReadoptionWindowExhausted` first, then the unconditional withdrawal
-   above, the keepalive stopped, and the shim's own orphan deadline from
-   there.
+   way, and a false answer from the lineage-held predicate ends it the same
+   way. The ordinary way means `OnReadoptionWindowExhausted` first, then the
+   unconditional withdrawal above, the keepalive stopped, and the shim's own
+   orphan deadline from there. A shim that stops being observable ends the
+   window through the ordinary lineage-gone path instead, with no exhaustion
+   hook, because the hook exists only for a window that ends with the shim
+   still observable.
 5. **Configuration is refused when the predicate cannot be bounded.** Setting
    the held-past-window predicate without the lineage-held predicate, or
-   outside lineage-live mode, is a configuration error at install time. A
+   outside an enabled lineage-live mode, is a configuration error at install
+   time. A
    standalone daemon's implicit "always held" would otherwise turn
    continuation into a re-adoption that nothing could ever release.
 
@@ -239,8 +242,9 @@ keeps asking.
 - **Negative.** A composing layer that answers true incorrectly keeps a
   harness alive past the point where the external release threshold would
   have bounded it. The predicate's contract makes this the composing layer's
-  responsibility, and the per-tick consultation bounds the damage to one
-  keepalive interval after the answer changes.
+  responsibility. The per-tick consultation bounds the damage to one
+  keepalive interval after the answer changes, plus the shim's own orphan
+  deadline before it reaps.
 - **Negative.** A continued window keeps spending re-adoption attempts at the
   capped backoff for as long as it continues. Each attempt is a preparation
   the control plane has to answer. The cap bounds the rate. Nothing bounds the

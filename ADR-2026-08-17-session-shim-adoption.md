@@ -343,13 +343,15 @@ control plane must implement consistently.
    and the shim stays observable, a window that ends continues in place with
    the keepalive still armed instead of exhausting, and a controller lost
    again inside the previous window is re-adopted, after one backoff, instead
-   of being quarantined. Once continued, the held-past-window predicate is
-   re-asked at every window end, attempt and paced keepalive tick. The first
-   false answer from either predicate, or a shim that is no longer
-   observable, ends the window through the exhaustion path above:
-   `OnReadoptionWindowExhausted`, then unconditional withdrawal. The
-   held-past-window predicate is refused without the lineage-held predicate
-   or outside lineage-live mode. Continuation is not retention: the lineage
+   of being quarantined. Once a window is continued, or was re-entered
+   under this authority, the held-past-window predicate is re-asked at every
+   window end, attempt and paced keepalive tick. The first false answer from
+   either predicate ends the window through the exhaustion path above:
+   `OnReadoptionWindowExhausted`, then unconditional withdrawal. A shim that
+   is no longer observable ends it through the ordinary lineage-gone path,
+   with no exhaustion hook. The held-past-window predicate is refused
+   without the lineage-held predicate or outside an enabled lineage-live
+   mode. Continuation is not retention: the lineage
    stays under the same observation that withdraws it, and no carrier is
    granted without a fresh preparation — see
    `ADR-2026-09-03-readoption-exhaustion-withdraws.md` § "Amendment
