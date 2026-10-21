@@ -601,9 +601,11 @@ control plane must implement consistently.
     only when no host transport remains, so neither the active leg nor the
     candidate leg can start it while the other is live. A stream with an
     admitted pending candidate is therefore retirable only after the full
-    window with no carrier, and only once the room is ended. Retirement keeps
-    the reservation's carrier-epoch floor (a schema-2 reservation already
-    raises it to the candidate epoch), so no candidate epoch is ever re-issued.
+    window with no carrier, and only once the room is ended or gone.
+    Retirement keeps the reservation's carrier-epoch floor: a schema-2
+    reservation already raises it to the candidate epoch, so under schema-2
+    proofs no candidate epoch is ever re-issued (schema-1 proofs carry no
+    floor, as for any carrier-idle retirement).
     A host that dials back after retirement is refused as drifted and the
     control plane re-prepares, which is the trade the carrier-idle ground
     already makes for an active carrier.
