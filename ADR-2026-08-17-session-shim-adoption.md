@@ -333,6 +333,27 @@ control plane must implement consistently.
    re-entry budget. The complete-snapshot rule (rules 8 and 10) applies
    throughout; the mode is chosen by the composing deployment and the
    zero-value policy is fixed-attempt mode.
+
+   **Amendment 2026-10-21 — held-lineage continuation (rule 8).** A
+   composing deployment MAY supply a held-past-window predicate alongside
+   the lineage-held predicate. A true answer states that the composing layer
+   holds the lineage on terms the window does not bound (no stop requested,
+   no duration quota spent) and that nothing outside the host will release
+   its claim while the answer stays true. While both predicates answer true
+   and the shim stays observable, a window that ends continues in place with
+   the keepalive still armed instead of exhausting, and a controller lost
+   again inside the previous window is re-adopted, after one backoff, instead
+   of being quarantined. Once continued, the held-past-window predicate is
+   re-asked at every window end, attempt and paced keepalive tick. The first
+   false answer from either predicate, or a shim that is no longer
+   observable, ends the window through the exhaustion path above:
+   `OnReadoptionWindowExhausted`, then unconditional withdrawal. The
+   held-past-window predicate is refused without the lineage-held predicate
+   or outside lineage-live mode. Continuation is not retention: the lineage
+   stays under the same observation that withdraws it, and no carrier is
+   granted without a fresh preparation — see
+   `ADR-2026-09-03-readoption-exhaustion-withdraws.md` § "Amendment
+   2026-10-21".
 9. **Fence before restart:** a planned daemon restart deterministically
    partitions every adopted and quarantined shim correlation by authority
    scope, obtains a durable byte-exact acknowledgement for every partition, and
