@@ -739,6 +739,8 @@ The full `ModelEndpoint` capability shape (the company-named `Resolve(EndpointRe
 
 Explicitly retired original tuples may remain source-marked legacy-only per the same ADR: validate and preserve the legacy default without advertising it in the active qualified manifest/view. Only that exact marked omission is allowed; unsupported active tuples and unmarked omissions still refuse. No caller permission or exported capability flag is added.
 
+[ADR-2026-10-23](ADR-2026-10-23-execution-path-qualified-harness-cells.md) adds a narrowing-only execution-path list to qualified cells (`headless`, `interactive`; an empty list means both). The path comes from `SessionMode` through one strict mapping. Admission and the runner refuse a path the cell does not list, with the existing `unsupported_session_mode` denial. The list is not a permission field, and the legacy views never carry a restricted cell.
+
 ### Versioned execution-cell admission contract (2026-08-05)
 
 The two-axis matrix is the **declared compatibility ceiling**, not a complete

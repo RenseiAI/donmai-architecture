@@ -372,6 +372,8 @@ identity.
 
 **Accepted protocol-selection amendment (2026-10-01):** [ADR-2026-10-01](ADR-2026-10-01-explicit-endpoint-protocol-and-responses-surface.md) makes the selected endpoint protocol explicit and validates the exact host/protocol tuple. Qualified consumers adopt the new view; legacy consumers retain their original default projection. Existing receipts already carry protocol. Neither a new matrix row nor an old allow widens admission to another protocol. Implementation and consumer adoption are pending.
 
+**Accepted execution-path amendment (2026-10-23):** [ADR-2026-10-23](ADR-2026-10-23-execution-path-qualified-harness-cells.md) adds the qualified cell's execution-path list to the admission intersection. Admission denies an unlisted path with `unsupported_session_mode` before enqueue. A claim-bound host denies it with `host_ineligible`. The runner refuses it before credential delivery or spawn. Implementation is pending.
+
 ## Seam 14 — Admission → harness adaptation → credential delivery → spawn
 
 **Problem:** An admitted execution cell proves that the requested harness,
