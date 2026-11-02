@@ -3,7 +3,7 @@ status: Proposed
 date: 2026-11-02
 boundary: shared
 split: inline-addenda
-amends: ADR-2026-09-28-agent-request-dispatches-a-card.md
+amends: ADR-2026-09-28-agent-request-dispatches-a-card.md, ADR-2026-06-03-batch-work-type-category.md
 ---
 
 # ADR-2026-11-02 — Stages, roles and stage cards: one process model for the 1.0 wire
@@ -90,7 +90,9 @@ documentation term for its authority order and never appear on a wire or surface
    scope a user may **add** a stage, **override** an inherited stage's name,
    description, cards, selection or transitions, or **disable** an inherited stage.
    An override may never change the **role**, so work already in the stage keeps its
-   meaning.
+   meaning. Stage configuration supplies **inherited defaults** for cards, model
+   selection, skills and outcomes; the workflow keeps final authority and may
+   override any value (D11.4).
 3. **Computed, never copied.** The effective set for a project is computed at
    evaluation. A scope inherits built-ins; it does not receive copies.
 4. **Built-ins are system-scope stages** (research, backlog writing, development,
@@ -156,7 +158,8 @@ pull request, is card data (D4), never a role or a stage name.
 3. **Resolution.** The control plane resolves each outcome's target to the tracker's
    write status (D6) and sends the resolved transitions on the wire (D9). The runner
    applies the one matching its outcome and holds no status name. A standalone
-   deployment supplies the same transitions by configuration.
+   deployment supplies the same transitions by configuration. A run with no stage
+   carries no transitions (D9.3).
 
 ### D6 — Tracker status mapping
 
@@ -197,8 +200,13 @@ pull request, is card data (D4), never a role or a stage name.
      model is never substituted at spawn (the same rule `001` states for harness
      versions).
    - Whatever resolves must fall inside the effective permission, a stage-1
-     question. Effort is a quantity and composes under
-     `ADR-2026-10-05-set-broad-enforce-the-minimum.md` R2.
+     question.
+   - **Effort is a quantity and is never refused.** A request above the permitted
+     levels clamps down to the highest permitted level at or below it; a request
+     below every permitted level clamps up to the lowest. Every clamp is recorded
+     with the requested level, the effective level and the scope that binds. This
+     follows `ADR-2026-10-05-set-broad-enforce-the-minimum.md` R2 and D15 of
+     `rensei-architecture/ADR-2026-09-30-model-library-dispatch-candidates-and-provider-failover.md`.
    - Credentials and auth are never set per node or per template; they resolve from
      the deployment's default credential binding through the same cascade.
    - The receipt records the level that bound, the selection value, the concrete
@@ -219,8 +227,16 @@ pull request, is card data (D4), never a role or a stage name.
    project and overridable per stage card: `all` (default; the harness discovers
    them as a developer would), `allowlist` (only the named repository skills) or
    `none` (card and attached skills only). An attached skill beats a repository
-   skill on a name clash.
-4. **Delivery.** The dispatch resolves skills to content and sends them on the wire.
+   skill on a name clash. **Kit-detected skills** (`005`) are governed as repository
+   skills under the same policy.
+4. **The policy is best-effort per harness.** Each materializer renders the policy as
+   far as its harness allows, and the run receipt records the policy actually
+   achieved. A harness that cannot suppress repository discovery runs with what it
+   achieved rather than being refused; repository skills are workspace content, not
+   capabilities, so the denial rule of
+   `ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md` D3
+   does not apply to them.
+5. **Delivery.** The dispatch resolves skills to content and sends them on the wire.
    Each harness adapter carries a **skill materializer** that delivers them natively,
    inside the existing adaptation vocabulary of
    `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md` (channel `skill`; no new
@@ -231,41 +247,56 @@ pull request, is card data (D4), never a role or a stage name.
    |---|---|
    | Claude Code | a per-session plugin directory outside the worktree, passed by `--plugin-dir` |
    | Pi | `--skill <dir>` from the run's state root |
-   | Codex | `$CODEX_HOME/skills` or `.agents/skills/donmai-*`, chosen by a spike |
-   | Muse | `.agents/skills/donmai-*` with `--trust-workspace` (product-owner allowed; it also loads repository rules and hooks) |
+   | Codex | `$CODEX_HOME/skills` or `.agents/skills/donmai-*`, decided by an implementation spike; prompt fallback until then |
+   | Muse | `.agents/skills/donmai-*` with `--trust-workspace` (accepted, including that it loads the repository's own rules and hooks; see Risks) |
 
-5. **Fallback.** Where no native delivery exists, the runner falls back to today's
+6. **Fallback.** Where no native delivery exists, the runner falls back to today's
    prompt append, which gains a size cap.
 
 ### D9 — The 1.0 dispatch wire
 
 ```
 QueuedWork / PollWorkItem {
-  stage:        { id, key, name, role }          // stageId exists; key, name, role are added
+  stage?:       { id, key, name, role }          // optional (D9.3); stageId exists; key, name, role are added
   card:         { id, handle, contract, skills[] }   // contract = { pr, verdict, workResult }
   skills[]:     { id, name, description, version, digest,
                   files[{ path, contentBase64, mode, sha256 }],
                   invocation, delivery, body /* fallback */, disallowedTools }  // merged per D8.2
   repoSkills:   { policy: all | allowlist | none, allow[] }
-  transitions:  { <outcome>: { stageKey, writeStatus } }   // resolved per D5.3
+  transitions?: { <outcome>: { stageKey, writeStatus } }   // only with a stage; resolved per D5.3
   stageContext: { ... }                          // D10
   workType                                       // legacy: stage.key during migration, then removed
 }
+
+BatchWorkItem {
+  batchKind                                      // replaces the workType discriminant (D9.4)
+  payload
+}
 ```
 
-1. The runner branches on `stage.role` and `card.contract` only. `AllWorkTypes`,
-   `workTypeCompleteStatus` / `workTypeFailStatus`, the name-keyed contract and
-   template tables, and `workTypeRole` are deleted. Status moves come from
-   `transitions`, never from a compiled-in name.
+1. The runner branches on `card.contract` and, when a stage is present,
+   `stage.role`; nothing else. `AllWorkTypes`, `workTypeCompleteStatus` /
+   `workTypeFailStatus`, the name-keyed contract and template tables, and
+   `workTypeRole` are deleted. Status moves come from `transitions`, never from a
+   compiled-in name.
 2. **Lock-step release.** The OSS binary, the composing binary and the control plane
    release together, because the embed surface couples them. The control plane adds
    the new fields first and keeps sending the legacy ones until the new binaries run
    on every host; the legacy fields are removed after that.
+3. **Stage is optional.** A run with no tracker work item (an interactive dispatch,
+   an ad-hoc agent request) omits `stage` and carries no `transitions`. The card
+   contract alone decides completion, and no tracker status moves.
+4. **Batch work gets its own discriminant.** `BatchWorkItem` carries `batchKind`
+   instead of riding the retired `workType`. This amends
+   `ADR-2026-06-03-batch-work-type-category.md`: its batch handlers register and are
+   selected by `batchKind`, and both fields are sent during the lock-step window. Its
+   category semantics do not change: one poll and claim loop, no
+   `AgentRuntimeProvider`, no agent quota, and no stage or card.
 
 ### D10 — What the dispatched agent knows
 
-Every dispatch carries a stage context block on the wire, also rendered into the
-prompt: the stage name and role, the tracker status it was dispatched from, the card
+Every dispatch with a stage carries a stage context block on the wire, also rendered
+into the prompt: the stage name and role, the tracker status it was dispatched from, the card
 and why it was chosen (default or mention), and the work item's parent plus a bounded
 child summary (identifier, stage, role). Cards may opt into richer tree context later.
 
@@ -283,13 +314,13 @@ child summary (identifier, stage, role). Cards may opt into richer tree context 
    vocabularies (for example the shipped SDLC mapping and a Ready / Active / Verify /
    Waiting / Done mapping), and adding a card or a stage needs no workflow edit.
    Template size is reported before and after, not targeted.
-4. **Locus.** Stage definitions and their transitions are configuration consumed by a
-   visible node, not hidden control flow. The dispatch-stage node's surface shows the
-   effective stage table for its project (statuses, stage, cards and default,
-   selections, transitions) and the scope that set each value, and the workflow scope
-   may override any of it. This is the remedy `016` corollary 6 names ("surface the
-   mapping table and override rules as the node's editable config"), applied once
-   instead of per status.
+4. **Locus (product-owner decision, 2026-11-02).** Stage configuration across the
+   system → org → project → workflow cascade supplies **inherited defaults** for
+   cards, model selection, skills and outcomes. The workflow keeps final authority
+   and may override any value. The dispatch-stage node always shows the effective
+   values (statuses, stage, cards and default, selections, skills, transitions) and
+   the source of each. That is how `016`'s locus rule is satisfied: the values are
+   visible and editable at the node, never hidden behaviour (corollaries 3 and 6).
 
 ### D12 — A reserved coordination slot
 
@@ -308,12 +339,20 @@ other.
   D6 (four outcomes with `stay` replace `advance` / `reject` / `none`). **Amended:**
   D1.3 (a card has no work type), D2.2 (the stamp carries the stage and the card's
   contract, not a work type and its role), D2.4 (the stage is the one the work item
-  is in, not a label on the card; see open question 1), the D3 table's work-type row,
+  is in, not a label on the card; a request with no work item has no stage, D9.3),
+  the D3 table's work-type row,
   and D3's model row (a node pin still wins; otherwise the stage-card selection
   resolves, D7). `agent_request_stage_unmapped` now means the target stage has no
   write status in the project's tracker binding.
-- `016-workflow-engine.md` § "Locus of definition": corollaries 4 and 6 are applied,
-  not changed (D3, D11.4).
+- `ADR-2026-06-03-batch-work-type-category.md`: the batch discriminant becomes
+  `batchKind` (D9.4); the category is otherwise unchanged.
+- `016-workflow-engine.md` § "Locus of definition": corollaries 3, 4 and 6 are
+  applied, not changed (D3, D11.4).
+- **Inherited stage defaults.** Platform-corpus decisions that bar stage settings
+  from owning cards, launch choices or outcome mappings, or bar an agent-card
+  execution default, are superseded to the extent that stage configuration supplies
+  inherited defaults (D2.2, D11.4). The workflow's final authority is unchanged. The
+  mirrored stub names them.
 - `014-tui-operator-surfaces.md` § "Open registries": the work-type registry gives
   way to roles (a closed set shipped in core) and stage names (opaque labels styled
   by role).
@@ -354,16 +393,18 @@ other.
 
 - **A partial cut-over** (new runner, old control plane) leaves a runner with no name
   table and no stage. Mitigation: the additive ordering of D9.2.
-- **Workspace trust.** Muse's `--trust-workspace` also loads repository rules and
-  hooks, which is workspace content `ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`
-  D2 keeps away from operator trust for extensions. The allowance is scoped to that
-  one harness and recorded in the adaptation plan; it must not generalize.
-- **Repository-skill policy may not be enforceable on every harness.** Under
-  `ADR-2026-08-13-capability-realization-registry-and-viability-of-absence.md` D3 a
-  short surface is a denial, never a downgrade; a harness that cannot suppress
-  repository discovery must not silently run `none` as `all`.
+- **Workspace trust (accepted).** Muse's `--trust-workspace` makes the harness load
+  the repository's own rules and hooks. That is workspace content an agent, a
+  contributor or an untrusted fork can write, and hooks execute code; it is the
+  exposure `ADR-2026-08-12-pi-extension-delivery-seam-and-capability-pack-boundary.md`
+  D2 keeps away from operator trust for extensions. The product owner accepted this
+  risk on 2026-11-02 for Muse only. The adaptation plan records the delivery; no
+  other harness inherits the allowance.
+- **Repository-skill policy is best-effort.** On a harness that cannot suppress
+  discovery, `none` or `allowlist` is not a guarantee; the receipt shows what was
+  achieved (D8.4).
 - **The effective stage table could become hidden logic** if a surface shows a stage
-  name without its resolved cards and transitions. D11.4 is the guard.
+  name without its resolved values and their sources. D11.4 is the guard.
 
 ## Alternatives considered
 
@@ -381,14 +422,23 @@ other.
 - **Prompt-append skills only.** No size guard and a spawn-failure risk. Rejected for
   native delivery with a capped fallback (D8).
 
-## Open questions for acceptance
+## Decided while drafting (product-owner rulings, 2026-11-02)
 
-1. Which stage an `agent.request` without a bound work item runs in.
-2. The batch-work discriminator of `ADR-2026-06-03-batch-work-type-category.md` rides
-   `workType`; it needs its own name before the legacy field is removed.
-3. How kit-contributed skills (`005`) order against the four attach levels.
-4. The Codex skill location (D8.4) and per-harness enforceability of `allowlist` and
-   `none`.
+These were open in the first draft and are now decisions:
+
+1. A run with no tracker work item omits `stage`; the card contract alone decides
+   completion, with no transitions (D9.3).
+2. Batch work carries `batchKind`, not `workType` (D9.4).
+3. Kit-detected skills are repository skills under the `repoSkills` policy (D8.3).
+4. The Codex skill location is decided by an implementation spike, with prompt
+   fallback until then (D8.5).
+5. The repository-skill policy is best-effort per harness, and the receipt records
+   the policy achieved (D8.4).
+6. Muse `--trust-workspace` is accepted, including loading the repository's own rules
+   and hooks (Risks).
+7. Stage configuration supplies inherited defaults, the workflow overrides, and the
+   dispatch-stage node shows effective values and sources (D11.4).
+8. Effort clamps and is never refused (D7.3).
 
 ## Affected documents
 
@@ -396,10 +446,14 @@ These edits land in the accepting commit:
 
 - `001-layered-execution-model.md` — Principle 2: "work types collapse from eight to
   five" becomes stages with roles; § "How the nouns compose": one line that its
-  "stages" are a documentation term (D1). No `BOUNDARY-SYNC` region is touched.
+  "stages" are a documentation term (D1); Layer 3: batch work is discriminated by
+  `batchKind` (D9.4). No `BOUNDARY-SYNC` region is touched.
 - `013-orchestrator-and-governor.md` — § "Completion contracts and backstop": the
   name-keyed table becomes the card's contract defaulting from the stage role; status
-  moves come from the wire's transitions.
+  moves come from the wire's transitions, and a run with no stage moves nothing;
+  § "Two governor loops": batch specs are discriminated by `batchKind`.
+- `ADR-2026-06-03-batch-work-type-category.md` — an amendment note: the discriminant
+  is `batchKind` (D9.4).
 - `014-tui-operator-surfaces.md` — § "Open registries": as D13.
 - `016-workflow-engine.md` — § `trigger` card-binding bullets (stage comes from the
   stage, not the card); the `agent.work_type.detect` switch and `workType` action
