@@ -92,7 +92,7 @@ spec:
       config:
         action: donmai@1:agent.dispatch_to_queue
         provider: donmai
-        workType: qa
+        stage: qa                      # a stage key; card, model and skills resolve from stage configuration
         scope: unit-tests-only
       next: [report_results]
 
@@ -130,8 +130,8 @@ Trigger-step nodes in `spec.steps[]` reference these by id. Multiple triggers pe
 **`agent.request` version 2 (`ADR-2026-09-28-agent-request-dispatches-a-card.md`).** The request names an agent card, not a work type:
 
 - **Card resolution.** `card` is a slug, a display name or a scoped card reference, resolved by the control plane over the cards the caller may dispatch into the project (published, non-deprecated, visible to the project, inside the registration's allowed cards). The narrowest scope wins; a tie or a miss is a typed refusal whose candidates come only from that set. There is no default card, and a version-1 body (`workType`, or no `card`) is refused, never translated.
-- **Card binding.** A dispatch workflow is *card-parameterised* when its invoke node binds its agent through the one exact expression naming the admitted card. Admission resolves the card before the run and stamps it (id, version, digest, work type and role, completion contract, inputs) beside the workflow admission; the executor refuses a card binding admission did not stamp. The stage a run executes is the card's work type.
-- **Card versus workflow.** The card owns prompt, work type, tool lists (tighten-only at the workflow scope), capability flags, declared inputs and a completion contract; the workflow owns model, budget, placement and delivery as visible node configuration. A workflow declares at publication the bounded union of completion contracts it handles, each naming stage moves (`advance`, `reject`, `none`) per verdict, never a tracker status; a workflow bound to one card has that card's contract as its union.
+- **Card binding.** A dispatch workflow is *card-parameterised* when its invoke node binds its agent through the one exact expression naming the admitted card. Admission resolves the card before the run and stamps it (id, version, digest, completion contract, inputs), with the stage the work item is in when there is one, beside the workflow admission; the executor refuses a card binding admission did not stamp. The stage a run executes is the stage its work item is in, never a label on the card; a request with no work item runs with no stage, and its card contract alone decides completion (`ADR-2026-11-02-stages-roles-and-stage-cards.md` D9.3, D13).
+- **Card versus workflow.** The card owns prompt, tool lists (tighten-only at the workflow scope), skills, capability flags, declared inputs and a completion contract; it carries no work type or stage label. The workflow owns budget, placement and delivery as visible node configuration. Model selection resolves node pin, then the stage-card selection, then the stage default, then the project, org and system defaults (`ADR-2026-11-02` D7). A workflow declares at publication the bounded union of completion contracts it handles; each maps verdicts to the four outcomes (`success`, `failure`, `blocked`, `close`), and the move for an outcome is the stage's resolved transition, never a tracker status (`ADR-2026-11-02` D5 supersedes the `advance` / `reject` / `none` stage moves). A workflow bound to one card has that card's contract as its union.
 - **Parameters.** `paramsSchema` declares install parameters (stored per project) and the `callerSettable` call parameters passed in `params`, which also carries the card's declared inputs. Each parameter resolves call value → install value → node-configuration default → inherited default; the value without the call is its *base*. Limits only lower from the base, sets only narrow, posture only adds denies, and a selection parameter chooses only within what its base permits (a pinned base permits only itself). Loosening is refused, never clamped. No parameter names an `executionSecurity` dimension, credentials are never parameters, and placement and stage behaviour are install-only.
 - **Selection.** Every dispatch runs through an installed, active dispatch workflow; automatic provisioning installs an ordinary visible workflow, and there is no compiled-in path. A project may carry several dispatch workflows and has exactly one default. A workflow matches when it is active, card-parameterised or bound to the resolved card, selectable by the caller, has the card's contract in its union, and has no parameter keys colliding with the card's inputs. Selection: an explicit matching `workflow` (a non-matching one is refused, never falls back), else the default if it matches, else the only match, else a typed refusal listing the matches.
 - **Refusals** are the closed `AgentRequestRefusalCode` enum listed in `002` § "RequesterProvider — inbound contract".
@@ -156,20 +156,18 @@ Branching node. Two modes.
 **Switch mode** (`mode: switch`, `cases[]`, `defaultHandle`):
 
 ```yaml
-- id: detect_work_type
+- id: route_by_size
   type: condition
   config:
     mode: switch
-    action: donmai@1:agent.work_type.detect
-    cases: [development, qa, acceptance, refinement, research]
+    action: donmai@1:agent.size_estimate
+    cases: [small, medium, large]
     defaultHandle: true
   branches:
-    development: dev_group
-    qa: qa_group
-    acceptance: acceptance_group
-    refinement: refinement_group
-    research: research_group
-    default: development              # fallback when defaultHandle: true
+    small: unit_tests_group
+    medium: integration_group
+    large: full_pipeline_group
+    default: unit_tests_group          # fallback when defaultHandle: true
 ```
 
 The verb's output schema must declare an enum that matches `cases[]`. Compile-time validation rejects mismatches.
@@ -184,7 +182,7 @@ Side-effect node. Invokes a plugin verb. Outputs feed downstream nodes.
   config:
     action: donmai@1:agent.dispatch_to_queue
     provider: donmai
-    workType: development
+    stage: development                 # a stage key, never a card or a tracker status
     issueId: ${trigger.data.issueId}
   next: [await_completion]
 ```
@@ -266,7 +264,7 @@ observation uses a separate durable consumer. Full contract:
 
 ## Workflow design discipline
 
-The legacy auto-generated SDLC YAML (the default SDLC template) is the canonical example of *what not to do*. Long flat chain of `parent? → ack → dispatch → ack → dispatch` per work type, plus an opaque `Detect Work Type` switch. The pathology W1.b (recursive groups) was imported to fix.
+The legacy auto-generated SDLC YAML (the default SDLC template) is the canonical example of *what not to do*. Long flat chain of `parent? → ack → dispatch → ack → dispatch` per work type, plus an opaque `Detect Work Type` switch, with tracker status names embedded in its branches. The pathology W1.b (recursive groups) was imported to fix.
 
 **Top-level discipline:** A workflow's root view should fit on a single screen. Detail belongs in groups.
 
@@ -319,7 +317,9 @@ spec:
     # ... etc
 ```
 
-Top-level: 7 nodes (trigger + classify + 5 groups + maybe a terminal). Groups encapsulate the dispatcher gates, ack-then-queue chain, and per-work-type logic. Each group internally fits its own single screen.
+Top-level: 7 nodes (trigger + classify + 5 groups + maybe a terminal). Groups encapsulate the dispatcher gates, ack-then-queue chain, and per-stage logic. Each group internally fits its own single screen.
+
+**The dispatch-stage node (`ADR-2026-11-02-stages-roles-and-stage-cards.md` D11, Accepted 2026-11-03).** Once stages carry their own cards and outcome transitions, the per-stage branches collapse further. The tracker SDLC template becomes two paths, "work item entered a stage" and "mention on a work item", both calling one generic **dispatch-stage** node. The card (the stage's default, or the stage card a mention names by handle or keyword), model selection, skills, credentials and the next status all come from configuration, so adding a card to a stage or a stage to a project needs no workflow edit, and the same template runs unmodified against two different status vocabularies. A shipped template holds no card ids, model or profile ids, credential ids or tracker status names, and a lint over shipped templates enforces it; node pins are a user override and never part of a template. Template size is reported before and after, not targeted.
 
 ## Locus of definition — user-visible nodes only
 
@@ -337,16 +337,18 @@ The transitions themselves are not the issue. `linear.issue.update`, `linear.iss
 
 3. **Sugar compiles to nodes.** If the platform offers a compact declarative shorthand for a common pattern (e.g. `spec.lifecycle: { research: { trigger: …, exit: … } }`), the result on the canvas must be inspectable as if the user had drawn it. The user can then delete, reorder, or extend it.
 
-4. **Closed registries are deprecated.** Hardcoded lists of stage ids, work types, or prompt keys lock users out of using the platform for processes the platform's authors didn't anticipate. Users supply names; the engine treats them as opaque strings. Validation rejects unknown *structure*, not unknown *names*.
+4. **Closed registries are deprecated.** Hardcoded lists of stage ids, work types, or prompt keys lock users out of using the platform for processes the platform's authors didn't anticipate. Users supply names; the engine treats them as opaque strings. Validation rejects unknown *structure*, not unknown *names*. Applied to stages (`ADR-2026-11-02` D3): a stage's seven **roles** are structure, a closed set the machine branches on, while stage names, card names and tracker statuses are data. Work type is retired rather than opened.
 
 5. **The Agent Exit primitive.** Today's "Agent Session Completed" and "Agent Session Failed" exist as two separate trigger node types. They fold into a single **Agent Exit** node with `success` and `fail` output edges, so post-agent flow is one node with two branches rather than two parallel trigger chains. This is the right primitive shape for the canvas; everything downstream (the locus rule, the lifecycle-config compilation target, the cross-link to Topology view) gets cleaner with it.
 
 6. **Node transparency — every node's logic is on its surface.** A node's behavior must be visible and configurable from the canvas, not hidden in node-implementation code or behind opaque JSON payloads. A switch-mode condition that shows a list of case labels while its routing rules live in TypeScript is a black box from the user's perspective: they see *that* a decision happens, not *how*. So is any node that requires pasting a long JSON config blob to invoke hidden code paths the user cannot inspect. If a node's decision logic is non-trivial, that logic must be exposed as named, typed, editable inputs — rules, mappings, prompts, status tables — the user reads and revises without leaving the canvas. Concretely deprecated examples in the legacy default SDLC template:
 
-   - **`agent.work_type.detect` ("Detect Work Type")** — node surface shows the case set [development, inflight, qa, acceptance, refinement, research]; the actual decision logic (`STATUS_WORK_TYPE_MAP`, mention-keyword scan, first-touch override) lives in platform-side node implementation code. Remediation: split into composable nodes (a Linear status condition, a comment-keyword condition, an explicit routing branch) that the user wires; *or* surface the mapping table and override rules as the node's editable config.
+   - **`agent.work_type.detect` ("Detect Work Type")** — node surface shows the case set [development, inflight, qa, acceptance, refinement, research]; the actual decision logic (`STATUS_WORK_TYPE_MAP`, mention-keyword scan, first-touch override) lives in platform-side node implementation code. Remediation: split into composable nodes (a Linear status condition, a comment-keyword condition, an explicit routing branch) that the user wires; *or* surface the mapping table and override rules as the node's editable config. Work type is now retired (`ADR-2026-11-02`), and the dispatch-stage node takes the second remediation: the status-to-stage mapping, the stage cards with their mention keywords, and the default are its visible configuration.
    - **`linear.issue.status_switch` ("Next Station")** — same shape; routing rules between native states live in code rather than on the canvas. Remediation: replace with `Linear Status Equals` condition nodes wired to user-labelled outgoing branches.
 
    These are slated for removal as part of unwinding hidden SDLC auto-generation; the principle generalises beyond them. Any future node that proposes "logic in code, labels on canvas" fails this corollary.
+
+   **Applied to stage configuration (`ADR-2026-11-02` D11.4).** Stage configuration across the system → org → project → workflow cascade supplies **inherited defaults** for cards, model selection, skills and outcome transitions. The workflow keeps final authority and may override any value. The dispatch-stage node always shows the effective values (statuses, stage, cards and default, selections, skills, transitions) and the source of each, so inherited configuration is visible and editable at the node, never hidden behaviour. Corollaries 3, 4 and 6 are applied here, not changed.
 
 ### How to apply this rule in design reviews
 

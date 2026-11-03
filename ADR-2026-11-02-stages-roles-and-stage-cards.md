@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-11-02
 boundary: shared
 split: inline-addenda
@@ -8,9 +8,9 @@ amends: ADR-2026-09-28-agent-request-dispatches-a-card.md, ADR-2026-06-03-batch-
 
 # ADR-2026-11-02 — Stages, roles and stage cards: one process model for the 1.0 wire
 
-**Status:** Proposed (2026-11-02, on the product owner's decisions of the same day).
-Architecture only; nothing in it is built. The edits under "Affected documents" land
-in the commit that flips this record to Accepted, OSS side first.
+**Status:** Accepted (2026-11-03, product-owner acceptance of the decisions of
+2026-11-02). Architecture only; nothing in it is built. The edits under "Affected
+documents" landed in the accepting commit, OSS side first.
 **Date:** 2026-11-02
 **Boundary:** shared. This record is OSS-canonical for the execution-layer contract:
 the stage, its seven roles, stage cards, outcome transitions, the tracker status
@@ -442,28 +442,46 @@ These were open in the first draft and are now decisions:
 
 ## Affected documents
 
-These edits land in the accepting commit:
+These edits landed in the accepting commit (2026-11-03), OSS side first:
 
 - `001-layered-execution-model.md` — Principle 2: "work types collapse from eight to
-  five" becomes stages with roles; § "How the nouns compose": one line that its
-  "stages" are a documentation term (D1); Layer 3: batch work is discriminated by
-  `batchKind` (D9.4). No `BOUNDARY-SYNC` region is touched.
-- `013-orchestrator-and-governor.md` — § "Completion contracts and backstop": the
-  name-keyed table becomes the card's contract defaulting from the stage role; status
-  moves come from the wire's transitions, and a run with no stage moves nothing;
-  § "Two governor loops": batch specs are discriminated by `batchKind`.
-- `ADR-2026-06-03-batch-work-type-category.md` — an amendment note: the discriminant
-  is `batchKind` (D9.4).
-- `014-tui-operator-surfaces.md` — § "Open registries": as D13.
-- `016-workflow-engine.md` — § `trigger` card-binding bullets (stage comes from the
-  stage, not the card); the `agent.work_type.detect` switch and `workType` action
-  examples; § "Workflow design discipline" (the dispatch-stage node); corollary 6
+  five" becomes stages with seven roles, and the control-flow paragraph records that
+  inherited stage defaults satisfy the locus rule (D11.4); § "How the nouns
+  compose": one line that its "stages" are a documentation term (D1); Layer 3:
+  batch work is discriminated by `batchKind` and carries no stage or card (D9.4).
+  No `BOUNDARY-SYNC` region is touched.
+- `013-orchestrator-and-governor.md` — § "The orchestrator": contract validation is
+  per card contract; § "The governor": the cycle maps statuses to stages through the
+  tracker binding and dispatches by stage and role, never by a status name; § "Two
+  governor loops": batch specs are discriminated by `batchKind`; § "Completion
+  contracts and backstop": the name-keyed table becomes the card's contract
+  defaulting from the stage role (the table is kept as the built-in stages'
+  reference), status moves come from the wire's transitions, a run with no stage
+  moves nothing, and card dispatch maps verdicts to outcomes; § "AgentRuntime
+  dispatch": skills arrive with content and are delivered by a per-adapter skill
+  materializer through the existing `skill` channel, with a capped prompt fallback
+  (D8.5, D8.6).
+- `ADR-2026-06-03-batch-work-type-category.md` — status line and amendment note: the
+  discriminant is `batchKind` (D9.4).
+- `014-tui-operator-surfaces.md` — § "Open registries": as D13, plus the rule that a
+  surface showing a stage's effective configuration shows each value's source
   (D11.4).
+- `016-workflow-engine.md` — § `trigger` card-binding bullets (the stage comes from
+  the work item, not the card; the card owns skills and carries no work type; model
+  selection follows D7; completion unions map verdicts to outcomes); the
+  `agent.work_type.detect` switch and `workType` action examples (now a size switch
+  and `stage:` keys); § "Workflow design discipline" (the dispatch-stage node and the
+  portable-template lint, D11.1 to D11.3); corollaries 4 and 6 (D3, D11.4).
 - `002-provider-base-contract.md` — § "RequesterProvider": the meaning of
   `agent_request_stage_unmapped`.
-- `ADR-2026-09-28-agent-request-dispatches-a-card.md` — an amendment note on D1.3,
-  D2.2, D2.4, D3 and D4.
-- `README.md` and `AGENTS.md` — this record's entry, refreshed.
+- `005-kit-manifest-spec.md` — kit-detected skills are governed as repository skills
+  under the `repoSkills` policy (D8.3, D8.4); `KitProvideContext.workType` is marked
+  legacy, and re-keying the kit work-type filters before the legacy field is removed
+  is recorded as open question 6, because this record does not decide it.
+- `ADR-2026-09-28-agent-request-dispatches-a-card.md` — status line, amendment note,
+  and inline notes on D1.3, D2.4, D3 and D4 (superseded).
+- `README.md` and `AGENTS.md` — this record's entry, refreshed, and the two amended
+  records' entries.
 
 ## Affected work items
 

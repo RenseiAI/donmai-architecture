@@ -7,7 +7,9 @@ split: sibling-extensions
 
 # ADR-2026-09-28 — An agent request dispatches a card: one card-parameterised workflow, tighten-only parameters, a chosen default
 
-**Status:** Accepted (product-owner acceptance, 2026-09-28)
+**Status:** Accepted (product-owner acceptance, 2026-09-28). **D4 superseded, and
+D1.3, D2.2, D2.4 and D3 amended, 2026-11-03** by
+[`ADR-2026-11-02-stages-roles-and-stage-cards.md`](ADR-2026-11-02-stages-roles-and-stage-cards.md).
 **Date:** 2026-09-28
 **Boundary:** shared (OSS-canonical here: the `agent.request` input contract, card
 resolution and binding, the split between what a card owns and what a workflow
@@ -17,6 +19,22 @@ verb, the reference workflow's name, storage, the hosted policy engine's
 resource, provisioning and the migration live in `rensei-architecture`: a
 short mirrored stub plus a platform-extensions sibling.)
 **Authors:** architecture lane, filed by the coordinator session
+
+> **Amended 2026-11-03 by
+> [`ADR-2026-11-02-stages-roles-and-stage-cards.md`](ADR-2026-11-02-stages-roles-and-stage-cards.md)
+> D13.** **D4 is superseded** by its D5 and D6: a completion contract maps each
+> verdict to one of four outcomes (`success`, `failure`, `blocked`, `close`), each
+> stage declares a target stage or `stay` per outcome, and the control plane
+> resolves the target to the tracker binding's write status and sends it on the
+> wire as a transition; `advance`, `reject` and `none` are retired. **Amended:**
+> D1.3 (a card has no work type); D2.2 (the admission stamp carries the stage and
+> the card's contract, not a work type and its role); D2.4 (the stage is the one
+> the work item is in, not a label on the card, and a request with no work item
+> has no stage); the D3 table's work-type row (retired); and D3's model row (a node
+> pin still wins; otherwise the stage-card selection resolves, per its D7).
+> `agent_request_stage_unmapped` now means that the target stage has no write
+> status in the project's tracker binding. The text below is kept as the record
+> of what this ADR decided.
 
 ## Context
 
@@ -92,7 +110,8 @@ runs outside an installed workflow.
    shadowing a wider card of the same name is the intended override path.
 3. A card's work type must be a stage the deployment defines. Card names and work
    types are opaque strings (`016` corollary 4); nothing on the dispatch path
-   branches on a particular name.
+   branches on a particular name. *(Amended 2026-11-03: a card carries no work
+   type; the stage is the one the work item is in. See the note at the top.)*
 4. `issue` optionally binds an existing tracker item. It is never required: issue
    tracking stays an optional output, and a request without an issue is
    complete.
@@ -123,7 +142,9 @@ runs outside an installed workflow.
    selects among cards the caller may run and never widens a permission. The card
    version is fixed at admission, and a resume uses the admitted version.
 4. The stage a run executes is the card's work type, so the request word never
-   reaches a stage registry.
+   reaches a stage registry. *(Amended 2026-11-03: the stamp carries the work
+   item's stage and the card's contract; a request with no work item has no
+   stage.)*
 
 ### D3 — The card owns the agent; the workflow owns the run
 
@@ -138,6 +159,10 @@ runs outside an installed workflow.
 | Grader | card | Unchanged |
 | Model, budget, placement, delivery | workflow | Visible node configuration; never on the card |
 
+*(Amended 2026-11-03 by `ADR-2026-11-02` D13: the work-type row is retired, because a
+card carries no work type; in the model row a node pin still wins, and otherwise the
+stage-card model selection resolves through that ADR's D7 order.)*
+
 **Bounded completion union.** A card chosen at run time cannot add output ports
 to a published workflow. A dispatch workflow therefore declares, at publication,
 the set of completion contracts it handles. Each member names an artifact kind,
@@ -148,6 +173,12 @@ does not match that workflow (D7). An outcome outside the admitted contract
 routes to the workflow's outcome-unknown path, never to a success branch.
 
 ### D4 — Stage moves, not status names
+
+> **Superseded 2026-11-03** by D5 and D6 of
+> [`ADR-2026-11-02-stages-roles-and-stage-cards.md`](ADR-2026-11-02-stages-roles-and-stage-cards.md):
+> four outcomes with `stay` replace `advance`, `reject` and `none`, and nothing
+> holds a status name in code, a card, a profile, a skill or a template. Kept
+> verbatim as the historical record.
 
 A completion contract names stage **moves** (`advance`, `reject` or `none`),
 never a tracker status. The IssueTracker provider resolves a move for the card's

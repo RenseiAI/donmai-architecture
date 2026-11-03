@@ -151,12 +151,12 @@ Status already pairs color with Unicode symbol (`tui-components/theme/status.go`
 
 1. **Honor `NO_COLOR` env var** — when set, force symbol-first rendering through `StatusStyle.Symbol` with no color.
 2. **Explicit a11y mode** — `DONMAI_A11Y=true` env var or `--a11y` flag forces high-contrast theme + symbol-first rendering + verbose-label-only-no-icon variants.
-3. **Document non-color signaling** — every status/work-type/activity primitive's documentation states the non-color disambiguator (Unicode symbol).
+3. **Document non-color signaling** — every status/stage-role/activity primitive's documentation states the non-color disambiguator (Unicode symbol).
 4. **Screen-reader-friendly labels** — every primitive declares an `accessibleLabel: string` field that screen readers can consume.
 
 For regulated environments (banking, defense), a11y mode may be a tenant-policy default. The architecture admits this; the policy layer enforces it.
 
-## Open registries (status, work type, activity)
+## Open registries (status, stage role, activity)
 
 The legacy `tui-components/theme/` hardcodes closed switch statements for status, work type, and activity. The architecture introduces new lifecycle states (workarea acquire/release, sandbox warming, kit-applying); switches don't extend.
 
@@ -175,7 +175,14 @@ themeRegistry.RegisterStatus(StatusEntry{
 
 Generic states ship in `tui-components` core; domain-specific states ship via plugins/kits. The `theme.GetStatusStyle(kind)` lookup queries the registry; unknown states get a fallback rendering with a "?" symbol and a registration-warning emit.
 
-Same shape for work types and activity types. Closes the drift described in the `tui-components` exploration ("`theme/worktype.go` hardcodes work types in the OSS shared lib, but the architecture treats work-type as orchestrator-internal").
+Same shape for activity types. Closes the drift described in the `tui-components` exploration ("`theme/worktype.go` hardcodes work types in the OSS shared lib, but the architecture treats work-type as orchestrator-internal").
+
+**Work types give way to stage roles and stage names** (`ADR-2026-11-02-stages-roles-and-stage-cards.md`, Accepted 2026-11-03). Work type is retired, so there is no work-type registry to open. Two things replace it:
+
+- **Stage roles** are a closed set of seven (`hold`, `intake`, `inflight`, `review`, `rework`, `done`, `closed`) shipped in `tui-components` core, each with its style and non-color symbol. Roles are structure the machine branches on, so they are not registrable; an unknown role is a structural error, not a fallback rendering (`016` corollary 4 rejects unknown structure, not unknown names).
+- **Stage names** are opaque labels a deployment defines at any scope. They are never registered: a surface renders a stage name with the style of its role.
+
+A surface that shows a stage's effective configuration (cards and default, model selection, skills, outcome targets) shows the scope each value came from, because the effective table is computed across scopes and a value without its source is hidden logic (`ADR-2026-11-02` D11.4).
 
 ### Host conditions are registry entries, not log lines
 
@@ -192,7 +199,7 @@ Conditions clear when they clear. An entry that latches on first occurrence and 
 | Theme system + swap mechanism | ✅ ships | extends with tenant brand themes |
 | Default + dark + high-contrast themes | ✅ ships | inherits |
 | `donmai` (OSS binary surface) | ✅ ships | consumed via `afcli.RegisterCommands` |
-| Architecture-concept registries (status, worktype, activity) | ✅ ships generic | extends domain-specific |
+| Architecture-concept registries (status, activity) and stage-role styles | ✅ ships generic | extends domain-specific |
 | Host-condition registry entries (unable-to-serve conditions) | ✅ ships generic | extends + aggregates cross-machine |
 
 The OSS layer ships a complete TUI for the local-daemon flow (per `011`). The platform extensions doc carries the SaaS-distinct surfaces — multi-tenant brand theme administration, the Live capacity contract, the dual-surface discipline obligation, the routing-intelligence/audit-chain TUI counterparts.

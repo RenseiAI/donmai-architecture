@@ -59,7 +59,8 @@ interface KitDetectResult {
 
 interface KitProvideContext {
   workarea: Workarea             // already acquired
-  workType: WorkType             // 'development' | 'qa' | 'refinement' | etc.
+  workType: WorkType             // legacy; the stage key during the 1.0
+                                 // lock-step window (see Open questions 6)
   scope: ProviderScope
   otherActiveKits: KitProviderId[]
                                  // for conflict-aware contributions
@@ -462,7 +463,7 @@ Composition is where most subtle bugs live; explicit rules prevent silent surpri
 | `prompt_fragments` | Concatenated in apply order. Each carries `when` filter; only fragments matching `workType` are included. The result is an ordered adaptation, not implicit whole-system-prompt replacement. |
 | `tool_permissions` | Union into kit-requested policy contributions. Harness adaptation still intersects them with the admitted policy floor and exact permission grammar; a kit cannot weaken a deny by union. |
 | `mcp_servers` | Concatenated; duplicate `name` is an error. Materialization produces source-addressed MCP adaptation entries. |
-| `skills` | Concatenated; duplicate `id` is an error. Granted capability companion instructions attach automatically; optional explanatory partials remain separate. |
+| `skills` | Concatenated; duplicate `id` is an error. Granted capability companion instructions attach automatically; optional explanatory partials remain separate. Kit-detected skills are governed as repository skills: the project's `repoSkills` policy (`all`, `allowlist` or `none`, overridable per stage card) applies to them, best-effort per harness, and an attached skill wins a name clash (`ADR-2026-11-02-stages-roles-and-stage-cards.md` D8.3, D8.4). |
 | `agents` | Concatenated; duplicate `id` errors. Multiple agents may share `work_types`. |
 | `a2a_skills` | Concatenated; duplicate `id` errors. |
 | `intelligence_extractors` | Concatenated by `language` + `emits`. Multiple extractors may emit same kind; results de-duped at the memory layer. |
@@ -753,5 +754,6 @@ Standard discipline: every interface and adapter ships in OSS. SaaS adds the cen
 3. **Kit versioning at composition time.** Two kits depending on incompatible versions of a third (transitive)? Default: error and require explicit lock. Long-term: a lockfile-shaped resolution akin to npm. Out of scope for v1.
 4. **Cross-kit handles.** A Spring kit's MCP server might want to query a generic-Java kit's data. Should kits expose typed handles to each other, or only via shared contributions (memory, MCP)? Default: only via shared contributions; explicit cross-kit APIs are out of scope until demanded.
 5. **Non-code kits.** Marketing/social workflows want kits too — but their "build/test/validate" don't apply. Contributions like `commands` may be empty for these; that's fine. The kit shape doesn't break, it just doesn't fill some fields. Worth a non-code reference kit (e.g., "Marketing campaign kit") in the OSS layer to validate.
+6. **Kit filters after work type.** `KitProvideContext.workType`, a prompt fragment's `when` and an agent's `work_types` match work-type names, which `ADR-2026-11-02-stages-roles-and-stage-cards.md` retires. During the 1.0 lock-step window the legacy `workType` carries the stage key, so these filters keep matching built-in stage keys. Re-keying them (to the stage key, the stage role or the card) before the legacy field is removed needs its own amendment to this doc.
 
 These are intentional gaps for future ADRs.
