@@ -110,7 +110,7 @@ The `receipt` is defined here as an optional opaque field; its generation (signi
 | `agent_request_param_invalid` | A value fails its declared type or validation; per key |
 | `agent_request_param_not_caller_settable` | A caller supplied an install-only parameter |
 | `agent_request_param_weakens_limit` | A caller value is looser than the base, or outside what a selection base permits; carries the base and the scope that set it |
-| `agent_request_stage_unmapped` | An issue-bound request needs a stage move the project's stage mapping does not cover |
+| `agent_request_stage_unmapped` | An issue-bound request's outcome targets a stage that has no write status in the project's tracker binding (`ADR-2026-11-02` D6, D13) |
 | `agent_request_workflow_none` | No dispatch workflow in the project matches |
 | `agent_request_workflow_ambiguous` | Several match, the default is not among them and none was selected; carries the matches |
 | `agent_request_workflow_not_selectable` | The selected workflow does not match, or is outside the caller's allowed workflows |

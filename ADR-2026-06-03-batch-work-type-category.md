@@ -6,10 +6,21 @@ split: sibling-extensions
 
 # ADR-2026-06-03-batch-work-type-category
 
-**Status:** Accepted (2026-06-10)
+**Status:** Accepted (2026-06-10). **Amended 2026-11-03** by
+[`ADR-2026-11-02-stages-roles-and-stage-cards.md`](ADR-2026-11-02-stages-roles-and-stage-cards.md)
+D9.4: the batch discriminant is `batchKind`.
 **Date:** 2026-06-03
 **Boundary:** shared
 **Authors:** mark, claude
+
+> **Amended 2026-11-03 by
+> [`ADR-2026-11-02-stages-roles-and-stage-cards.md`](ADR-2026-11-02-stages-roles-and-stage-cards.md)
+> D9.4.** Work type is retired, so batch work no longer rides it: `BatchWorkItem`
+> carries `batchKind`, and batch handlers register and are selected by
+> `batchKind`. Both fields are sent during the 1.0 lock-step window, after which
+> `workType` is removed. The category semantics are unchanged: one poll and claim
+> loop, no `AgentRuntimeProvider`, no agent quota, and no stage or card. Read the
+> `workType` discriminant below as `batchKind`.
 
 ## Context
 

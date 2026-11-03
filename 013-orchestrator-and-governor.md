@@ -43,7 +43,7 @@ graph TB
 - Worker process supervision (heartbeat, drain, reap)
 - Provider capability discovery and resolver registration
 - **Stability-tier-aware placement** — consults each provider's declared stability tier (`stable | beta | unstable | registration-only`, per `002`) when placing work; warns on `unstable` selection for production sessions and refuses to dispatch to `registration-only` providers unless the session is explicitly a probe / dry-run.
-- Completion contract validation (per work type)
+- Completion contract validation (per card contract, defaulting from the stage role)
 - Session-end backstop (push branches, create PRs, post results)
 
 **What does NOT live in the orchestrator:**
@@ -63,8 +63,9 @@ The governor is the **scan-and-dispatch loop** that watches external systems for
 ├──────────────────────────────────────────────────────────┤
 │  1. List issues from configured IssueTrackerProviders    │
 │     in scope (project allowlist, monorepo paths)         │
-│  2. Filter by status (Backlog → development trigger,     │
-│     Started → inflight, Finished → qa, etc.)             │
+│  2. Map each status to a stage through the tracker       │
+│     binding; dispatch by stage and role, never by a      │
+│     status name (a hold-role stage is never scheduled)   │
 │  3. Filter against active fleet quota                    │
 │  4. Apply failure-backoff and dispatch-cap gates         │
 │  5. For each eligible issue, build a SessionSpec         │
@@ -78,7 +79,7 @@ Governor is **stateless across cycles** — all state lives in the work queue, t
 
 ### Two governor loops: issue-driven and time-driven
 
-The scan-and-dispatch loop above is the **issue-driven loop** — it watches trackers and builds `SessionSpec`s. A parallel **time-driven loop** selects due **batch** rows on a schedule and builds `BatchJobSpec`s (discriminated by `workType`), enqueuing to the **same** work queue. Both loops are scope-bounded, stateless across cycles, and rely on the same atomic queue claim. Batch work-types (code-survival scans, KG extraction — see `ADR-2026-06-03-batch-work-type-category.md`) ride the time-driven loop and are executed by registered batch handlers that do not drive an `AgentRuntimeProvider`.
+The scan-and-dispatch loop above is the **issue-driven loop** — it watches trackers and builds `SessionSpec`s. A parallel **time-driven loop** selects due **batch** rows on a schedule and builds `BatchJobSpec`s (discriminated by `batchKind`), enqueuing to the **same** work queue. Both loops are scope-bounded, stateless across cycles, and rely on the same atomic queue claim. Batch kinds (code-survival scans, KG extraction — see `ADR-2026-06-03-batch-work-type-category.md`) ride the time-driven loop and are executed by registered batch handlers, selected by `batchKind`, that do not drive an `AgentRuntimeProvider`. Batch work carries no stage or card. The discriminant was `workType` until `ADR-2026-11-02-stages-roles-and-stage-cards.md` D9.4; both fields are sent during the 1.0 lock-step window.
 
 ## The worker
 
@@ -321,6 +322,15 @@ cleanup. Runtime and cleanup outcomes append records to the initial receipt.
 Role intent cannot replace the harness operating protocol, and prompt guidance
 cannot stand in as evidence for a requested service.
 
+Skills arrive on the dispatch wire with their content, already merged across the
+org, project, stage-card and card attach levels, together with the project's
+repository-skill policy (`ADR-2026-11-02-stages-roles-and-stage-cards.md` D8).
+Each harness adapter's skill materializer delivers them natively through the
+existing `skill` channel, adding no channel or delivery strategy; the plan names
+the delivery per skill before spawn, and the receipt records which applied and
+the repository-skill policy actually achieved. Where no native delivery exists,
+the prompt-append fallback applies under a size cap.
+
 The accepted
 [`ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md`](ADR-2026-09-16-refreshable-protected-http-mcp-authorization.md)
 adds one fail-closed pre-spawn specialization for a runner-owned protected HTTP
@@ -489,20 +499,22 @@ changes.
 
 ## Completion contracts and backstop
 
-Per the existing `packages/core/src/orchestrator/completion-contracts.ts`, each work type has required outputs:
+**The card owns the contract (`ADR-2026-11-02-stages-roles-and-stage-cards.md` D4, Accepted 2026-11-03).** Every card carries an explicit completion contract, `{ pr, verdict, workResult }`: what a run owes, possibly nothing. A field the card leaves unset defaults from the role of the stage the run executes in, and a card's explicit value wins. The runner branches on the card's contract and, when the dispatch carries a stage, on `stage.role`; it holds no table keyed by a work-type, stage or status name. The seeded built-in stages and their system cards reproduce the outputs the retired per-work-type table required, kept here as that reference:
 
-| Work Type | Required Outputs |
+| Built-in stage | Required outputs |
 |---|---|
-| `development` / `inflight` | Commits on branch, branch pushed, PR created |
-| `qa` | Work result (passed/failed), comment posted |
-| `acceptance` | Work result (passed/failed) |
-| `refinement` | Comment posted |
-| `research` | Issue description updated |
-| `merge` | PR merged |
+| development | Commits on branch, branch pushed, PR created |
+| QA | Work result (passed/failed), comment posted |
+| acceptance | Work result (passed/failed) |
+| refinement | Comment posted |
+| research | Issue description updated |
+| merge | PR merged |
 
-(With `-coordination` work types deprecated per `001` Principle 2, the table collapses to development/qa/acceptance/refinement/research/merge.)
+No row is a coordination stage: a coordinator is a card like any other (`001` Principle 2).
 
-**Card dispatch (`ADR-2026-09-28-agent-request-dispatches-a-card.md`).** For a session started by an `agent.request`, the completion contract is the dispatched card's, not a row of the table above: one member of the dispatch workflow's bounded union, declared at publication, naming an artifact kind, its required fields, its verdict vocabulary and a stage move (`advance`, `reject` or `none`) per verdict. The IssueTracker provider resolves each move through the project's stage mapping, never a literal tracker status, and an outcome outside the admitted contract routes to the workflow's outcome-unknown path.
+**Status moves come from the wire.** A dispatch that carries a stage also carries the resolved `transitions`: for each of the four outcomes (`success`, `failure`, `blocked`, `close`), a target stage key and the write status the control plane resolved through the project's tracker binding, or `stay` for no move. The runner applies the transition matching its outcome and holds no status name (D5, D6, D9.1). Retries for provider, spawn, workarea and launch-acknowledgement errors are stage policy, and a stage emits `failure` or `blocked` only once they are exhausted. No verdict, an operator cancel and a gate timeout stay and comment; a cancel never routes to rework (D5.2). **A run with no stage moves nothing:** a dispatch with no tracker work item (an interactive dispatch, an ad-hoc agent request) carries no stage and no transitions, and the card contract alone decides completion (D9.3).
+
+**Card dispatch (`ADR-2026-09-28-agent-request-dispatches-a-card.md`, as amended by `ADR-2026-11-02`).** For a session started by an `agent.request`, the completion contract is the dispatched card's: one member of the dispatch workflow's bounded union, declared at publication, naming an artifact kind, its required fields and its verdict vocabulary. Each verdict maps to an outcome (an approve-with-follow-ups verdict is a `success`, a request-changes verdict a `failure`), and the move is that outcome's resolved transition, never a literal tracker status; `ADR-2026-09-28` D4's `advance`, `reject` and `none` are superseded. An outcome outside the admitted contract routes to the workflow's outcome-unknown path.
 
 The orchestrator's session-end backstop (`packages/core/src/orchestrator/session-backstop.ts`) auto-recovers missing outputs:
 
