@@ -247,8 +247,16 @@ pull request, is card data (D4), never a role or a stage name.
    |---|---|
    | Claude Code | a per-session plugin directory outside the worktree, passed by `--plugin-dir` |
    | Pi | `--skill <dir>` from the run's state root |
-   | Codex | `$CODEX_HOME/skills` or `.agents/skills/donmai-*`, decided by an implementation spike; prompt fallback until then |
+   | Codex | `$CODEX_HOME/skills/donmai-<id>/` in the session's private Codex home (shipped; see below) |
    | Muse | `.agents/skills/donmai-*` with `--trust-workspace` (accepted, including that it loads the repository's own rules and hooks; see Risks) |
+
+   Codex skills are written before the app-server starts, with a sha256 readback,
+   and confirmed by the app-server's `skills/list` (`forceReload`) before the thread
+   starts; any skill not confirmed falls back to the prompt. Codex discovers them
+   without a trust flag, including in an untrusted project. The headless working
+   directory is recorded as `untrusted`, so a repository's project config cannot
+   reach the thread. Codex loads repository skills regardless of trust, so the
+   repository-skill policy for Codex is `all`, and the receipt records it (D8.4).
 
 6. **Fallback.** Where no native delivery exists, the runner falls back to today's
    prompt append, which gains a size cap.
@@ -430,8 +438,9 @@ These were open in the first draft and are now decisions:
    completion, with no transitions (D9.3).
 2. Batch work carries `batchKind`, not `workType` (D9.4).
 3. Kit-detected skills are repository skills under the `repoSkills` policy (D8.3).
-4. The Codex skill location is decided by an implementation spike, with prompt
-   fallback until then (D8.5).
+4. The Codex skill location was left to an implementation spike. The spike is done
+   and the runner ships `$CODEX_HOME/skills/donmai-<id>/` in the session's private
+   Codex home, with prompt fallback for any skill not confirmed (D8.5).
 5. The repository-skill policy is best-effort per harness, and the receipt records
    the policy achieved (D8.4).
 6. Muse `--trust-workspace` is accepted, including loading the repository's own rules
