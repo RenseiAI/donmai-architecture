@@ -1132,6 +1132,15 @@ This section records what the daemon will do and what an operator will see.
     `retention.dehydrated` and `retention.expired`.
   - None of these carry a scope value, a registry URL or a credential. The
     keeper adds no HTTP route.
+- **Embedded baseline (added 2026-11-11 by
+  [`ADR-2026-11-11-session-independent-dependency-preparation.md`](ADR-2026-11-11-session-independent-dependency-preparation.md),
+  Accepted; implementation pending).** The daemon binary carries the official
+  kits' signed dependency entries for pnpm and Go, verified against the
+  embedded trust root. They apply only to a leaf for which no installed,
+  enabled kit declares that manager, so an installed kit always wins. An
+  operator setting disables the baseline. It lets the runner drop its
+  hard-coded install commands without a regression on a host that has no
+  official kit installed.
 - **Out of scope.** Build caches (`GOCACHE`, cargo's `target/`, `.next/cache`)
   stay per session.
 
