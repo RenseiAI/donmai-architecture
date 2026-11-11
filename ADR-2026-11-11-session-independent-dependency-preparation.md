@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-11-11
 boundary: shared
 split: sibling-extensions
@@ -7,11 +7,13 @@ split: sibling-extensions
 
 # ADR-2026-11-11 — Session-independent dependency preparation
 
-**Status:** Proposed 2026-11-11. Architecture only: nothing here is built.
+**Status:** Accepted 2026-11-11 (founder acceptance as drafted, after the
+founder's rulings on its six open decisions the same day; the rulings are under
+"Rulings (founder, 2026-11-11)"). Architecture only: nothing here is built.
 It **extends**
 [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md)
-(Accepted) and reopens none of its rulings. On acceptance, the accepting commit
-adds a forward note to that ADR and makes the edits under "Affected documents".
+(Accepted) and reopens none of its rulings. The accepting commit adds a forward
+note to that ADR and makes the edits under "Affected documents".
 **Date:** 2026-11-11
 **Boundary:** shared. The entry point, its error taxonomy, the subject-shaped
 scope callback, the fallback order, the time bounds, the confinement and
@@ -454,16 +456,12 @@ The entry gains three things:
 Composition carries each entry's **verified package root**. A package path in
 an entry (`relocate`) resolves only against that root, never against the leaf.
 
-**The revision.** No published kit declares `donmai.dev/v2` yet. Released
-parsers apply strict keys to v2, so a v2 manifest carrying these keys is
-rejected by them, never half-applied. Two options:
-
-- **A (proposed).** Amend `donmai.dev/v2` in place before its first
-  publication, and record the amendment in `005`'s revision table.
-- **B.** Add these keys as `donmai.dev/v4`, after the reserved `v3`.
-
-The founder decides. Either way, a consumer that does not understand the keys
-rejects the manifest.
+**The revision (founder ruling, 2026-11-11).** No published kit declares
+`donmai.dev/v2` yet. Released parsers apply strict keys to v2, so a v2 manifest
+carrying these keys is rejected by them, never half-applied. The keys amend
+`donmai.dev/v2` in place, before its first publication, and the amendment is
+recorded in `005`'s revision table. No `donmai.dev/v4` is added. A consumer
+that does not understand the keys rejects the manifest.
 
 ### D7 — Where entries come from; hooks; the official kits
 
@@ -500,8 +498,8 @@ rejects the manifest.
      revision. Daemons that predate the revision reject it, so the catalog
      keeps the previous v1 versions installable for them.
    - npm, bun, yarn, cargo, uv and pip follow ADR-2026-10-08 Phase 3.
-5. **A baseline for hosts with no kits installed (proposed; the founder
-   decides).**
+5. **A baseline for hosts with no kits installed (founder ruling,
+   2026-11-11).**
    - **What ships.** The daemon binary carries the official kits' signed
      dependency entries for the managers it hard-codes today, pnpm and Go,
      verified against the embedded trust root.
@@ -527,9 +525,8 @@ rejects the manifest.
 ### D9 — Migration of the runner
 
 - **The runner becomes a caller.** It calls `Prepare` with `SubjectSession`,
-  and its two hard-coded commands are deleted once one of these holds:
-  - the baseline of D7.5 is accepted and shipped;
-  - every supported host is known to have the official kits installed.
+  and its two hard-coded commands are deleted once the baseline of D7.5
+  ships.
 - **The golden file.** With no keeper and the baseline entries, the commands
   and environment the runner runs must match today's install. This is
   ADR-2026-10-08's "Opt-out" test.
@@ -553,6 +550,27 @@ This is the shipping state until ADR-2026-10-08's keeper slices land behind
 `Config.Keeper`. The keeper never changes `Prepare`'s signature, codes or
 fallback order.
 
+## Rulings (founder, 2026-11-11)
+
+The draft put six decisions to the founder. The founder accepted all six as
+recommended on 2026-11-11, then accepted the ADR as drafted.
+
+1. **Extending ADR and location.** This is a new ADR that extends
+   ADR-2026-10-08, with the entry point in `runtime/depprep` (D1).
+2. **Manifest revision.** The new keys amend `donmai.dev/v2`. There is no
+   `donmai.dev/v4` (D6).
+3. **Embedded baseline.** The daemon ships an embedded baseline of the
+   official pnpm and Go entries, applied only where no installed, enabled kit
+   declares the manager (D7.5).
+4. **Package code never runs unconfined.** This holds for sessions too
+   (D4 rule 4).
+5. **Shared scope.** Invocations and sessions share a scope's stores when
+   their scope strings match (D2 rule 2).
+6. **The earlier daemon wiring.** The closed, unmerged daemon wiring branch
+   is superseded, not rebased. Private-registry credentials for invocations
+   are deferred until after the minimum slice that unblocks a non-agent
+   executor (Context 4, D2 rule 6).
+
 ## Consequences
 
 ### Positive
@@ -573,7 +591,8 @@ fallback order.
 ### Negative
 
 - **More moving parts.** A new exported package with a compatibility promise,
-  a manifest revision decision, and two entries per pnpm major.
+  an amended manifest revision, an embedded baseline, and two entries per
+  pnpm major.
 - **Some repositories stop working unconfined.** Those that need lifecycle
   scripts fail at command time on hosts without a confinement backend, until
   that backend runs the install.
@@ -605,6 +624,9 @@ fallback order.
 - **Put the entry point in the `daemon` package.** Rejected. Preparation
   needs the kit engine, not a daemon, and a library caller should not
   construct one.
+- **Add the keys as `donmai.dev/v4`.** Rejected by the founder's ruling. No
+  kit has published `v2`, so amending it costs no compatibility, and a fourth
+  revision number would follow the reserved `v3` for no benefit.
 - **Mount the operator's store read-write for invocations.** Rejected, as in
   ADR-2026-10-08 D12.
 - **One online command with credentials and scripts together** (the existing
@@ -624,9 +646,9 @@ Edited in the accepting commit:
 - `005-kit-manifest-spec.md` § "Dependency stores":
   - `versions`, `no_code` and `credentials`;
   - lockfile-based eligibility;
-  - the revision row under option A or B;
+  - the amendment to the `donmai.dev/v2` revision row;
   - hook path resolution until `v3`.
-- `011-local-daemon-fleet.md`: the baseline setting, if D7.5 is accepted.
+- `011-local-daemon-fleet.md`: the baseline setting (D7.5).
 - The companion private corpus gets a mirrored stub. It carries invocation
   scope derivation, registry credential release to an invocation, and the
   first non-agent executor's use of the entry point.

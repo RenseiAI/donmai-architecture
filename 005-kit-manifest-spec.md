@@ -1,6 +1,6 @@
 # 005 — Kit Manifest Spec
 
-**Status:** Reference. `[provides]` / `[depends_on]` cross-family-consumption blocks **Accepted (2026-05-06)** in lockstep with `002` v2. Package integrity and deterministic command/catalog composition **Accepted (2026-07-10)** by `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`. Kit-declared dependency stores **Accepted (2026-10-08)** by `ADR-2026-10-08-kit-dependency-stores.md` (implementation pending).
+**Status:** Reference. `[provides]` / `[depends_on]` cross-family-consumption blocks **Accepted (2026-05-06)** in lockstep with `002` v2. Package integrity and deterministic command/catalog composition **Accepted (2026-07-10)** by `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`. Kit-declared dependency stores **Accepted (2026-10-08)** by `ADR-2026-10-08-kit-dependency-stores.md` (implementation pending). Their `versions`, `no_code` and `credentials` keys, lockfile-based eligibility and kit hook path resolution **Accepted (2026-11-11)** by `ADR-2026-11-11-session-independent-dependency-preparation.md` (implementation pending).
 **Last updated:** 2026-10-08
 **Related:** `001-layered-execution-model.md`, `002-provider-base-contract.md`, `003-workarea-provider.md`, `006-cross-provider-interactions.md`, `ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`
 
@@ -278,7 +278,7 @@ number belongs to the kit manifest alone: other documents that carry a
 | `api` | State | Adds |
 |---|---|---|
 | `donmai.dev/v1` | Current. `rensei.dev/v1` is its legacy spelling. | The contribution set in this document, apart from the rows below. |
-| `donmai.dev/v2` | The dependency-stores revision. | `[[provide.dependency_store]]`, per [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md). A v1 manifest that declares the section is rejected. |
+| `donmai.dev/v2` | The dependency-stores revision. Amended 2026-11-11, before its first publication, by [`ADR-2026-11-11-session-independent-dependency-preparation.md`](ADR-2026-11-11-session-independent-dependency-preparation.md). | `[[provide.dependency_store]]`, per [`ADR-2026-10-08-kit-dependency-stores.md`](ADR-2026-10-08-kit-dependency-stores.md), and the entry keys `versions`, `[provide.dependency_store.no_code]` and `[provide.dependency_store.credentials]`. A v1 manifest that declares the section or the keys is rejected, and a consumer that predates the amendment rejects a manifest carrying them. |
 | `donmai.dev/v3` | Reserved for the package and composition ADR. Not yet implemented. | The revision [`ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md`](ADR-2026-07-10-deterministic-kit-packages-and-command-composition.md) requires: path-bearing fields typed as package paths, structured command identity, alias claims, replacement requests, and target-owner delegations. |
 
 Both ADRs were accepted before any revision had a number. The dependency-stores
@@ -348,6 +348,34 @@ runs_package_code = true
   - `store.never_share` paths (outputs of package code) never enter a shared
     store.
 - **OS-keyed commands.** Commands may be OS-keyed, like other commands.
+
+> **Added 2026-11-11 by [`ADR-2026-11-11-session-independent-dependency-preparation.md`](ADR-2026-11-11-session-independent-dependency-preparation.md)**
+> (Accepted architecture; implementation pending). It amends the
+> `donmai.dev/v2` revision.
+
+- **`versions`.** An optional semver range string. It scopes the entry to the
+  manager versions it covers, so one kit can declare a manager twice (for
+  example pnpm `>=9 <10` and `>=10 <11`) with non-overlapping ranges. The
+  leaf's pin (for Node, `packageManager`, then the entry's `version` command)
+  selects the covering entry, or the miss reason is `toolchain_mismatch`.
+  Composition across kits rejects overlapping ranges unless the lock selects
+  one.
+- **`[provide.dependency_store.no_code] env`.** The settings that make every
+  phase run no package code and no repository-supplied manager hooks. An entry
+  that declares none cannot be used where no confiner is available.
+- **`[provide.dependency_store.credentials] config_env`.** The variable that
+  names the per-run credential file, delivered to the fetch phase only.
+- **Lockfile-based eligibility.** The host composes the entries of every
+  enabled kit whose `lockfiles` the leaf holds, whether or not the kit's
+  `detect` rules matched.
+- **Hook paths.** Dependency preparation never runs `hooks.post_acquire`, and a
+  kit that declares a manager's entry must not install that manager's
+  dependencies in a hook. Until `donmai.dev/v3` types package paths, a hook
+  string that is a relative path resolves against the kit's verified package
+  root, or is refused, and never against the leaf. Inline shell text keeps
+  running with the leaf as its working directory. Composition carries each
+  entry's verified package root, and a package path in an entry (`relocate`)
+  resolves only against it.
 
 The full field table and the per-manager matrix are in the ADR. The matrix
 covers pnpm, bun, npm, yarn berry and classic, Go modules, cargo, uv and pip.

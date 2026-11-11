@@ -474,6 +474,26 @@ every session root, and it is not the workarea cache.
 - **Observability.** `dependency_path` (below), typed miss reasons, and an
   estimated time saved.
 
+> **Added 2026-11-11 by
+> [`ADR-2026-11-11-session-independent-dependency-preparation.md`](ADR-2026-11-11-session-independent-dependency-preparation.md)**
+> (Accepted architecture; implementation pending).
+
+- **Entry point and subject.** Dependency preparation is one exported entry
+  point, `runtime/depprep`, that takes a **subject**: a session, or a non-agent
+  invocation that checks out a repository and runs a declared command. The
+  runner is one caller and an executor with no agent session is another. Both
+  get the same fallback order, the same confinement and environment rules and
+  one typed result, and the scope callback takes the subject. A session and an
+  invocation whose scopes resolve to the same string share that scope's stores
+  and snapshots.
+- **Before the keeper exists,** every subject gets `session-only` exposure: a
+  two-phase frozen install (a fetch with credentials and no package code, then
+  an offline install with no credentials) into a per-run cache that is
+  discarded with the scratch directory. A leaf no kit entry selects gets
+  `not_applicable`, and nothing runs.
+- **Package code never runs unconfined,** for sessions too. Without a
+  confiner, every phase runs with the entry's no-code settings.
+
 ### Observability
 
 Every acquire/release emits a structured event consumed by Layer 6. Minimum fields:
@@ -492,7 +512,7 @@ acquire_duration_ms
 dependency_path: 'snapshot' | 'store' | 'online' | 'session-only' | 'skipped'
 ```
 
-The `acquire_path` field is the operational hook for "are we missing cache warmth?" alerts. Its value literals keep the `pool-` prefix — see the note above on unchanged type literals. `dependency_path` (`ADR-2026-10-08-kit-dependency-stores.md`; implementation pending) reports how the install step obtained the session's dependencies.
+The `acquire_path` field is the operational hook for "are we missing cache warmth?" alerts. Its value literals keep the `pool-` prefix — see the note above on unchanged type literals. `dependency_path` (`ADR-2026-10-08-kit-dependency-stores.md`; implementation pending) reports how the install step obtained the session's dependencies. `ADR-2026-11-11-session-independent-dependency-preparation.md` (implementation pending) adds `subject_kind` (`session` or `invocation`) to the install events.
 
 ## Snapshot-aware implementations
 

@@ -42,6 +42,21 @@ about dependency installs on shared seat hosts.
 > are corrected below. Nothing else in this ADR changes. The revision table is
 > in `005-kit-manifest-spec.md` § "Manifest `api` revisions".
 
+> **Note 2026-11-11:** [`ADR-2026-11-11-session-independent-dependency-preparation.md`](ADR-2026-11-11-session-independent-dependency-preparation.md)
+> is Accepted and extends this ADR without reopening any ruling. In
+> brief:
+>
+> - D3's scope callback takes a **subject** (a session or a non-agent
+>   invocation), not only a session.
+> - D6's install step is realized by the `runtime/depprep` entry point, and its
+>   online step is two phases: a fetch with credentials and no package code,
+>   then an offline install with no credentials.
+> - D10's `DependencyMissReason` enum gains `requires_repository_code`,
+>   `confinement_unavailable` and `toolchain_mismatch`, and the install events
+>   gain `subject_kind`.
+> - The new manifest keys (`versions`, `no_code`, `credentials`) amend the
+>   `donmai.dev/v2` revision named above, before its first publication.
+
 ## Context
 
 ### The question
