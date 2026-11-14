@@ -104,8 +104,9 @@ bound.** D1 to D6 state the rules.
    exactly one project of the resolved set and resolves that project's own
    configuration. There is still no project-less execution.
 3. **Home project.** A control plane may name a home project for an assignment,
-   where sessions started through it begin by default. The home must be a member
-   project; when it leaves the scope, it stops being the home.
+   where sessions started through it begin by default. The home must be a project
+   of the resolved set, through the scope or through a per-project grant; when it
+   leaves the set, it stops being the home.
 
 ### D5 — Access level
 
