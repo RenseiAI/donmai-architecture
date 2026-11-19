@@ -188,7 +188,7 @@ Part F's details are filled in by its own delivery within these bounds.
 3. **Discovered after onboarding.** An item that first appears for a host
    record after its onboarding starts **disabled**. This applies whether a
    periodic scan or a rescan finds it.
-   - **Auto-enable setting (Proposed, pending product-owner confirmation).**
+   - **Auto-enable setting (decided by the product owner, 2026-11-19).**
      A tenant may set "newly discovered items of this kind: leave disabled
      (default) / enable automatically". Only kinds whose `enabled` field has
      no selection effect allow it.
