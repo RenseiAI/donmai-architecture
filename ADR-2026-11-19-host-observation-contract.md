@@ -188,6 +188,18 @@ Part F's details are filled in by its own delivery within these bounds.
 3. **Discovered after onboarding.** An item that first appears for a host
    record after its onboarding starts **disabled**. This applies whether a
    periodic scan or a rescan finds it.
+   - **Auto-enable setting (Proposed, pending product-owner confirmation).**
+     A tenant may set "newly discovered items of this kind: leave disabled
+     (default) / enable automatically". Only kinds whose `enabled` field has
+     no selection effect allow it.
+   - **When the setting is on:** the onboarding checklist starts fully
+     checked, later discoveries arrive enabled, and each auto-enabled item
+     raises a notification naming the host and the item.
+   - **Policy is untouched.** An auto-enabled item takes the default policy
+     unchanged. For subscription logins (S4) that means every billing
+     permission stays off, so only prepaid allowance can be consumed.
+   - **Scope.** The forge kinds (Part F) never allow it: a commit identity or
+     forge login is never selected automatically.
 4. **Rescan** is a daemon control operation:
    - `POST /api/daemon/observations/scan`, with an optional `kinds` filter, on
      the local control API;
@@ -454,9 +466,11 @@ discovered later.
      percent-unit allowance per `limitId`.
 2. Window ids, kinds, the five-minute poller, the claim-time exhaustion check and
    the `host-session:<harness>` tag keep their meaning.
-3. Logins already in use when the migration runs are recorded as **enabled** on
-   their existing host records, so nothing stops working. G4.3 applies only to
-   logins discovered afterwards.
+3. **Rollout.** Every login already present when the contract rolls out is
+   recorded as **enabled** on its existing host record, and that host record
+   counts as onboarded, so nothing stops working. The disabled-by-default rule
+   of G4.3 starts to apply only after rollout.
+4. No pool-level policy scope exists. The defaults chain is exactly G5.3.
 
 ---
 
