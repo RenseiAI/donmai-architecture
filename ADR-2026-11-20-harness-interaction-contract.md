@@ -1,15 +1,17 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-11-20
 boundary: shared
 split: inline-addenda
-amends: 002-provider-base-contract.md, 014-tui-operator-surfaces.md
+amends: 001-layered-execution-model.md, 002-provider-base-contract.md, 014-tui-operator-surfaces.md
 ---
 
 # ADR-2026-11-20 — Harness interaction contract: one set of interactions, instructions and output for every harness
 
-**Status:** Proposed. Nothing in this record is accepted. Rendering fixes that need no
-contract change are shipping now as small pull requests (§ Implementation notes, phase 0).
+**Status:** Accepted (2026-11-20, product-owner acceptance). The affected-document
+edits to `001`, `002` and `014` landed in the accepting commit. Implementation follows
+the phases in § Implementation notes. Phase 0 (rendering fixes needing no contract
+change) is in review; phases 1–5 are pending.
 **Date:** 2026-11-20
 **Boundary:** shared. This record is OSS-canonical for the execution-layer contract:
 - the interaction verbs;
@@ -277,7 +279,9 @@ platform corpus.
 
 ## Affected documents
 
-On acceptance, in the accepting commit:
+Landed in the accepting commit:
+- `001-layered-execution-model.md` § "The ten plugin families" (harness tiers): the one-interaction-contract
+  rule.
 - `002-provider-base-contract.md` § "Agent Runtime providers": D1 verbs and capability
   flags, D2 instructions and translation report, D3 and D4 event kinds, D7 conformance.
 - `014-tui-operator-surfaces.md`: the D5 rendering rules for operator surfaces.
