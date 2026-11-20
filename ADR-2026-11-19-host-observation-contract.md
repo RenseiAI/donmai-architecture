@@ -266,6 +266,22 @@ of the pushed policy and its local policy, in the narrow-only shape of
 `ADR-2026-06-06-two-axis-provider-model.md` D5. A refusal nacks with its typed
 reason, and the work is re-placed under the single fallback rule.
 
+A push replaces the registration's whole policy. The daemon persists the last
+applied push per registration, so a restart never runs ungated:
+
+- **Ever governed.** A registration that has ever received a push is enforced
+  from its last-known policy at boot, until a fresh push replaces it.
+- **Never governed.** A registration that has never received a push passes
+  claims through. This keeps rollout and standalone hosts working.
+- **Corrupt or unreadable file.** A persisted file that cannot be read fails
+  closed for that registration: every item of the kind is disabled.
+
+The control plane re-pushes the effective policy when a daemon registers or
+reconnects, but only for a host record it already governs. An empty push to a
+never-governed registration would disable every item. A typed claim refusal
+tells the control plane its view has drifted. On `disabled` it re-pushes the
+policy. On a usage reason it requests a rescan of that kind.
+
 ### G7 — Tenants sharing a physical host
 
 1. **Policy is per tenant, and so are its effects.** One tenant's policy never
