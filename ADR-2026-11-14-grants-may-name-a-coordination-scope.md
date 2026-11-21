@@ -53,7 +53,7 @@ bound.** D1 to D6 state the rules.
 ### D1 — A grant may name a coordination scope
 
 1. **Coordination scope.** A coordination scope is a named set of member projects
-   that a control plane defines and humans maintain, for example a program or an
+   that a control plane defines and authorized principals maintain, for example a program or an
    initiative. Its membership is an explicit list of projects or a declared rule.
 2. **Assignment is a grant.** Assigning a principal to a coordination scope is a
    grant. A human who may administer agent principals makes it explicitly. It is
@@ -86,10 +86,17 @@ bound.** D1 to D6 state the rules.
    allowed only as the declared membership of a coordination scope that a human
    assigned the principal to. It is never the meaning of "unset", "empty" or
    "unresolvable".
-3. **Reach changes only by a human's act.** Reach never follows the sponsor and
-   never grows by use. It changes only when a human changes a grant, an assignment,
-   or a scope's membership, including the declared rule. For a rule, the human's
-   act is declaring it: its answer then moves with the facts it reads.
+3. **Reach changes only by an explicit, audited grant act.** Reach never follows
+   the sponsor and never grows by use. It changes only when a principal this record
+   or the control plane's policy authorizes to make that grant, human or agent,
+   changes a grant, an assignment, or a scope's membership, including the declared
+   rule. Each change is explicit and recorded, never implicit or ambient. For a
+   rule, the act is declaring it: its answer then moves with the facts it reads.
+   Rationale: velocity first. A control plane whose workloads are driven by agents
+   gains only friction from human-only edits, so this record does not require a
+   human for them. A control plane may narrow who is authorized as its maturity
+   grows. Assigning a principal to a scope stays a grant that D1 rule 2 reserves
+   to a human who may administer agent principals.
 4. **No self-widening.** A principal may not change the membership of a scope it is
    assigned to, or assign itself. Its own writes cannot add a project either: work
    created in a project is a write there, and a write needs that project to be in
@@ -142,8 +149,8 @@ bound.** D1 to D6 state the rules.
   may enforce from it.
 - Removal takes effect on the next call. An execution already running in a removed
   project finishes; its next admission or wake into that project is refused.
-- A human who edits a scope's membership changes the reach of every principal
-  assigned to it, often without looking at those principals.
+- Whoever edits a scope's membership, human or agent, changes the reach of every
+  principal assigned to it, often without looking at those principals.
 
 ### Risks
 
