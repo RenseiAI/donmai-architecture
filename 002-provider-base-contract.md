@@ -523,6 +523,15 @@ Capability declarations are stable for the lifetime of the Provider instance. Im
 
 **Parent tool-use id on normalized events.** A normalized event carries the id of the delegation tool call it belongs to, when the adapter knows it, so a sub-agent's own tool calls can be tied to the call that started it. An adapter that cannot know it leaves the field empty and says so in its manifest. The field is never guessed.
 
+### Subscription provider catalog (Accepted 2026-11-21)
+
+Per [`ADR-2026-11-19-host-observation-contract.md`](ADR-2026-11-19-host-observation-contract.md) Part S, the capability matrix is generated with a `subscriptionProviders` section beside its harness and endpoint sections. The ADR is normative; this is the summary for implementers.
+
+- **One entry per subscription provider.** It holds an id and a kind (`direct`, or `gateway` for model-provider-agnostic gateways), plus the login kinds it issues.
+- **Per plan:** the plan slug as reported, a display name, the allowance shape, a `lowCap` flag, policy defaults, the (model provider, model id) pairs the plan reaches, the harnesses that may sign in with the login, and the ordered billing modes (`allowance` → `credits` → `overage` → `api-metered`).
+- **Describes, never grants.** A login whose plan has no row is still observed and usable as `uncatalogued`, with the kind's built-in defaults. Harness compatibility is a ceiling, checked with the two-axis validity rule (`ADR-2026-06-06` D2). A deployment may add rows, set definition defaults and narrow compatibility. It may never widen compatibility.
+- **The subscription axis is orthogonal to the model-endpoint axis.** A subscription provider issues and bills the login; the model provider is the MODEL-ENDPOINT company whose model answers. One subscription provider may serve many model providers.
+
 ### Reference implementations
 
 Each implementation is a peer-package under `donmai/provider/`:

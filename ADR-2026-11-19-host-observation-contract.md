@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-11-19
 boundary: shared
 split: sibling-extensions
@@ -7,7 +7,7 @@ split: sibling-extensions
 
 # ADR-2026-11-19 — Host observation: one contract for what a host reports, with subscription accounts and forge identities as its first kinds
 
-**Status:** Proposed. Revised 2026-11-19 with the product owner's rulings.
+**Status:** Accepted 2026-11-21 by the product owner. Revised 2026-11-19 with the product owner's rulings.
 **Date:** 2026-11-19
 **Boundary:** shared. This file is the canonical ADR. `rensei-architecture` carries a `status: Mirrored` stub and a platform-only companion ADR.
 **Authors:** agent:claude (Opus 5.5), for the product owner

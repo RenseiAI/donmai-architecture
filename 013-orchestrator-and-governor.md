@@ -230,6 +230,15 @@ incarnation, which carries its own incarnation identity and provenance under
 the same session, from a continued one, which is the same incarnation; a
 resumed incarnation is never presented as the old one silently continuing.
 
+### Claim-time observation viability (Accepted 2026-11-21)
+
+Per [`ADR-2026-11-19-host-observation-contract.md`](ADR-2026-11-19-host-observation-contract.md) G6 and Part S, an observed kind's effects are evaluated when work is admitted and again when a host claims it, with byte-identical predicates. They are never evaluated after a session starts.
+
+- **Viability and selection at claim.** The daemon applies the more restrictive of the control plane's pushed policy and its own local policy, in the narrow-only shape of `ADR-2026-06-06` D5. A `subscription-login` is viable when it is enabled on the tenant's host record, ready, under the tenant's own guard against the account's shared observed usage, and not past a billing boundary the tenant's policy disallows.
+- **Selection order.** Among enabled, viable logins, prepaid allowance is preferred before a keyed mode, and among logins the one with the most headroom above the tenant's guard (S8.1).
+- **The nack.** A claim refused under an observed-kind effect nacks with code `observation_unavailable`, the kind, a closed reason (`disabled`, `guard_reached`, `exhausted`, `billing_boundary`) and, for a usage reason, the instant it may recover (`until`). The work is re-placed under the single fallback rule.
+- **Drift repair.** On `disabled` the control plane re-pushes the host record's policy. On a usage reason it requests a rescan of that kind.
+
 ## AgentRuntime dispatch
 
 The orchestrator admits a versioned `DispatchIntent` and selects one
