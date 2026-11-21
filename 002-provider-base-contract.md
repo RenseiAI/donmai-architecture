@@ -448,7 +448,46 @@ Lifecycle expectations (per `agent/provider.go` doc comment):
 - `Resume` continues a previously interrupted session. Capability-gated by `SupportsSessionResume`; providers that do not support resume return `ErrUnsupported`.
 - `Shutdown` releases provider-level resources (long-lived child processes such as the codex app-server). Per-session-process providers (Claude CLI) may no-op.
 
-The 8-variant `agent.Event` discriminated union (`init` / `system` / `assistant_text` / `tool_use` / `tool_result` / `tool_progress` / `result` / `error`) is the normalized shape every provider emits regardless of its native protocol.
+The `agent.Event` discriminated union is the normalized shape every provider emits regardless of its native protocol. Its v1 kinds are `init` / `system` / `assistant_text` / `llm_call` / `tool_use` / `tool_result` / `tool_progress` / `usage` / `context_usage` / `subagent` / `result` / `error`. Event model v2 (below) extends the union additively.
+
+### Harness interaction contract (Accepted 2026-11-20)
+
+Per [`ADR-2026-11-20-harness-interaction-contract.md`](ADR-2026-11-20-harness-interaction-contract.md), every harness adapter implements the contract below. The ADR is normative; this section is its summary for implementers.
+
+- **Interaction verbs (D1).** These are the verbs and the capability that gates each:
+
+  | Verb | Mapping | Gating capability |
+  |---|---|---|
+  | `start` | `Spawn` | always present |
+  | `resume` | `Resume` | `SupportsSessionResume` |
+  | `steer` | `Handle.Inject` | `SupportsMessageInjection` |
+  | `interrupt` | ends the turn and keeps the session | `SupportsInterrupt` |
+  | `respond` | answers an `interactive_request` | `SupportsInteractiveRequests` |
+  | `stop` / `shutdown` | stops the session or provider | always present |
+
+  A verb the harness lacks returns `ErrUnsupported`. It never falls back to another verb.
+- **Normalized instructions (D2).** `Spec.Instructions` carries:
+  - `planMode` (`off` · `plan-first` · `plan-only`);
+  - `approvals` (`never` · `on-request` · `on-risk`);
+  - `toolPolicy` (allow and deny lists by tool family and exact name; deny wins);
+  - `outputSchema`.
+
+  These sit next to the existing effort, model and sandbox knobs. The translator returns a deterministic translation report: one `applied` / `approximated` / `unsupported` line per instruction, computed without starting the harness. A required instruction reported `unsupported` refuses before spawn.
+- **Effective settings (D3).** After start the adapter emits one `effective_settings` event. Each instruction and knob has a line with `requested`, `applied` and `evidence` (`native-echo` or `translator`), and any `mismatch`. A later change emits a delta. Consumers show the latest. A mismatch is a notice.
+- **Event model v2 (D4).** The union stays closed and the extension is additive:
+  - `itemId` on every item event. For tools it is the tool-use id, and `tool_progress` carries it too. An adapter that cannot know the id leaves it empty.
+  - An item status lifecycle: `started → running → completed | failed | interrupted`.
+  - New kinds `reasoning`, `plan` (replace-whole by `itemId`), `file_change` (per-file path, change, move path, additions, deletions, unified diff), `interactive_request`, `turn` (`started` / `completed` with `turnId`), `notice` (`info` · `warning` · `blocked`) and `effective_settings`.
+  - `assistant_text.phase` (`commentary` · `final`).
+  - `raw` stays on every event. No renderer reads it.
+
+  Routine harness metadata with no reader-facing signal maps to no event. Consumers render an unknown future kind as a notice.
+- **Conformance (D7).** `agent/conformance` runs a per-adapter suite:
+  - input translation validated against the harness's vendored protocol schema (version and provenance recorded);
+  - recorded transcripts mapped to an expected v2 sequence;
+  - a golden translation report.
+
+  A vendored-schema update that removes or renames a translated field fails the suite.
 
 ### Capability matrix
 

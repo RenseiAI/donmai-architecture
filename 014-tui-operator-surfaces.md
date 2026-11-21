@@ -184,6 +184,17 @@ Same shape for activity types. Closes the drift described in the `tui-components
 
 A surface that shows a stage's effective configuration (cards and default, model selection, skills, outcome targets) shows the scope each value came from, because the effective table is computed across scopes and a value without its source is hidden logic (`ADR-2026-11-02` D11.4).
 
+### Harness output renders through one presentation model
+
+Per [`ADR-2026-11-20-harness-interaction-contract.md`](ADR-2026-11-20-harness-interaction-contract.md) D5, every surface that renders harness output follows the same rules: the TUI host watch, session views, inboxes and any web client. It labels tools only through the shared presentation model (`agent/present` in Go, or a second-language implementation that passes the same `testdata/vectors.json`). That model supplies a tool family, a human title (`server › tool` for MCP) and a one-line detail (the command without its shell wrapper, or the path, pattern, URL or description). It also decodes content-part output into text.
+
+1. A call and its result are one row, paired by item id only, never by name or adjacency.
+2. Progress never creates a row. It advances the item's activity indicator, one spinner frame per fresh tick. The indicator freezes when ticks stop, never animates on replay, and names the running tool. Plain output stays stable across ticks.
+3. Two or more adjacent tool rows fold into one expandable group with a plain-language summary, for example `4 tool events · Bash ×3, Read`. A failure, an interactive request or a notice breaks the run and stands alone.
+4. Reasoning renders de-emphasised and distinct from the final message.
+5. Raw JSON appears only on explicit expand.
+6. Diffs render with `+`/`−` tint and `+A −D` counts.
+
 ### Host conditions are registry entries, not log lines
 
 Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D7, anything that makes a host unable to serve — a failed scope registration, an unresolvable allowlist entry, a dead credential socket, an abandoned attach leg — registers as a condition and rides the host-status signal outward, so it renders in every client rather than being observable only in a local log file. The registry is what makes that affordable: a new condition is one `RegisterStatus` call, not a switch-statement edit in three surfaces.
