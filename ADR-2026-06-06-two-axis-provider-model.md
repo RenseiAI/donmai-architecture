@@ -266,3 +266,7 @@ gate must refuse a manifest that hand-declares a capability bit, and refuse a
 capability bit whose realization has no passing fixture. Registering, changing,
 or removing a realization is an **adapter-version** move; the family ABI and the
 binary pin do not move.
+
+## Addendum 2026-11-21 — the subscription axis is orthogonal to the model-endpoint axis
+
+`ADR-2026-11-19-host-observation-contract.md` (Accepted 2026-11-21) adds a subscription provider: the company or gateway that issues and bills a login. It is not a third matrix axis. A subscription provider may serve many model providers (the MODEL-ENDPOINT companies of D1), and a login's harness compatibility is a ceiling checked with D2's validity rule. The catalog is generated with the capability matrix (D3) as a `subscriptionProviders` section, and a deployment may narrow it but never widen it.

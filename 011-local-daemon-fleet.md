@@ -768,6 +768,16 @@ Key NDJSON fields the daemon emits (consumed by Layer 6 observability per `006`)
 { "time": "...", "level": "info", "event": "auto-update-applied","from_version": "0.8.59", "to_version": "0.8.60", "drain_duration_s": 47 }
 ```
 
+## Host observations (Accepted 2026-11-21; implementation pending)
+
+Per [`ADR-2026-11-19-host-observation-contract.md`](ADR-2026-11-19-host-observation-contract.md) Part G, the daemon reports observed host state with its heartbeat and enforces the tenant's pushed policy at claim. The ADR is normative; this section is the operational summary.
+
+- **The observation report.** The heartbeat carries an `observations` report: the items of each registered kind, each encoded through its kind's closed schema, with `scannedAt` and whether the report is a full scan of the kinds it lists. Secrets, credential paths and raw account ids are never encoded (G2). A full scan of a kind marks that kind's unreported items gone.
+- **When the daemon scans.** It runs a full scan at daemon start, when the host joins a tenant's pool, and on a rescan. One scan is in flight per host, at most one a minute, with a timeout per kind; a kind that times out reports `readiness: unknown` and does not vanish (G4.5).
+- **`donmai host observations [--kind <k>] [--rescan]`.** Lists the host's observed items with their readiness. `--rescan` runs a scan and marks newly discovered items.
+- **The scan operation.** The control API serves `POST /api/daemon/observations/scan`, with an optional `kinds` filter. A control plane requests the same scan over the host-mutation channel as operation `observations.scan`. The daemon acknowledges that mutation as applied only in the heartbeat that carries that scan's full report. It never acknowledges it on receipt, and never on the strength of a scan that was already running or completed earlier. A control plane may therefore treat an acknowledged scan, plus a report ingested at or after the acknowledgement, as the answer to its request. A scan that cannot run is reported as a mutation failure.
+- **The host-mutation policy operation.** A control plane pushes the claiming tenant's effective policy for a registration as operation `observations.policy`. A push replaces the registration's whole policy. The daemon persists the last applied push per registration, so a restart never runs ungated: an ever-governed registration is enforced from its last-known policy at boot, a never-governed registration passes claims through, and an unreadable persisted file fails closed for that registration (G6).
+
 ## HTTP Control API
 
 The daemon binds to `127.0.0.1:7734` (configurable) and exposes a JSON HTTP
