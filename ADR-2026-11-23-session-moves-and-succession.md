@@ -7,7 +7,7 @@ split: sibling-extensions
 
 # ADR-2026-11-23 — Session moves: a session ends with a successor on another host, harness or account
 
-**Status:** Proposed (2026-11-23). Revised the same day with the product owner's rulings: a successor session, every session class in the first phase, and no default timeout on an ask. Nothing here is built, and no reference document changes until acceptance.
+**Status:** Proposed (2026-11-23). Revised the same day with the product owner's rulings: a successor session, every session class in the first phase, no default timeout on an ask, and the defaults for the move bound and the quiet interval. Nothing here is built, and no reference document changes until acceptance.
 **Date:** 2026-11-23
 **Boundary:** shared. This file is the canonical ADR. `rensei-architecture` carries a `status: Mirrored` stub and a platform-only companion ADR.
 **Authors:** agent:claude (Fable 5.2), for the product owner
@@ -131,7 +131,7 @@ A move has a **move record** with a closed state list: `proposed`, `reserved`,
 
    *PTY.* Today's stop of a PTY session is a kill. A stop for a move is not:
    - the safe point is the harness waiting for input: the adapter's turn-completed
-     signal where it has one, otherwise terminal quiet for a configured interval;
+     signal where it has one, otherwise terminal quiet for a configured interval, ten seconds by default;
    - every attached viewer is told that the session is about to move, and input is
      frozen from that moment. Text typed and not yet sent is lost, and the notice says
      so;
@@ -266,8 +266,9 @@ A `native_import` that the harness does not confirm after start is downgraded to
    (`ADR-2026-10-08-kit-dependency-stores.md`).
 4. Files in the predecessor's workarea root that are outside every repository do not
    cross, and a workarea with no repository has nothing to check out. The briefing lists
-   what was left behind. Carrying a whole-root archive to a successor is a later
-   decision, because it changes who may restore an archive.
+   what was left behind. The product owner accepted this for the first phase. Carrying
+   a whole-root archive to a successor is a later decision, because it changes who may
+   restore an archive.
 5. The predecessor's workarea root is disposed of by its ordinary terminal release. A
    composing control plane may archive it for the chain's lifetime.
 6. Move checkpoints are removed when the chain ends.
@@ -329,7 +330,7 @@ The trigger list is closed.
    daemon restart alone never moves a PTY session, because its process is adopted. A
    planned reboot or a decommission does.
 5. **Moves are bounded.** A chain allows a configured number of consecutive moves in
-   which no turn completed. At the bound the next move is refused.
+   which no turn completed, three by default. At the bound the next move is refused.
 6. **A session its host is not holding.** A host that vanished selects nothing (D1.2).
    An operator or coordinator may still ask for a successor, on two conditions: the
    session has first ended by the existing terminal-evidence rules, and the request is an
@@ -468,10 +469,9 @@ plane that both hosts report to. The hosted delta is in the platform corpus.
 
 ## Open questions for the product owner
 
-1. **The move bound.** Three consecutive moves without a completed turn is proposed.
-2. **Whole-root archives.** Whether files outside every repository must cross.
-3. **The quiet interval** that stands in for a turn signal on a PTY harness without one
-   (D2 step 3). Ten seconds is proposed.
+None. On 2026-11-23 the product owner ruled on all three: the move bound is three
+consecutive moves without a completed turn (D7.5), files outside every repository do not
+cross in the first phase (D5.4), and the quiet interval is ten seconds (D2 step 3).
 
 ## Affected documents
 
