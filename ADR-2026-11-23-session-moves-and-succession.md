@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-11-23
 boundary: shared
 split: sibling-extensions
@@ -7,7 +7,7 @@ split: sibling-extensions
 
 # ADR-2026-11-23 — Session moves: a session ends with a successor on another host, harness or account
 
-**Status:** Proposed (2026-11-23). Revised the same day with the product owner's rulings: a successor session, every session class in the first phase, no default timeout on an ask, and the defaults for the move bound and the quiet interval. Nothing here is built, and no reference document changes until acceptance.
+**Status:** Accepted (2026-11-23, product-owner acceptance). Revised the same day with the product owner's rulings: a successor session, every session class in the first phase, no default timeout on an ask, and the defaults for the move bound and the quiet interval. The affected-document edits landed in the accepting commit. Nothing here is built yet.
 **Date:** 2026-11-23
 **Boundary:** shared. This file is the canonical ADR. `rensei-architecture` carries a `status: Mirrored` stub and a platform-only companion ADR.
 **Authors:** agent:claude (Fable 5.2), for the product owner
@@ -475,7 +475,7 @@ cross in the first phase (D5.4), and the quiet interval is ten seconds (D2 step 
 
 ## Affected documents
 
-These edits land in the accepting commit, not before.
+These edits landed in the accepting commit.
 
 - `001-layered-execution-model.md` — sessions: succession, the chain, and `moved`.
 - `002-provider-base-contract.md` — `SupportsHistoryImport`, `SupportsTranscriptRead`;

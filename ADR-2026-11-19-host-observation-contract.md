@@ -259,6 +259,13 @@ Effects are evaluated when work is admitted, and again when a host claims it,
 with byte-identical predicates. They are never evaluated after the session
 starts: no observation or policy change stops, pauses or preempts running work.
 
+> **Amended 2026-11-23 by
+> [`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md).**
+> A session move starts only on a provider refusal reported by the session's own
+> runner or on an explicit operator or coordinator act (D7.1, D7.2). A guard, a
+> warning, a policy change or an observation never starts one, so the rule above
+> still holds.
+
 The daemon applies viability and selection again at claim, using what it
 knows. A control plane pushes the claiming tenant's effective host-record
 policy over the host-mutation channel. The daemon applies the more restrictive
@@ -408,6 +415,14 @@ requires a control plane to function (`001` boundary rules 2 and 4).
 
 `enabled` is G5.2: explicit, set at onboarding, and disabled when the login is
 discovered later.
+
+> **Amended 2026-11-23 by
+> [`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md).**
+> S4 gains `onRefusal` (D7.3): what a provider refusal does to a running session.
+> Values `ask` (built-in default: stop and ask the operator to move, wait or
+> end), `move` (propose a session move with the refused login excluded) and
+> `wait` (stop for resume with stop reason `allowance_wait`, continue after
+> the reset).
 
 ### S5 — Effects
 

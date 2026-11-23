@@ -36,6 +36,13 @@ settings.
 > rather than reading the journal (A7, A9). D7: `agent/conformance` gains the view
 > check (a view built event by event equals the view rebuilt from the record).
 
+> **Amended 2026-11-23 by
+> [`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md).**
+> D1 gains two capabilities, computed from fixtures: `SupportsHistoryImport` and,
+> for PTY adapters, `SupportsTranscriptRead` (D8.3). D7: `agent/conformance` gains
+> a move fixture per adapter and per mode (D8.4). A PTY adapter normalizes a
+> transcript read at a stop into the same D4 event kinds (D3.3).
+
 ## Context
 
 A harness is the agent loop the runner drives: a CLI or app-server such as Claude Code,

@@ -2,7 +2,7 @@
 title: interactive-attach-v1 — interactive PTY session attach wire protocol
 status: Proposed
 date: 2026-07-12
-revision: v1.0-draft7 (2026-10-08) — § 9 OSC 52 set exception (viewer-local)
+revision: v1.0-draft8 (2026-11-23) — § 7 session move: `room_state.movedTo`, `kill` reason `moved`
 protocol-version: interactive-attach-v1
 boundary: OSS-only
 derived-from: asciinema ALiS live-stream protocol (shape only; NOT byte-compatible)
@@ -16,7 +16,7 @@ sign-off:
 
 **Status:** Proposed
 **Date:** 2026-07-12
-**Revision:** v1.0-draft7 (2026-10-08) — § 9 OSC 52 set exception (viewer-local)
+**Revision:** v1.0-draft8 (2026-11-23) — § 7 session move: `room_state.movedTo`, `kill` reason `moved`
 **Protocol version:** `interactive-attach-v1`
 **Normative for:** the OSS PTY session host and framing library in `donmai`, the
 relay, and every viewer (web, iOS).
@@ -42,6 +42,20 @@ section may be amended by its owning wave via PR to this file **with the sign-of
 cell updated in the same PR** — never silently.
 
 ## Changelog
+
+### v1.0-draft8 (2026-11-23) — § 7 session move: `room_state.movedTo`, `kill` reason `moved`
+
+Records ADR-2026-11-23-session-moves-and-succession D9.6 and D2 step 3.
+Implementation is pending. The § 7 message set is unchanged, so no protocol
+version is minted; both additions use § 7's `v1-draft` field rule.
+
+| Item | Disposition |
+|---|---|
+| `room_state.movedTo` | Optional session id on `state: "ended"`, naming the successor when the session ended with a session move. A viewer joins the successor with a new token and a new room. An older viewer ignores the unknown field and sees an ordinary end |
+| `kill.reason: "moved"` | A kill for a session move. The frozen `kill` semantics are unchanged |
+| Pre-move notice | Required by the ADR: attached viewers are told the session is about to move, and input is frozen until the move completes or is refused. Its carrier is **pending**: the message set is frozen, and the owning wave fixes it in a later revision |
+
+`interactive-attach-v2` pins `v1.0-draft5` and is unchanged by this entry.
 
 ### v1.0-draft7 (2026-10-08) — § 9 OSC 52 set exception (viewer-local)
 
@@ -582,7 +596,7 @@ it via PR; receivers MUST ignore unknown fields (forward-compatibility).
 | `subscribe` | any leg → relay | join a room | `{ "type":"subscribe", "sessionId":str, "asRole":"host"\|"driver"\|"viewer", "epoch":int (host legs only; MUST equal the token claim), "resumeFrom":int\|null, "resumeEpoch":int\|null, "viewport":{"cols":int,"rows":int} }` |
 | `resume_from` | viewer → relay | request replay from a sequence | `{ "type":"resume_from", "seq":int, "epoch":int\|null }` |
 | `snapshot_request` | relay → host | ask the host to emit a `Snapshot` | `{ "type":"snapshot_request", "reason":"join"\|"resync"\|"ring-miss"\|"backpressure" }` |
-| `kill` | relay → host | terminate the session | `{ "type":"kill", "reason":"stopped"\|"quota"\|"revoked", "signal":str\|null }` |
+| `kill` | relay → host | terminate the session | `{ "type":"kill", "reason":"stopped"\|"quota"\|"revoked"\|"moved", "signal":str\|null }` |
 | `grab` | viewer → relay | take the pen | `{ "type":"grab" }` |
 | `release` | viewer → relay | drop the pen | `{ "type":"release" }` |
 | `presence` | relay → viewers | roster changes | `{ "type":"presence", "op":"join"\|"leave"\|"list", "members":[{"userId":str,"connId":str,"role":str,"driving":bool}] }` |
@@ -590,7 +604,7 @@ it via PR; receivers MUST ignore unknown fields (forward-compatibility).
 | `pen_granted` | relay → all | pen assigned | `{ "type":"pen_granted", "userId":str, "connId":str, "penGeneration":int }` |
 | `pen_revoked` | relay → all | pen lost/stale | `{ "type":"pen_revoked", "userId":str, "connId":str, "penGeneration":int }` |
 | `pen_state` | relay → leg on join/reconnect | current pen holder | `{ "type":"pen_state", "holderUserId":str\|null, "holderConnId":str\|null, "penGeneration":int }` |
-| `room_state` | relay → viewers | host-leg / room lifecycle | `{ "type":"room_state", "state":"live"\|"host-reconnecting"\|"degraded"\|"host-gone"\|"ended", "sinceSeq":int\|null }` |
+| `room_state` | relay → viewers | host-leg / room lifecycle | `{ "type":"room_state", "state":"live"\|"host-reconnecting"\|"degraded"\|"host-gone"\|"ended", "sinceSeq":int\|null, "movedTo":str (optional) }` |
 | `error` | any → any | typed error | `{ "type":"error", "code":str, "message":str, "retryable":bool }` |
 
 Notes that are themselves `v1-frozen`:
@@ -636,6 +650,17 @@ Notes that are themselves `v1-frozen`:
   the `error` message itself is frozen. `host-lost` and `host-still-absent`
   are **viewer-leg only** — the relay never sends either to a host/shim leg —
   and are defined in § 13.
+
+**Session move (ADR-2026-11-23-session-moves-and-succession, D9.6 and D2 step 3;
+`v1-draft`, implementation pending).** `room_state` with `state: "ended"` MAY
+carry `movedTo`, the successor's session id, when the session ended with a
+session move. `kill.reason: "moved"` names a kill for a session move. A stop for a move is
+not a kill: the harness is asked to exit by its own path, and is signalled only
+if it does not exit within the stop bound. Before the stop, every attached
+viewer is told the session is about to move, and input is frozen until the
+move completes or is refused; text typed and not yet sent is lost, and the
+notice says so. The carrier of that notice is pending (see the draft8
+changelog entry). An older viewer sees an ordinary end.
 
 ---
 

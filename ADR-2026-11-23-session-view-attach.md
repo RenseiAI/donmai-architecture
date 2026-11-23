@@ -101,7 +101,7 @@ and is bounded however long the session has run.
 |---|---|
 | `position` | the position the view is true at (A4) |
 | `session` | status, end reason, harness, model, the latest `effective_settings`, usage totals, the record's completeness level |
-| `chain` | the predecessor and successor session, when the session was moved (`ADR-2026-11-23-session-moves-and-succession.md`, Proposed) |
+| `chain` | the predecessor and successor session, when the session was moved (`ADR-2026-11-23-session-moves-and-succession.md`, Accepted 2026-11-23) |
 | `window` | the newest items, each in its latest state, oldest first |
 | `live` | what is in progress: running items with their latest transient state, the current plan, the open interactive request, whether a turn is running or the session waits for input |
 | `history` | a cursor for the page before the window, and whether there is one |
