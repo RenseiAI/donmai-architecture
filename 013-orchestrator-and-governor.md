@@ -305,6 +305,20 @@ durable consumer channel, while A2A and PTY remain separate coordination or
 nudge transports. See
 [`ADR-2026-08-19-durable-execution-event-bus-and-bounded-subscriptions.md`](ADR-2026-08-19-durable-execution-event-bus-and-bounded-subscriptions.md).
 
+**The runner sequences the structured stream** (Accepted 2026-11-23; nothing
+built). Per
+[`ADR-2026-11-23-session-view-attach.md`](ADR-2026-11-23-session-view-attach.md)
+A1, the session's runner, as the single writer, assigns each durable normalized
+event a per-session `structuredSeq` that starts at 1 and increases by exactly 1.
+It survives a runner restart; a new incarnation continues from the last recorded
+value and never reuses or skips one. The session journal records it, and the
+sequence assigned for upload is the same number. Per A2, a **durable event**
+(an item started, completed, failed or was interrupted; a message completed; a
+plan was replaced; a turn began or ended) carries the sequence; a **transient
+update** (partial text or reasoning, a tool progress tick, running output)
+carries the item id and a per-item revision, is coalesced to a bounded rate,
+and is never replayed.
+
 Admission/claim is followed by exact-harness adaptation, not immediate spawn.
 Per `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`, the orchestrator
 and execution host compile a versioned `HarnessAdaptationPlan`, apply every
