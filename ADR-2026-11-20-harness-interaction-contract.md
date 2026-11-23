@@ -27,6 +27,15 @@ settings.
 
 **Authors:** architecture lane (coordinator draft)
 
+> **Amended 2026-11-23 by
+> [`ADR-2026-11-23-session-view-attach.md`](ADR-2026-11-23-session-view-attach.md).**
+> D4: every durable normalized event carries a runner-assigned per-session
+> `structuredSeq`, and events split into durable events and transient updates,
+> which are coalesced and never replayed (A1, A2). D6: that ADR is how a consumer
+> joins the pipeline; the host watch attaches through the daemon's view reads
+> rather than reading the journal (A7, A9). D7: `agent/conformance` gains the view
+> check (a view built event by event equals the view rebuilt from the record).
+
 ## Context
 
 A harness is the agent loop the runner drives: a CLI or app-server such as Claude Code,

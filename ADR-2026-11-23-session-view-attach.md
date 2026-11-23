@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-11-23
 boundary: shared
 split: sibling-extensions
@@ -7,7 +7,8 @@ split: sibling-extensions
 
 # ADR-2026-11-23 — Session view attach: a bounded snapshot, a position, and paged history for every client
 
-**Status:** Proposed (2026-11-23). Nothing here is built, and no reference document changes until acceptance.
+**Status:** Accepted (2026-11-23, product-owner acceptance). The affected-document
+edits landed in the accepting commit. Nothing here is built yet.
 **Date:** 2026-11-23
 **Boundary:** shared. This file is the canonical ADR. `rensei-architecture` carries a `status: Mirrored` stub and a platform-only companion ADR.
 **Authors:** agent:claude (Fable 5.2), for the product owner
@@ -270,13 +271,12 @@ The hosted delta is in the platform corpus.
 
 ## Open questions for the product owner
 
-1. **The default bounds** in A8.
-2. **Whether the view of an ended session is kept** for the life of its record, or
-   rebuilt on first open after a period. Keeping it is proposed.
+None remain. The product owner accepted the A8 default bounds as proposed, and the view
+of an ended session is kept for the life of its record.
 
 ## Affected documents
 
-These edits land in the accepting commit, not before.
+These edits landed in the accepting commit.
 
 - `001-layered-execution-model.md` — sessions: the session view and the position.
 - `011-local-daemon-fleet.md` — the three daemon reads; the host watch attaches through
