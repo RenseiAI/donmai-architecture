@@ -230,6 +230,15 @@ incarnation, which carries its own incarnation identity and provenance under
 the same session, from a continued one, which is the same incarnation; a
 resumed incarnation is never presented as the old one silently continuing.
 
+### Session moves end a session with a successor (Accepted 2026-11-23; nothing built)
+
+Per [`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md) D9:
+
+- **`moved` is not a completion and not a cancellation** (D9.2). It is a non-failure end with no charge, no refund and no failure backoff. No completion contract fires and no stage moves on it.
+- **Budgets belong to the chain** (D9.1). Stage budget meters, turn counters and wall-clock duration limits continue from the predecessor's readings. A move never resets a cap.
+- **One outcome per chain** (D9.3). The session that finishes the work writes the outcome the work item sees. Anything waiting on a moved session's result waits on the chain's.
+- **Lineage follows the chain** (D9.5). A chain is one node in the spawn lineage. A child's recorded parent is not rewritten: authority over children, child events and shared budget reservations resolve a moved parent to its live successor.
+
 ### Claim-time observation viability (Accepted 2026-11-21)
 
 Per [`ADR-2026-11-19-host-observation-contract.md`](ADR-2026-11-19-host-observation-contract.md) G6 and Part S, an observed kind's effects are evaluated when work is admitted and again when a host claims it, with byte-identical predicates. They are never evaluated after a session starts.

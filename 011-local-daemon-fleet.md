@@ -479,6 +479,14 @@ reboot scheduled), it drains or fences according to the intended outcome:
 
 For graceful planned restarts (e.g., a reboot), `donmai daemon drain` returns when drain completes. CI scripts or shutdown hooks can wait on it.
 
+**Session moves in the preflight (Accepted 2026-11-23; nothing built).** Per
+[`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md)
+D7.4, the restart preflight's order becomes: adopt a live process, stop for
+resume, propose a session move where a destination can be reserved, then wait.
+A move proposed here has the trigger `host-drain`, one move per session, and
+excludes the draining host. A daemon restart alone never moves a PTY session,
+because its process is adopted; a planned reboot or a decommission does.
+
 **A scope change is not on this list.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D3, adding or removing a project or an organization on a host is a runtime operation, so no user-facing instruction is ever "restart the service." The stops/restarts that remain — auto-update, an operator stop, a reboot — always enter the drain-or-fence protocol first, because a configuration change must never cost in-flight work.
 
 ## Recovery from crash
@@ -835,6 +843,15 @@ those reads: it no longer tails the journal by byte offset, it shows the current
 view when it starts, and it survives a truncated or rotated journal. A journal
 written before the ADR has no sequence; the daemon assigns one in file order when
 it first reads it and records that it did (A9.4).
+
+**Session move verb (Accepted 2026-11-23; implementation pending).** Per
+[`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md)
+D10, the standalone daemon ships a working move on one machine: a session moves
+to another harness or another login on the same host, with the daemon as the
+authority and the session journal as the record. The move verb is served on the
+existing localhost surface; its path and CLI spelling are fixed by the
+implementing change and follow the localhost-only, no-bearer rules above. A move
+between hosts needs a control plane that both hosts report to.
 
 `POST /api/daemon/restart/prepare` is the mandatory preflight for a planned
 service-manager restart or update while shim ownership is active. It enters

@@ -489,6 +489,15 @@ Per [`ADR-2026-11-20-harness-interaction-contract.md`](ADR-2026-11-20-harness-in
 
   A vendored-schema update that removes or renames a translated field fails the suite.
 
+### Session move capabilities (Accepted 2026-11-23)
+
+Per [`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md) D8 (nothing built), every harness can be a move source and a `briefed` destination. Two capabilities are added (D8.3):
+
+- `SupportsHistoryImport`: the adapter can load prior messages into a fresh harness conversation as history. Without it the move briefing is an attributed context block.
+- `SupportsTranscriptRead`: a PTY adapter can read the harness's own transcript after the process exits and normalize it into the same event kinds. Without it a PTY session's record is whatever its tail delivered, and it is `partial` or `none`.
+
+Both are computed from fixtures, never declared by hand (`ADR-2026-08-13` D6). The conformance suite gains a move fixture per adapter and per mode: stop a scripted session, build the briefing, start a successor, and observe the goal, the plan and the changed files in its first turn's context (D8.4).
+
 ### Capability matrix
 
 Verbatim, from `agent/types.go::Capabilities`:
