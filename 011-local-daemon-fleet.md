@@ -825,6 +825,17 @@ signal, the `FailureOperatorCancelled` / `FailureNoProgress` terminal modes, and
 the no-progress watchdog — is in
 `ADR-2026-06-22-daemon-per-session-cancel-wire.md`.
 
+**Session view reads (Accepted 2026-11-23; implementation pending).** Per
+[`ADR-2026-11-23-session-view-attach.md`](ADR-2026-11-23-session-view-attach.md)
+A9, the daemon keeps a session view per live session and serves three reads under
+its existing localhost surface: the view, the events after a position as a
+stream, and a history page. The paths are fixed by the implementing change; they
+follow the localhost-only, no-bearer rules above. The host watch attaches through
+those reads: it no longer tails the journal by byte offset, it shows the current
+view when it starts, and it survives a truncated or rotated journal. A journal
+written before the ADR has no sequence; the daemon assigns one in file order when
+it first reads it and records that it did (A9.4).
+
 `POST /api/daemon/restart/prepare` is the mandatory preflight for a planned
 service-manager restart or update while shim ownership is active. It enters
 `draining`, prevents new claims, and returns success only after every authority

@@ -170,6 +170,12 @@ rehydration path. No consumer silently resets to the current head. Archive
 precedes prune, and lifecycle/key-outcome headers remain sufficient to
 interpret terminal, cancellation, delivery, and cost evidence.
 
+> **Forward note, 2026-11-23.** `ADR-2026-11-23-session-view-attach.md`
+> (Accepted 2026-11-23) A1.4 and A4 fix the structured position of the D3 cursor
+> tuple as the runner-assigned per-session `structuredSeq`; it adds no second
+> ordering. A5's `resync` is the explicit form of a reset: a fresh view with a
+> closed reason, never a silent reset to the head.
+
 ### D4 — The predicate language is deliberately small
 
 The v1 predicate is exactly one of `all`, `any`, `not`, or a typed leaf
