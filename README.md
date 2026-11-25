@@ -297,6 +297,7 @@ renaming an ADR.
 | [`ADR-2026-11-20-harness-interaction-contract.md`](ADR-2026-11-20-harness-interaction-contract.md) | Accepted | shared | Harness interaction contract: one set of interactions, instructions and output for every harness |
 | [`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md) | Accepted | shared | Session moves: a session ends with a successor on another host, harness or account |
 | [`ADR-2026-11-23-session-view-attach.md`](ADR-2026-11-23-session-view-attach.md) | Accepted | shared | Session view attach: a bounded snapshot, a position, and paged history for every client |
+| [`ADR-2026-11-24-session-chat-readiness-report.md`](ADR-2026-11-24-session-chat-readiness-report.md) | Accepted | shared | Session chat-readiness report on the session status wire |
 | [`ADR-template.md`](ADR-template.md) | Template | shared | Required frontmatter for every new ADR. |
 <!-- ADR-INDEX:END -->
 
