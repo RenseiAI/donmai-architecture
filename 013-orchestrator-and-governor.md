@@ -601,6 +601,24 @@ consumer falls back to the marker scan). A `blocked` verdict is the structured
 form of the deliberate-decline signal and routes to needs-clarification, not a
 generic failure. See `ADR-2026-06-15-turn-result-manifest.md`.
 
+### Session chat-readiness report on the session status wire (ADR-2026-11-24)
+
+Non-terminal status posts for interactive sessions with status `running` may
+carry an optional top-level `chatReadiness` field:
+`{ version, channel, state, liveSupported, queueSupported, reason, observedAt }`.
+The runner sends it whenever its readiness read changes and at least every 60
+seconds while the session is live, and never on terminal posts. The producer
+never posts `ended`. A daemon that does not send it keeps working. The consumer ignores reports with an unknown
+version or an unknown `channel` (keeping the last good one), stores the latest report per session with
+the server receive time, and treats a report older than 180 seconds measured
+from `observedAt`, a report with `observedAt` in the future, or a
+session that is not active, as not live. Delivery is `live` only for a fresh
+report with `liveSupported: true` and `state` `idle` or `busy`; otherwise it is
+`queue_only` when there is no fresh report or the fresh report has `queueSupported`
+true. A fresh report that is not live-eligible with `queueSupported: false`
+derives `available: false`. Full contract:
+`ADR-2026-11-24-session-chat-readiness-report.md`.
+
 ### Terminal workarea ownership spans durable release (ADR-2026-07-18, Accepted architecture)
 
 `ADR-2026-07-18-bounded-terminal-workarea-leases.md` accepts an
