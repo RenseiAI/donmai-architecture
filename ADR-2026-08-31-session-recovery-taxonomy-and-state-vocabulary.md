@@ -138,6 +138,11 @@ because the operational verb that existed on the day this was written was a
 whole-host restart, and a taxonomy that does not say "no host-wide member" will
 acquire one.
 
+> **Forward note, 2026-11-23.** `ADR-2026-11-23-session-moves-and-succession.md`
+> (Accepted 2026-11-23) D1: a session move is a succession, not a member of the
+> D1 table. It ends one session with end reason `moved` and admits a successor
+> session. It is a deliberate act, and absence never selects it (D1.2).
+
 ### D2 — Session state outlives the process that produced it
 
 If resume is a capability, then the artifact resume is keyed on is **session

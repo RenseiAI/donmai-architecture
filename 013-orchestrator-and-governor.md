@@ -230,6 +230,24 @@ incarnation, which carries its own incarnation identity and provenance under
 the same session, from a continued one, which is the same incarnation; a
 resumed incarnation is never presented as the old one silently continuing.
 
+### Session moves end a session with a successor (Accepted 2026-11-23; nothing built)
+
+Per [`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md) D9:
+
+- **`moved` is not a completion and not a cancellation** (D9.2). It is a non-failure end with no charge, no refund and no failure backoff. No completion contract fires and no stage moves on it.
+- **Budgets belong to the chain** (D9.1). Stage budget meters, turn counters and wall-clock duration limits continue from the predecessor's readings. A move never resets a cap.
+- **One outcome per chain** (D9.3). The session that finishes the work writes the outcome the work item sees. Anything waiting on a moved session's result waits on the chain's.
+- **Lineage follows the chain** (D9.5). A chain is one node in the spawn lineage. A child's recorded parent is not rewritten: authority over children, child events and shared budget reservations resolve a moved parent to its live successor.
+
+### Claim-time observation viability (Accepted 2026-11-21)
+
+Per [`ADR-2026-11-19-host-observation-contract.md`](ADR-2026-11-19-host-observation-contract.md) G6 and Part S, an observed kind's effects are evaluated when work is admitted and again when a host claims it, with byte-identical predicates. They are never evaluated after a session starts.
+
+- **Viability and selection at claim.** The daemon applies the more restrictive of the control plane's pushed policy and its own local policy, in the narrow-only shape of `ADR-2026-06-06` D5. A `subscription-login` is viable when it is enabled on the tenant's host record, ready, under the tenant's own guard against the account's shared observed usage, and not past a billing boundary the tenant's policy disallows.
+- **Selection order.** Among enabled, viable logins, prepaid allowance is preferred before a keyed mode, and among logins the one with the most headroom above the tenant's guard (S8.1).
+- **The nack.** A claim refused under an observed-kind effect nacks with code `observation_unavailable`, the kind, a closed reason (`disabled`, `guard_reached`, `exhausted`, `billing_boundary`) and, for a usage reason, the instant it may recover (`until`). The work is re-placed under the single fallback rule.
+- **Drift repair.** On `disabled` the control plane re-pushes the host record's policy. On a usage reason it requests a rescan of that kind.
+
 ## AgentRuntime dispatch
 
 The orchestrator admits a versioned `DispatchIntent` and selects one
@@ -295,6 +313,20 @@ only evidence that may claim live delivery. Coordinators observe through the
 durable consumer channel, while A2A and PTY remain separate coordination or
 nudge transports. See
 [`ADR-2026-08-19-durable-execution-event-bus-and-bounded-subscriptions.md`](ADR-2026-08-19-durable-execution-event-bus-and-bounded-subscriptions.md).
+
+**The runner sequences the structured stream** (Accepted 2026-11-23; nothing
+built). Per
+[`ADR-2026-11-23-session-view-attach.md`](ADR-2026-11-23-session-view-attach.md)
+A1, the session's runner, as the single writer, assigns each durable normalized
+event a per-session `structuredSeq` that starts at 1 and increases by exactly 1.
+It survives a runner restart; a new incarnation continues from the last recorded
+value and never reuses or skips one. The session journal records it, and the
+sequence assigned for upload is the same number. Per A2, a **durable event**
+(an item started, completed, failed or was interrupted; a message completed; a
+plan was replaced; a turn began or ended) carries the sequence; a **transient
+update** (partial text or reasoning, a tool progress tick, running output)
+carries the item id and a per-item revision, is coalesced to a bounded rate,
+and is never replayed.
 
 Admission/claim is followed by exact-harness adaptation, not immediate spawn.
 Per `ADR-2026-08-06-harness-adaptation-plan-and-receipt.md`, the orchestrator
@@ -568,6 +600,24 @@ verbatim on the terminal status wire (additively — an old peer omits it and th
 consumer falls back to the marker scan). A `blocked` verdict is the structured
 form of the deliberate-decline signal and routes to needs-clarification, not a
 generic failure. See `ADR-2026-06-15-turn-result-manifest.md`.
+
+### Session chat-readiness report on the session status wire (ADR-2026-11-24)
+
+Non-terminal status posts for interactive sessions with status `running` may
+carry an optional top-level `chatReadiness` field:
+`{ version, channel, state, liveSupported, queueSupported, reason, observedAt }`.
+The runner sends it whenever its readiness read changes and at least every 60
+seconds while the session is live, and never on terminal posts. The producer
+never posts `ended`. A daemon that does not send it keeps working. The consumer ignores reports with an unknown
+version or an unknown `channel` (keeping the last good one), stores the latest report per session with
+the server receive time, and treats a report older than 180 seconds measured
+from `observedAt`, a report with `observedAt` in the future, or a
+session that is not active, as not live. Delivery is `live` only for a fresh
+report with `liveSupported: true` and `state` `idle` or `busy`; otherwise it is
+`queue_only` when there is no fresh report or the fresh report has `queueSupported`
+true. A fresh report that is not live-eligible with `queueSupported: false`
+derives `available: false`. Full contract:
+`ADR-2026-11-24-session-chat-readiness-report.md`.
 
 ### Terminal workarea ownership spans durable release (ADR-2026-07-18, Accepted architecture)
 

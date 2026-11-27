@@ -479,6 +479,14 @@ reboot scheduled), it drains or fences according to the intended outcome:
 
 For graceful planned restarts (e.g., a reboot), `donmai daemon drain` returns when drain completes. CI scripts or shutdown hooks can wait on it.
 
+**Session moves in the preflight (Accepted 2026-11-23; nothing built).** Per
+[`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md)
+D7.4, the restart preflight's order becomes: adopt a live process, stop for
+resume, propose a session move where a destination can be reserved, then wait.
+A move proposed here has the trigger `host-drain`, one move per session, and
+excludes the draining host. A daemon restart alone never moves a PTY session,
+because its process is adopted; a planned reboot or a decommission does.
+
 **A scope change is not on this list.** Per `ADR-2026-08-07-onboarding-is-the-only-user-action.md` D3, adding or removing a project or an organization on a host is a runtime operation, so no user-facing instruction is ever "restart the service." The stops/restarts that remain — auto-update, an operator stop, a reboot — always enter the drain-or-fence protocol first, because a configuration change must never cost in-flight work.
 
 ## Recovery from crash
@@ -768,6 +776,16 @@ Key NDJSON fields the daemon emits (consumed by Layer 6 observability per `006`)
 { "time": "...", "level": "info", "event": "auto-update-applied","from_version": "0.8.59", "to_version": "0.8.60", "drain_duration_s": 47 }
 ```
 
+## Host observations (Accepted 2026-11-21; implementation pending)
+
+Per [`ADR-2026-11-19-host-observation-contract.md`](ADR-2026-11-19-host-observation-contract.md) Part G, the daemon reports observed host state with its heartbeat and enforces the tenant's pushed policy at claim. The ADR is normative; this section is the operational summary.
+
+- **The observation report.** The heartbeat carries an `observations` report: the items of each registered kind, each encoded through its kind's closed schema, with `scannedAt` and whether the report is a full scan of the kinds it lists. Secrets, credential paths and raw account ids are never encoded (G2). A full scan of a kind marks that kind's unreported items gone.
+- **When the daemon scans.** It runs a full scan at daemon start, when the host joins a tenant's pool, and on a rescan. One scan is in flight per host, at most one a minute, with a timeout per kind; a kind that times out reports `readiness: unknown` and does not vanish (G4.5).
+- **`donmai host observations [--kind <k>] [--rescan]`.** Lists the host's observed items with their readiness. `--rescan` runs a scan and marks newly discovered items.
+- **The scan operation.** The control API serves `POST /api/daemon/observations/scan`, with an optional `kinds` filter. A control plane requests the same scan over the host-mutation channel as operation `observations.scan`. The daemon acknowledges that mutation as applied only in the heartbeat that carries that scan's full report. It never acknowledges it on receipt, and never on the strength of a scan that was already running or completed earlier. A control plane may therefore treat an acknowledged scan, plus a report ingested at or after the acknowledgement, as the answer to its request. A scan that cannot run is reported as a mutation failure.
+- **The host-mutation policy operation.** A control plane pushes the claiming tenant's effective policy for a registration as operation `observations.policy`. A push replaces the registration's whole policy. The daemon persists the last applied push per registration, so a restart never runs ungated: an ever-governed registration is enforced from its last-known policy at boot, a never-governed registration passes claims through, and an unreadable persisted file fails closed for that registration (G6).
+
 ## HTTP Control API
 
 The daemon binds to `127.0.0.1:7734` (configurable) and exposes a JSON HTTP
@@ -814,6 +832,26 @@ in-process `WorkerSpawner.StopSession` primitive. Full contract — the in-band 
 signal, the `FailureOperatorCancelled` / `FailureNoProgress` terminal modes, and
 the no-progress watchdog — is in
 `ADR-2026-06-22-daemon-per-session-cancel-wire.md`.
+
+**Session view reads (Accepted 2026-11-23; implementation pending).** Per
+[`ADR-2026-11-23-session-view-attach.md`](ADR-2026-11-23-session-view-attach.md)
+A9, the daemon keeps a session view per live session and serves three reads under
+its existing localhost surface: the view, the events after a position as a
+stream, and a history page. The paths are fixed by the implementing change; they
+follow the localhost-only, no-bearer rules above. The host watch attaches through
+those reads: it no longer tails the journal by byte offset, it shows the current
+view when it starts, and it survives a truncated or rotated journal. A journal
+written before the ADR has no sequence; the daemon assigns one in file order when
+it first reads it and records that it did (A9.4).
+
+**Session move verb (Accepted 2026-11-23; implementation pending).** Per
+[`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md)
+D10, the standalone daemon ships a working move on one machine: a session moves
+to another harness or another login on the same host, with the daemon as the
+authority and the session journal as the record. The move verb is served on the
+existing localhost surface; its path and CLI spelling are fixed by the
+implementing change and follow the localhost-only, no-bearer rules above. A move
+between hosts needs a control plane that both hosts report to.
 
 `POST /api/daemon/restart/prepare` is the mandatory preflight for a planned
 service-manager restart or update while shim ownership is active. It enters

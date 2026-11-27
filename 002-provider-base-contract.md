@@ -448,7 +448,55 @@ Lifecycle expectations (per `agent/provider.go` doc comment):
 - `Resume` continues a previously interrupted session. Capability-gated by `SupportsSessionResume`; providers that do not support resume return `ErrUnsupported`.
 - `Shutdown` releases provider-level resources (long-lived child processes such as the codex app-server). Per-session-process providers (Claude CLI) may no-op.
 
-The 8-variant `agent.Event` discriminated union (`init` / `system` / `assistant_text` / `tool_use` / `tool_result` / `tool_progress` / `result` / `error`) is the normalized shape every provider emits regardless of its native protocol.
+The `agent.Event` discriminated union is the normalized shape every provider emits regardless of its native protocol. Its v1 kinds are `init` / `system` / `assistant_text` / `llm_call` / `tool_use` / `tool_result` / `tool_progress` / `usage` / `context_usage` / `subagent` / `result` / `error`. Event model v2 (below) extends the union additively.
+
+### Harness interaction contract (Accepted 2026-11-20)
+
+Per [`ADR-2026-11-20-harness-interaction-contract.md`](ADR-2026-11-20-harness-interaction-contract.md), every harness adapter implements the contract below. The ADR is normative; this section is its summary for implementers.
+
+- **Interaction verbs (D1).** These are the verbs and the capability that gates each:
+
+  | Verb | Mapping | Gating capability |
+  |---|---|---|
+  | `start` | `Spawn` | always present |
+  | `resume` | `Resume` | `SupportsSessionResume` |
+  | `steer` | `Handle.Inject` | `SupportsMessageInjection` |
+  | `interrupt` | ends the turn and keeps the session | `SupportsInterrupt` |
+  | `respond` | answers an `interactive_request` | `SupportsInteractiveRequests` |
+  | `stop` / `shutdown` | stops the session or provider | always present |
+
+  A verb the harness lacks returns `ErrUnsupported`. It never falls back to another verb.
+- **Normalized instructions (D2).** `Spec.Instructions` carries:
+  - `planMode` (`off` · `plan-first` · `plan-only`);
+  - `approvals` (`never` · `on-request` · `on-risk`);
+  - `toolPolicy` (allow and deny lists by tool family and exact name; deny wins);
+  - `outputSchema`.
+
+  These sit next to the existing effort, model and sandbox knobs. The translator returns a deterministic translation report: one `applied` / `approximated` / `unsupported` line per instruction, computed without starting the harness. A required instruction reported `unsupported` refuses before spawn.
+- **Effective settings (D3).** After start the adapter emits one `effective_settings` event. Each instruction and knob has a line with `requested`, `applied` and `evidence` (`native-echo` or `translator`), and any `mismatch`. A later change emits a delta. Consumers show the latest. A mismatch is a notice.
+- **Event model v2 (D4).** The union stays closed and the extension is additive:
+  - `itemId` on every item event. For tools it is the tool-use id, and `tool_progress` carries it too. An adapter that cannot know the id leaves it empty.
+  - An item status lifecycle: `started → running → completed | failed | interrupted`.
+  - New kinds `reasoning`, `plan` (replace-whole by `itemId`), `file_change` (per-file path, change, move path, additions, deletions, unified diff), `interactive_request`, `turn` (`started` / `completed` with `turnId`), `notice` (`info` · `warning` · `blocked`) and `effective_settings`.
+  - `assistant_text.phase` (`commentary` · `final`).
+  - `raw` stays on every event. No renderer reads it.
+
+  Routine harness metadata with no reader-facing signal maps to no event. Consumers render an unknown future kind as a notice.
+- **Conformance (D7).** `agent/conformance` runs a per-adapter suite:
+  - input translation validated against the harness's vendored protocol schema (version and provenance recorded);
+  - recorded transcripts mapped to an expected v2 sequence;
+  - a golden translation report.
+
+  A vendored-schema update that removes or renames a translated field fails the suite.
+
+### Session move capabilities (Accepted 2026-11-23)
+
+Per [`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md) D8 (nothing built), every harness can be a move source and a `briefed` destination. Two capabilities are added (D8.3):
+
+- `SupportsHistoryImport`: the adapter can load prior messages into a fresh harness conversation as history. Without it the move briefing is an attributed context block.
+- `SupportsTranscriptRead`: a PTY adapter can read the harness's own transcript after the process exits and normalize it into the same event kinds. Without it a PTY session's record is whatever its tail delivered, and it is `partial` or `none`.
+
+Both are computed from fixtures, never declared by hand (`ADR-2026-08-13` D6). The conformance suite gains a move fixture per adapter and per mode: stop a scripted session, build the briefing, start a successor, and observe the goal, the plan and the changed files in its first turn's context (D8.4).
 
 ### Capability matrix
 
@@ -483,6 +531,15 @@ Capability declarations are stable for the lifetime of the Provider instance. Im
 **`EmitsSubagentEvents` is computed, not declared ([`ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md`](ADR-2026-10-03-sub-agents-for-dispatched-sessions-and-non-native-harnesses.md), Accepted 2026-10-04).** The bit is true for an adapter version only when its fixtures pass (`ADR-2026-08-08` D4.2, `ADR-2026-08-13` D6). The fixtures show that a delegation call emits `subagent.started`, then `subagent.completed` or `subagent.failed`, and a `subagent` span. A delegation call is either the harness's own native delegation tool, which the adapter names (today `Task` or `Agent`), or a tool that an extension delivery declares as one. When the tool's structured result carries a child `SessionRef`, the events carry it; it is read from a typed field, never parsed from prose. The bit is never a manifest edit. For `pi` it needs a loaded delivery that declares a delegation tool and a passing fixture; without both it stays false. The runner's stage cap counts these typed events, so a harness whose bit is false contributes no counted children.
 
 **Parent tool-use id on normalized events.** A normalized event carries the id of the delegation tool call it belongs to, when the adapter knows it, so a sub-agent's own tool calls can be tied to the call that started it. An adapter that cannot know it leaves the field empty and says so in its manifest. The field is never guessed.
+
+### Subscription provider catalog (Accepted 2026-11-21)
+
+Per [`ADR-2026-11-19-host-observation-contract.md`](ADR-2026-11-19-host-observation-contract.md) Part S, the capability matrix is generated with a `subscriptionProviders` section beside its harness and endpoint sections. The ADR is normative; this is the summary for implementers.
+
+- **One entry per subscription provider.** It holds an id and a kind (`direct`, or `gateway` for model-provider-agnostic gateways), plus the login kinds it issues.
+- **Per plan:** the plan slug as reported, a display name, the allowance shape, a `lowCap` flag, policy defaults, the (model provider, model id) pairs the plan reaches, the harnesses that may sign in with the login, and the ordered billing modes (`allowance` → `credits` → `overage` → `api-metered`).
+- **Describes, never grants.** A login whose plan has no row is still observed and usable as `uncatalogued`, with the kind's built-in defaults. Harness compatibility is a ceiling, checked with the two-axis validity rule (`ADR-2026-06-06` D2). A deployment may add rows, set definition defaults and narrow compatibility. It may never widen compatibility.
+- **The subscription axis is orthogonal to the model-endpoint axis.** A subscription provider issues and bills the login; the model provider is the MODEL-ENDPOINT company whose model answers. One subscription provider may serve many model providers.
 
 ### Reference implementations
 

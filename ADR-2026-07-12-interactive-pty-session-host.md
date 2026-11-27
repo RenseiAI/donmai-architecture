@@ -74,6 +74,12 @@ split: synchronized-mirror
 > attach client does not report a durable send to the daemon on socket write;
 > it waits for that ack. V1 bytes, claims, and controls remain unchanged.
 
+> **Forward note, 2026-11-23.** `ADR-2026-11-23-session-moves-and-succession.md`
+> (Accepted 2026-11-23) D2 step 3: a stop for a session move is not the kill
+> path. It waits for the harness to be idle, tells attached viewers and freezes
+> input, and asks the harness to exit by its own path; it signals only at the
+> stop bound. None of this touches the synchronized region in § 4.
+
 ## Context
 
 The OSS `donmai` runtime is **headless by design**. A session clones a repo, spawns

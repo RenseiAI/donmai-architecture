@@ -1200,6 +1200,13 @@ shim records (D7).
 - Resume after an unplanned crash, and resume on a different host. D8 resumes
   only a seat its own host stopped cooperatively, from state on that host.
 
+> **Amended 2026-11-23 by
+> [`ADR-2026-11-23-session-moves-and-succession.md`](ADR-2026-11-23-session-moves-and-succession.md).**
+> Continuation on a different host is now a session move: a successor session,
+> not a resume. D8's stop gains the stop reasons `session_move` and
+> `allowance_wait` (D2 step 3, D7.3). Resume after an unplanned crash stays
+> out of scope.
+
 ## Consequences
 
 ### Positive

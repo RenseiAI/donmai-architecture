@@ -744,3 +744,7 @@ effective level. Discharge happens after bind: secret release waits for the
 applied receipt and, when the control plane provisioned the context, its
 provisioning record to meet the levels on the control plane's own stamp
 (`ADR-2026-08-06` D4, amended 2026-09-27).
+
+## Addendum 2026-11-21 — observed-kind effects map to stages 3, 4 and 6
+
+`ADR-2026-11-19-host-observation-contract.md` (Accepted 2026-11-21) G6 declares each observed kind's effects in terms of this law. `viability` removes a candidate at stage 3 with a typed reason that names the item and when it may recover. `preference` orders candidates at stage 4 and never gates. `selection` binds the item a session uses at stage 6. `warning` is advisory at stage 3; a tenant may promote a warning class to a refusal, and it is never silently skipped. Effects run at admission and again at claim with byte-identical predicates, and a claim refusal is re-placed under the single fallback rule.
