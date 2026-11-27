@@ -8,16 +8,16 @@ amends: ADR-2026-10-17-sponsored-agent-principals.md
 
 # ADR-2026-11-14 — A grant may name a coordination scope
 
-**Status:** Proposed (2026-11-14). Architecture only: nothing in it is built. It
-amends D2 of `ADR-2026-10-17-sponsored-agent-principals.md` (Accepted) and keeps
+**Status:** Proposed (2026-11-14). A control plane implements part of it
+downstream; this corpus's repositories need no change. It amends D2 of `ADR-2026-10-17-sponsored-agent-principals.md` (Accepted) and keeps
 every other rule of that record. The edits listed under "Affected documents" land
 in the commit that flips this record to Accepted. No synchronized region changes.
 **Date:** 2026-11-14
 **Boundary:** shared. This record is OSS-canonical for the rule: what a grant may
 name, how a principal's resolved set is formed, and what the fences, executions and
 records do with it. How a control plane stores coordination scopes, which scopes it
-offers, who may edit their membership, and its surfaces belong in the platform
-corpus, which carries a mirrored stub of this record.
+offers, which non-human principals may edit their membership within D3 rule 4,
+and its surfaces belong in the platform corpus, which carries a mirrored stub of this record.
 **Authors:** architecture lane
 
 ## Context
@@ -53,8 +53,10 @@ bound.** D1 to D6 state the rules.
 ### D1 — A grant may name a coordination scope
 
 1. **Coordination scope.** A coordination scope is a named set of member projects
-   that a control plane defines and authorized principals maintain, for example a program or an
-   initiative. Its membership is an explicit list of projects or a declared rule.
+   that a control plane defines, for example a program or an initiative. Its
+   membership is an explicit list of projects or a declared rule, maintained by a
+   human or by a non-human principal the control plane authorizes (D3 rules 3
+   and 4).
 2. **Assignment is a grant.** Assigning a principal to a coordination scope is a
    grant. A human who may administer agent principals makes it explicitly. It is
    recorded, audited and revocable, like a per-project grant.
@@ -86,21 +88,35 @@ bound.** D1 to D6 state the rules.
    allowed only as the declared membership of a coordination scope that a human
    assigned the principal to. It is never the meaning of "unset", "empty" or
    "unresolvable".
-3. **Reach changes only by an explicit, audited grant act.** Reach never follows
-   the sponsor and never grows by use. It changes only when a principal this record
-   or the control plane's policy authorizes to make that grant, human or agent,
-   changes a grant, an assignment, or a scope's membership, including the declared
-   rule. Each change is explicit and recorded, never implicit or ambient. For a
-   rule, the act is declaring it: its answer then moves with the facts it reads.
-   Rationale: velocity first. A control plane whose workloads are driven by agents
-   gains only friction from human-only edits, so this record does not require a
-   human for them. A control plane may narrow who is authorized as its maturity
-   grows. Assigning a principal to a scope stays a grant that D1 rule 2 reserves
-   to a human who may administer agent principals.
-4. **No self-widening.** A principal may not change the membership of a scope it is
-   assigned to, or assign itself. Its own writes cannot add a project either: work
-   created in a project is a write there, and a write needs that project to be in
-   the resolved set already.
+3. **Reach changes only by an explicit, audited act.** Reach never follows the
+   sponsor and never grows by use. It changes only when a per-project grant, an
+   assignment, or a scope's membership, including the declared rule, is changed by
+   an explicit, recorded act. Per-project grants and assignments are made only by a
+   human who administers agent principals (sponsored-agent-principals D2 rule 3;
+   D1 rule 2 here). A scope's membership may be changed by such a human, or by
+   another principal, human or agent, that the control plane's policy authorizes to
+   edit it; a non-human editor is bound by rule 4. Each change is explicit and
+   recorded, never implicit or ambient. For a rule, the act is declaring it: its
+   answer then moves with the facts it reads.
+4. **No self-widening, and no lent reach.**
+   1. A principal may not change the membership of a scope it is assigned to, or
+      assign itself. Its own writes cannot add a project either: work created in a
+      project is a write there, and a write needs that project to be in the
+      resolved set already.
+   2. A non-human principal that edits a scope's membership may add only projects
+      inside its own resolved set, and only where its own access there (D5 rule 2)
+      is at least the access level of every assignment to that scope. It lends no
+      reach and no level it does not hold.
+   3. A non-human editor may not declare or change a membership rule whose answer
+      can reach beyond its own resolved set. A rule it cannot show stays inside that
+      set is refused.
+   4. A non-human edit is refused when the editor is a principal assigned to that
+      scope, an execution acting as one, or a child of such an execution
+      (sponsored-agent-principals D3 rule 3), or when it is in the lineage that
+      started such an execution.
+   5. These checks fail closed. If the editor's identity, its lineage, its resolved
+      set or the scope's assignments cannot be resolved, the edit is refused with a
+      typed error.
 
 ### D4 — Executions still stay inside one project
 
@@ -140,6 +156,12 @@ bound.** D1 to D6 state the rules.
   project list when the initiative changes.
 - A record shows why a project is in reach: a named grant or a named scope.
 - One bound remains. The fences and the inventory read one set.
+- Membership can follow the work at the speed of the agents doing it. A control
+  plane whose workloads are driven by agents gains only friction from routing every
+  membership edit through a human, so this record lets its policy authorize
+  non-human editors, inside the bounds of D3 rule 4 (velocity first). A control
+  plane may narrow who is authorized as it matures. Per-project grants and
+  assignments stay human.
 
 ### Negative
 
@@ -161,7 +183,12 @@ bound.** D1 to D6 state the rules.
 - **Membership edits widen agents.** Someone who may edit a scope but not
   administer agent principals can widen an assigned principal. Mitigation: every
   membership change is recorded, and the control plane decides who may make it.
-  The platform corpus states that policy.
+  A non-human editor adds only projects it already reaches at the assignment's
+  level, cannot declare a rule that reaches past its own set, and cannot edit a
+  scope it is assigned to, acts as or descends from (D3 rule 4). Two authorized
+  agents can still pool reach they each hold by editing each other's scopes; each
+  edit is recorded and attributed, and the control plane's policy decides which
+  agents may edit at all. The platform corpus states that policy.
 - **A rule widened by work-item data.** A rule that reads work items gains a
   project when someone files work in it. Mitigation: D3 rule 4 stops the principal
   from doing this itself, and the record names the scope behind each reach.
@@ -194,8 +221,11 @@ These edits land in the accepting commit. None touches a `BOUNDARY-SYNC` region.
   - **D2 rule 1.** "Each grant names one project" becomes "each grant names one
     project or one coordination scope". The set is the resolved set (D2 rules 1
     and 2).
-  - **D2 rule 3.** Add D3 rules 2 and 4: "every project" only by declaration, and
-    no self-widening.
+  - **D2 rule 3.** Not amended: per-project grants, and assignments to a scope,
+    are still made by a human who administers agent principals. A pointer note is
+    added to D3 rules 2 to 4 here: "every project" only by declaration, membership
+    edits by a non-human principal only inside its own resolved set, and no
+    self-widening.
   - **D2 rule 4.** "A project of its set" reads as one project of the resolved set;
     the home may be named per assignment (D4 rule 3).
   - **D3 rules 2 and 4.** The principal's own access in a project is the level of
@@ -234,5 +264,9 @@ enumerated in the platform corpus's stub.
 - **Tests are written on the input.** A project removed from a scope is refused on
   the next call; a project added is reached on the next call; an unresolvable rule
   refuses with a typed error and reaches nothing; a principal cannot edit a scope it
-  is assigned to; a read assignment refuses a write; a session's stored project list
+  is assigned to; a non-human membership editor is refused for a project outside
+  its own resolved set, for a project where its access is below the scope's
+  assignment level, for a rule that can reach past its set, on a scope it is
+  assigned to, acts as or descends from, and whenever an input to that check cannot
+  be resolved; a read assignment refuses a write; a session's stored project list
   is not consulted by any fence. Write each refusal test first and watch it fail.
